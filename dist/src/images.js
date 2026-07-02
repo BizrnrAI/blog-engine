@@ -65,10 +65,12 @@ export async function applyWatermark(root, imageBuffer) {
 }
 function buildAiPrompt(post, topic) {
     return [
-        `Professional editorial real-estate blog cover photograph for: "${post.title}".`,
-        `Topic: ${topic.keyword}. Market: ${BLOG_CONFIG.image.promptMarket}.`,
-        'Style: modern coastal Southern California luxury, natural light, premium editorial composition.',
-        'No text, no signs, no logos, no watermarks, no UI overlays.',
+        `Create a hyper-realistic ChatGPT Image 2 / GPT Image 2 blog hero image based primarily on this blog title: "${post.title}".`,
+        `Use the title as the scene brief. Topic: ${topic.keyword}. Market context: ${BLOG_CONFIG.image.promptMarket}.`,
+        BLOG_CONFIG.image.promptStyle,
+        BLOG_CONFIG.image.promptCamera,
+        'Make the image look like a real, high-end editorial photograph, not an illustration, rendering, collage, stock mockup, or AI-art poster.',
+        'No text, captions, words, signs, logos, watermarks, UI overlays, people holding signs, or readable documents inside the generated image.',
         `Avoid recognizable copyrighted listings. Make it suitable for ${BLOG_CONFIG.identity.name}.`,
     ].join(' ');
 }
