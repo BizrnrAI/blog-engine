@@ -15,13 +15,6 @@ export async function getGoogleAccessToken(): Promise<string> {
   return j.access_token;
 }
 
-const BRAND_STOPWORDS = [
-  BLOG_CONFIG.identity.name.toLowerCase(),
-  BLOG_CONFIG.identity.siteHost.replace(/\.[a-z]+$/, ''),
-  BLOG_CONFIG.identity.agent.name.toLowerCase(),
-  BLOG_CONFIG.identity.voice.name.toLowerCase(),
-];
-
 export async function getGscQueries(): Promise<{ token: string | null; queries: GscQuery[] }> {
   if (
     !process.env.GOOGLE_OAUTH_CLIENT_ID ||
@@ -32,6 +25,12 @@ export async function getGscQueries(): Promise<{ token: string | null; queries: 
   }
 
   const token = await getGoogleAccessToken();
+  const brandStopwords = [
+    BLOG_CONFIG.identity.name.toLowerCase(),
+    BLOG_CONFIG.identity.siteHost.replace(/\.[a-z]+$/, ''),
+    BLOG_CONFIG.identity.agent.name.toLowerCase(),
+    BLOG_CONFIG.identity.voice.name.toLowerCase(),
+  ];
   const end = new Date();
   const start = new Date(end.getTime() - 28 * 864e5);
   const fmt = (d: Date) => d.toISOString().slice(0, 10);
@@ -57,7 +56,7 @@ export async function getGscQueries(): Promise<{ token: string | null; queries: 
         impressions: row.impressions,
       }))
       .filter((q: GscQuery) => q.query.split(/\s+/).length >= 2)
-      .filter((q: GscQuery) => !BRAND_STOPWORDS.some((b) => norm(q.query).includes(norm(b))))
+      .filter((q: GscQuery) => !brandStopwords.some((b) => norm(q.query).includes(norm(b))))
       .sort((a: GscQuery, b: GscQuery) => b.impressions - a.impressions);
     return { token, queries };
   } catch (err) {
