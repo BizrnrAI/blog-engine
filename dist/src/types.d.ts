@@ -104,6 +104,8 @@ export interface BlogEngineConfig {
         format: 'webp' | 'jpg' | 'png';
         credit: string;
         promptMarket: string;
+        promptStyle: string;
+        promptCamera: string;
         watermark: {
             width: number;
             opacity: number;
