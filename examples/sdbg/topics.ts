@@ -1,0 +1,78 @@
+import type { CrossPromoTopic, EditorialTopic, TopicCategory } from '../../src';
+
+export const ALLOWED_CATEGORIES: TopicCategory[] = [
+  'Buying',
+  'Selling',
+  'Neighborhoods',
+  'Market Insights',
+  'Lifestyle',
+  'AI & Real Estate',
+];
+
+export const CROSS_PROMO_EVERY = 4;
+
+export const GRADIENTS = ['he1', 'he2', 'he3', 'he4', 'he5', 'he6'] as const;
+
+export const HERO_PHOTOS = [
+  { url: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=1600&q=80', alt: 'Modern luxury home with an infinity pool overlooking the city' },
+  { url: 'https://images.unsplash.com/photo-1613490493576-7fde63acd811?w=1600&q=80', alt: 'Contemporary villa with warm wood accents and a swimming pool' },
+  { url: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=1600&q=80', alt: 'Modern coastal home with glass walls and palm trees' },
+  { url: 'https://images.unsplash.com/photo-1544984243-ec57ea16fe25?w=1600&q=80', alt: 'Mid-century modern home with a pool at sunset' },
+  { url: 'https://images.unsplash.com/photo-1602343168117-bb8ffe3e2e9f?w=1600&q=80', alt: 'Luxury white estate with a resort-style pool' },
+  { url: 'https://images.unsplash.com/photo-1670589953882-b94c9cb380f5?w=1600&q=80', alt: 'Sleek single-story modern home with a pool and lounge chairs' },
+  { url: 'https://images.unsplash.com/photo-1706164971302-e30c0640cc3b?w=1600&q=80', alt: 'Modern single-story luxury home with a manicured lawn at dusk' },
+  { url: 'https://images.unsplash.com/photo-1583765748076-cac46b8c98c1?w=1600&q=80', alt: 'Grand white estate mansion with a circular drive and lawns' },
+  { url: 'https://images.unsplash.com/photo-1531971589569-0d9370cbe1e5?w=1600&q=80', alt: 'Luxury indoor-outdoor living terrace at twilight' },
+  { url: 'https://images.unsplash.com/photo-1628012209120-d9db7abf7eab?w=1600&q=80', alt: 'Angular modern white architectural home' },
+  { url: 'https://images.unsplash.com/photo-1505843513577-22bb7d21e455?w=1600&q=80', alt: 'Illuminated luxury stone mansion at dusk' },
+  { url: 'https://images.unsplash.com/photo-1613977257363-707ba9348227?w=1600&q=80', alt: 'Modern white villa with an infinity pool and glass walls' },
+] as const;
+
+export const INTERNAL_LINKS = [
+  '/buy',
+  '/sell',
+  '/neighborhoods',
+  '/tours',
+  '/about',
+  '/contact',
+  '/ai-context',
+  '/neighborhoods/la-jolla',
+  '/neighborhoods/del-mar',
+  '/neighborhoods/coronado',
+  '/neighborhoods/rancho-santa-fe',
+  '/neighborhoods/carlsbad',
+  '/neighborhoods/encinitas',
+  '/neighborhoods/downtown-san-diego',
+  '/neighborhoods/pacific-beach',
+  '/neighborhoods/point-loma',
+  '/neighborhoods/north-park',
+  '/neighborhoods/carmel-valley',
+] as const;
+
+export const EDITORIAL_TOPICS: EditorialTopic[] = [
+  { keyword: 'buying a luxury home in La Jolla', category: 'Buying', angle: 'step-by-step luxury buyer journey for La Jolla, off-market access, pre-approval, coastal pricing tiers' },
+  { keyword: 'selling a home in Del Mar', category: 'Selling', angle: 'seller playbook for Del Mar: pricing strategy, staging the coastal lifestyle, timing the market' },
+  { keyword: 'Coronado real estate for relocating buyers', category: 'Neighborhoods', angle: 'relocation guide to Coronado: lifestyle, schools, the island feel, what your budget buys' },
+  { keyword: 'first-time luxury home buyer San Diego', category: 'Buying', angle: 'what first-time luxury buyers should know: financing, contingencies, due diligence, working with a broker' },
+  { keyword: 'Rancho Santa Fe estate buyers guide', category: 'Neighborhoods', angle: 'guide to buying an estate in Rancho Santa Fe: acreage, privacy, the Covenant, value drivers' },
+  { keyword: 'home valuation San Diego what is my home worth', category: 'Selling', angle: 'how a real home valuation works versus an online estimate, why local expertise wins on price' },
+  { keyword: 'Carlsbad vs Encinitas where to buy', category: 'Neighborhoods', angle: 'honest comparison of Carlsbad and Encinitas for buyers: vibe, price, beaches, commute, schools' },
+  { keyword: 'off-market homes San Diego', category: 'Buying', angle: 'how off-market and pocket listings work in San Diego and how buyers get early access through a broker' },
+  { keyword: 'best San Diego neighborhoods for families', category: 'Lifestyle', angle: 'family-focused neighborhood roundup: schools, parks, safety, value across coastal and inland San Diego' },
+  { keyword: 'staging a luxury home to sell San Diego', category: 'Selling', angle: 'staging that maximizes price for San Diego luxury homes, indoor-outdoor living, light, lifestyle framing' },
+  { keyword: 'downtown San Diego condo buyers guide', category: 'Neighborhoods', angle: 'buying a downtown San Diego condo: HOAs, views, walkability, buildings, resale considerations' },
+  { keyword: 'San Diego luxury real estate market trends', category: 'Market Insights', angle: 'what is driving the San Diego luxury market, inventory and demand dynamics, use ranges not fabricated figures' },
+  { keyword: 'moving to San Diego from out of state', category: 'Lifestyle', angle: 'relocation guide: choosing a neighborhood, climate, cost, and the home search timeline with a local broker' },
+  { keyword: 'selling your home fast in San Diego', category: 'Selling', angle: 'what actually makes a San Diego home sell quickly: price, presentation, marketing reach, responsiveness' },
+  { keyword: 'Pacific Beach home buyers guide', category: 'Neighborhoods', angle: 'walkable coastal lifestyle, condos versus single-family homes, parking, noise, and buyer fit' },
+  { keyword: 'Point Loma luxury homes guide', category: 'Neighborhoods', angle: 'views, marinas, hillside inventory, Liberty Station access, and architectural variety' },
+  { keyword: 'North Park San Diego real estate guide', category: 'Neighborhoods', angle: 'urban lifestyle, restaurants, historic homes, rental demand, and tradeoffs for buyers' },
+  { keyword: 'Carmel Valley homes for families', category: 'Lifestyle', angle: 'schools, commute, master-planned neighborhoods, parks, and coastal access' },
+];
+
+export const CROSS_PROMO_TOPICS: CrossPromoTopic[] = [
+  { keyword: 'AI receptionist for real estate agents', angle: 'how an AI voice receptionist captures every lead 24/7 for busy agents, and why fast response wins deals' },
+  { keyword: 'never miss a real estate lead', angle: 'the cost of a missed call in real estate and how 24/7 AI answering changes an agent conversion path' },
+  { keyword: 'AI lead qualification for real estate', angle: 'how AI qualifies buyers and sellers by budget, timeline, and intent before they ever reach the broker' },
+  { keyword: 'after-hours answering service real estate', angle: 'why after-hours and weekend calls are where deals are won or lost, and how AI covers them' },
+];
