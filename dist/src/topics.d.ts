@@ -1,4 +1,4 @@
-import type { CrossPromoTopic, EditorialTopic } from './types';
+import type { CrossPromoTopic, EditorialTopic } from './types.js';
 export declare const ALLOWED_CATEGORIES: string[];
 export declare const GRADIENTS: string[];
 export declare const HERO_PHOTOS: {

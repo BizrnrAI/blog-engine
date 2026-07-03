@@ -1,5 +1,5 @@
-import { getBlogTopics } from './config';
-import type { CrossPromoTopic, EditorialTopic, TopicCategory } from './types';
+import { getBlogTopics } from './config.js';
+import type { CrossPromoTopic, EditorialTopic, TopicCategory } from './types.js';
 
 function proxiedArray<T>(select: () => readonly T[]): T[] {
   return new Proxy([] as T[], {

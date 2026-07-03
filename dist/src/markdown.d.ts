@@ -1,4 +1,4 @@
-import type { CoverImage, GeneratedBlogPost } from './types';
+import type { CoverImage, GeneratedBlogPost } from './types.js';
 export declare function toMarkdown(post: GeneratedBlogPost, args: {
     gradient: string;
     cover: CoverImage;

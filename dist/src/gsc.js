@@ -1,5 +1,5 @@
-import { BLOG_CONFIG } from './config';
-import { env, norm } from './utils';
+import { BLOG_CONFIG } from './config.js';
+import { env, norm } from './utils.js';
 export async function getGoogleAccessToken() {
     const body = new URLSearchParams({
         client_id: env('GOOGLE_OAUTH_CLIENT_ID'),

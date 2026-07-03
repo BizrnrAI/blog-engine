@@ -1,15 +1,15 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { BLOG_CONFIG } from './config';
-import { readExistingPosts } from './existing-posts';
-import { generateBlogPost } from './generate-post';
-import { getGscQueries, pingGscSitemap } from './gsc';
-import { generateCoverImage, gradientForOrdinal } from './images';
-import { pingIndexNow } from './indexing';
-import { toMarkdown } from './markdown';
-import { describeTopic, pickTopic } from './topic-rotation';
-import type { GenerateRunOptions, GenerateRunResult } from './types';
-import { wordCount } from './utils';
+import { BLOG_CONFIG } from './config.js';
+import { readExistingPosts } from './existing-posts.js';
+import { generateBlogPost } from './generate-post.js';
+import { getGscQueries, pingGscSitemap } from './gsc.js';
+import { generateCoverImage, gradientForOrdinal } from './images.js';
+import { pingIndexNow } from './indexing.js';
+import { toMarkdown } from './markdown.js';
+import { describeTopic, pickTopic } from './topic-rotation.js';
+import type { GenerateRunOptions, GenerateRunResult } from './types.js';
+import { wordCount } from './utils.js';
 
 function ensureDir(path: string): void {
   if (!existsSync(path)) mkdirSync(path, { recursive: true });

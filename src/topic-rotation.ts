@@ -1,10 +1,10 @@
-import { BLOG_CONFIG, getBlogTopics } from './config';
+import { BLOG_CONFIG, getBlogTopics } from './config.js';
 import {
   CROSS_PROMO_TOPICS,
   EDITORIAL_TOPICS,
-} from './topics';
-import type { ExistingPost, GscQuery, SeoTopic, TopicCategory } from './types';
-import { norm, slugify } from './utils';
+} from './topics.js';
+import type { ExistingPost, GscQuery, SeoTopic, TopicCategory } from './types.js';
+import { norm, slugify } from './utils.js';
 
 function categoryForQuery(q: string): TopicCategory {
   const custom = getBlogTopics().categoryForQuery;

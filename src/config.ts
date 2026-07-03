@@ -1,4 +1,4 @@
-import type { BlogEngineConfig, BlogEngineRuntime, BlogEngineTopics } from './types';
+import type { BlogEngineConfig, BlogEngineRuntime, BlogEngineTopics } from './types.js';
 
 let runtime: BlogEngineRuntime | null = null;
 

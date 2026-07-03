@@ -1,4 +1,4 @@
-import type { CrossPromoTopic, EditorialTopic, TopicCategory } from '../../src';
+import type { CrossPromoTopic, EditorialTopic, TopicCategory } from '../../src/index.js';
 export declare const ALLOWED_CATEGORIES: TopicCategory[];
 export declare const CROSS_PROMO_EVERY = 4;
 export declare const GRADIENTS: readonly ["he1", "he2", "he3", "he4", "he5", "he6"];

@@ -1,4 +1,4 @@
-import type { CrossPromoTopic, EditorialTopic, TopicCategory } from '../../src';
+import type { CrossPromoTopic, EditorialTopic, TopicCategory } from '../../src/index.js';
 
 export const ALLOWED_CATEGORIES: TopicCategory[] = [
   'Buying',

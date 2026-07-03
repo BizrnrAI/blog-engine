@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { BLOG_CONFIG } from './config';
+import { BLOG_CONFIG } from './config.js';
 export function readExistingPosts(root) {
     const blogDir = join(root, BLOG_CONFIG.paths.blogDir);
     if (!existsSync(blogDir))
