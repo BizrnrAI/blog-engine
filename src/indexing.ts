@@ -1,4 +1,4 @@
-import { BLOG_CONFIG } from './config';
+import { BLOG_CONFIG } from './config.js';
 
 export async function pingIndexNow(urls: string[]): Promise<void> {
   const key = process.env.INDEXNOW_KEY || BLOG_CONFIG.indexNow.key;

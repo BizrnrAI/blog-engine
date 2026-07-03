@@ -1,6 +1,6 @@
-import { BLOG_CONFIG, getBlogTopics } from './config';
-import { CROSS_PROMO_TOPICS, EDITORIAL_TOPICS, } from './topics';
-import { norm, slugify } from './utils';
+import { BLOG_CONFIG, getBlogTopics } from './config.js';
+import { CROSS_PROMO_TOPICS, EDITORIAL_TOPICS, } from './topics.js';
+import { norm, slugify } from './utils.js';
 function categoryForQuery(q) {
     const custom = getBlogTopics().categoryForQuery;
     if (custom)

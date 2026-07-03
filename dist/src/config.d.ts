@@ -1,4 +1,4 @@
-import type { BlogEngineConfig, BlogEngineRuntime, BlogEngineTopics } from './types';
+import type { BlogEngineConfig, BlogEngineRuntime, BlogEngineTopics } from './types.js';
 export declare function configureBlogEngine(nextRuntime: BlogEngineRuntime): void;
 export declare function getBlogRuntime(): BlogEngineRuntime;
 export declare function getBlogConfig(): BlogEngineConfig;

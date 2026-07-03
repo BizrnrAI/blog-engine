@@ -153,4 +153,114 @@ export interface BlogEngineRuntime {
     topics: BlogEngineTopics;
     brandPersona: () => string;
 }
+export interface BlogAnswerSection {
+    heading: string;
+    answer: string;
+    body: string;
+}
+export interface ParsedBlogFaq {
+    question: string;
+    answer: string;
+}
+export interface ParsedBlogPost {
+    slug: string;
+    title: string;
+    description: string;
+    category: TopicCategory;
+    tags: string[];
+    author: string;
+    publishedAt: string;
+    updatedAt: string;
+    heroImage: string;
+    heroImageAlt: string;
+    ogImage?: string;
+    readMins?: number;
+    answer: string;
+    content: string;
+    faqs: ParsedBlogFaq[];
+    body: BlogAnswerSection[];
+}
+export interface SeedBlogPost {
+    slug: string;
+    title: string;
+    description: string;
+    category: string;
+    tags?: string[];
+    author?: string;
+    publishedAt: string;
+    updatedAt?: string;
+    heroImage: string;
+    heroImageAlt?: string;
+    ogImage?: string;
+    readMins?: number;
+    answer?: string;
+    content?: string;
+    faqs?: ParsedBlogFaq[];
+    body?: BlogAnswerSection[];
+}
+export interface ReadGeneratedPostsOptions {
+    root?: string;
+    blogDir?: string;
+    fallback?: {
+        title?: string;
+        description: string;
+        category?: string;
+        tags?: string[];
+        author: string;
+        heroImage: string;
+        heroImageAltPrefix: string;
+    };
+}
+export interface TemplateSiteProfile {
+    id: string;
+    brand: string;
+    legalName: string;
+    domain: string;
+    description: string;
+    industry: string;
+    primaryMarket: string;
+    region: string;
+    schemaType: string;
+    theme: {
+        ink: string;
+        muted: string;
+        paper: string;
+        surface: string;
+        primary: string;
+        accent: string;
+    };
+    hero: {
+        image: string;
+    };
+    services: readonly {
+        slug: string;
+        title: string;
+        summary: string;
+    }[];
+    markets: readonly string[];
+    collections: readonly {
+        title: string;
+        image?: string;
+        imageAlt?: string;
+    }[];
+    blogPosts: readonly SeedBlogPost[];
+    businessRunner: {
+        agentName: string;
+        poweredByUrl: string;
+    };
+}
+export interface TemplateRuntimeOptions {
+    blogDir?: string;
+    assetDir?: string;
+    heroDir?: string;
+    brandLogo?: string;
+    watermarkLogo?: string;
+    indexNowKey?: string;
+    textModel?: string;
+    imageModel?: string;
+    imageSize?: BlogEngineConfig['image']['size'];
+    imageFormat?: BlogEngineConfig['image']['format'];
+    rssLimit?: number;
+    extraInternalLinks?: readonly string[];
+}
 //# sourceMappingURL=types.d.ts.map

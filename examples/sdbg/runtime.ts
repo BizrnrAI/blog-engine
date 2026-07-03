@@ -1,5 +1,5 @@
-import { configureBlogEngine } from '../../src';
-import { BLOG_CONFIG, brandPersona } from './config';
+import type { BlogEngineRuntime } from '../../src/index.js';
+import { BLOG_CONFIG, brandPersona } from './config.js';
 import {
   ALLOWED_CATEGORIES,
   CROSS_PROMO_EVERY,
@@ -8,8 +8,8 @@ import {
   GRADIENTS,
   HERO_PHOTOS,
   INTERNAL_LINKS,
-} from './topics';
-import type { TopicCategory } from '../../src';
+} from './topics.js';
+import type { TopicCategory } from '../../src/index.js';
 
 function categoryForQuery(q: string): TopicCategory {
   const t = q.toLowerCase();
@@ -20,8 +20,8 @@ function categoryForQuery(q: string): TopicCategory {
   return 'Buying';
 }
 
-export function configureSdbgBlogEngine(): void {
-  configureBlogEngine({
+export function sdbgBlogRuntime(): BlogEngineRuntime {
+  return {
     config: BLOG_CONFIG,
     brandPersona,
     topics: {
@@ -35,5 +35,5 @@ export function configureSdbgBlogEngine(): void {
       categoryForQuery,
       gscAngleForQuery: (query: string) => `directly answer the search intent behind "${query}" for a San Diego buyer or seller`,
     },
-  });
+  };
 }

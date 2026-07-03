@@ -1,6 +1,6 @@
-import { BLOG_CONFIG } from './config';
-import { env, norm } from './utils';
-import type { GscQuery } from './types';
+import { BLOG_CONFIG } from './config.js';
+import { env, norm } from './utils.js';
+import type { GscQuery } from './types.js';
 
 export async function getGoogleAccessToken(): Promise<string> {
   const body = new URLSearchParams({

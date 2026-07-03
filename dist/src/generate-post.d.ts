@@ -1,4 +1,4 @@
-import type { ExistingPost, GeneratedBlogPost, SeoTopic } from './types';
+import type { ExistingPost, GeneratedBlogPost, SeoTopic } from './types.js';
 export declare function validateGeneratedPost(post: Partial<GeneratedBlogPost>, args: {
     existingSlugs: string[];
     topic: SeoTopic;

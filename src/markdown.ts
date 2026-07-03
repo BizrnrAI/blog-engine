@@ -1,5 +1,5 @@
-import type { CoverImage, GeneratedBlogPost } from './types';
-import { yamlString } from './utils';
+import type { CoverImage, GeneratedBlogPost } from './types.js';
+import { yamlString } from './utils.js';
 
 export function toMarkdown(
   post: GeneratedBlogPost,

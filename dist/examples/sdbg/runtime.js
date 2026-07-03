@@ -1,6 +1,5 @@
-import { configureBlogEngine } from '../../src';
-import { BLOG_CONFIG, brandPersona } from './config';
-import { ALLOWED_CATEGORIES, CROSS_PROMO_EVERY, CROSS_PROMO_TOPICS, EDITORIAL_TOPICS, GRADIENTS, HERO_PHOTOS, INTERNAL_LINKS, } from './topics';
+import { BLOG_CONFIG, brandPersona } from './config.js';
+import { ALLOWED_CATEGORIES, CROSS_PROMO_EVERY, CROSS_PROMO_TOPICS, EDITORIAL_TOPICS, GRADIENTS, HERO_PHOTOS, INTERNAL_LINKS, } from './topics.js';
 function categoryForQuery(q) {
     const t = q.toLowerCase();
     if (/(sell|selling|worth|valuation|list my)/.test(t))
@@ -13,8 +12,8 @@ function categoryForQuery(q) {
         return 'Lifestyle';
     return 'Buying';
 }
-export function configureSdbgBlogEngine() {
-    configureBlogEngine({
+export function sdbgBlogRuntime() {
+    return {
         config: BLOG_CONFIG,
         brandPersona,
         topics: {
@@ -28,6 +27,6 @@ export function configureSdbgBlogEngine() {
             categoryForQuery,
             gscAngleForQuery: (query) => `directly answer the search intent behind "${query}" for a San Diego buyer or seller`,
         },
-    });
+    };
 }
 //# sourceMappingURL=runtime.js.map

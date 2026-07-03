@@ -1,4 +1,4 @@
-import { yamlString } from './utils';
+import { yamlString } from './utils.js';
 export function toMarkdown(post, args) {
     return [
         '---',

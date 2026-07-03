@@ -3,9 +3,9 @@ import { createGateway } from '@ai-sdk/gateway';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import sharp from 'sharp';
-import { BLOG_CONFIG } from './config';
-import { GRADIENTS, HERO_PHOTOS } from './topics';
-import { xmlEscape } from './utils';
+import { BLOG_CONFIG } from './config.js';
+import { GRADIENTS, HERO_PHOTOS } from './topics.js';
+import { xmlEscape } from './utils.js';
 function ensureDir(path) {
     if (!existsSync(path))
         mkdirSync(path, { recursive: true });

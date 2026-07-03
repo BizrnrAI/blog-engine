@@ -1,5 +1,5 @@
-import { BLOG_CONFIG } from './config';
-import { xmlEscape } from './utils';
+import { BLOG_CONFIG } from './config.js';
+import { xmlEscape } from './utils.js';
 
 export interface RssPost {
   id: string;

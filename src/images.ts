@@ -3,10 +3,10 @@ import { createGateway } from '@ai-sdk/gateway';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import sharp from 'sharp';
-import { BLOG_CONFIG } from './config';
-import { GRADIENTS, HERO_PHOTOS } from './topics';
-import type { CoverImage, GeneratedBlogPost, SeoTopic } from './types';
-import { xmlEscape } from './utils';
+import { BLOG_CONFIG } from './config.js';
+import { GRADIENTS, HERO_PHOTOS } from './topics.js';
+import type { CoverImage, GeneratedBlogPost, SeoTopic } from './types.js';
+import { xmlEscape } from './utils.js';
 
 function ensureDir(path: string): void {
   if (!existsSync(path)) mkdirSync(path, { recursive: true });

@@ -1,5 +1,5 @@
-import { BLOG_CONFIG } from './config';
-import { xmlEscape } from './utils';
+import { BLOG_CONFIG } from './config.js';
+import { xmlEscape } from './utils.js';
 export function buildBlogRss(posts) {
     const lastBuildDate = posts[0]?.date ?? new Date();
     const items = posts.slice(0, BLOG_CONFIG.rss.limit)

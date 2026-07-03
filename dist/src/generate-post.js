@@ -1,6 +1,6 @@
-import { BLOG_CONFIG, brandPersona } from './config';
-import { ALLOWED_CATEGORIES, INTERNAL_LINKS } from './topics';
-import { env, slugify, wordCount } from './utils';
+import { BLOG_CONFIG, brandPersona } from './config.js';
+import { ALLOWED_CATEGORIES, INTERNAL_LINKS } from './topics.js';
+import { env, slugify, wordCount } from './utils.js';
 function buildMessages(topic, existingTitles) {
     const v = BLOG_CONFIG.identity.voice;
     const system = [

@@ -1,4 +1,4 @@
-import type { GscQuery } from './types';
+import type { GscQuery } from './types.js';
 export declare function getGoogleAccessToken(): Promise<string>;
 export declare function getGscQueries(): Promise<{
     token: string | null;

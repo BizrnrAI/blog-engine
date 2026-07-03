@@ -1,4 +1,4 @@
-import { getBlogTopics } from './config';
+import { getBlogTopics } from './config.js';
 function proxiedArray(select) {
     return new Proxy([], {
         get(_target, prop) {
