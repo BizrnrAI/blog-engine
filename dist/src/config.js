@@ -14,6 +14,9 @@ export function getBlogConfig() {
 export function getBlogTopics() {
     return getBlogRuntime().topics;
 }
+export function getBlogHooks() {
+    return getBlogRuntime().hooks || {};
+}
 export function brandPersona() {
     return getBlogRuntime().brandPersona();
 }

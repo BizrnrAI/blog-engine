@@ -1,4 +1,4 @@
-import type { BlogEngineConfig, BlogEngineRuntime, BlogEngineTopics } from './types.js';
+import type { BlogEngineConfig, BlogEngineHooks, BlogEngineRuntime, BlogEngineTopics } from './types.js';
 
 let runtime: BlogEngineRuntime | null = null;
 
@@ -21,6 +21,10 @@ export function getBlogConfig(): BlogEngineConfig {
 
 export function getBlogTopics(): BlogEngineTopics {
   return getBlogRuntime().topics;
+}
+
+export function getBlogHooks(): BlogEngineHooks {
+  return getBlogRuntime().hooks || {};
 }
 
 export function brandPersona(): string {

@@ -1,9 +1,9 @@
 import { experimental_generateImage as generateImage } from 'ai';
 import { createGateway } from '@ai-sdk/gateway';
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import sharp from 'sharp';
-import { BLOG_CONFIG } from './config.js';
+import { BLOG_CONFIG, getBlogHooks } from './config.js';
 import { GRADIENTS, HERO_PHOTOS } from './topics.js';
 import { xmlEscape } from './utils.js';
 function ensureDir(path) {
@@ -74,31 +74,59 @@ function buildAiPrompt(post, topic) {
         `Avoid recognizable copyrighted listings. Make it suitable for ${BLOG_CONFIG.identity.name}.`,
     ].join(' ');
 }
-async function generateAiHero(root, post, topic) {
+/**
+ * Branded, descriptive alt text: a literal scene description (model-written
+ * when available) behind a stable brand prefix. Never an identical literal
+ * across posts — that reads as keyword stuffing to search engines.
+ */
+export function heroAltText(post) {
+    const scene = (post.heroImageAlt || '').trim();
+    return scene
+        ? `${BLOG_CONFIG.identity.name} – ${scene}`
+        : `${BLOG_CONFIG.identity.name} guide: ${post.title}`;
+}
+async function encodeTo(format, image) {
+    if (format === 'jpg')
+        return image.jpeg({ quality: 88, mozjpeg: true }).toBuffer();
+    if (format === 'png')
+        return image.png().toBuffer();
+    return image.webp({ quality: 86 }).toBuffer();
+}
+async function fetchRawHero(post, topic) {
+    const prompt = buildAiPrompt(post, topic);
+    const hook = getBlogHooks().generateHeroImage;
+    if (hook)
+        return hook({ prompt, post, topic });
     const apiKey = (process.env.VERCEL_AI_GATEWAY_BLOG_KEY || process.env.VERCEL_AI_GATEWAY_KEY || '').trim();
     if (!apiKey)
         return null;
+    const gateway = createGateway({ apiKey });
+    const result = await generateImage({
+        model: gateway.imageModel(BLOG_CONFIG.image.model),
+        prompt,
+        size: BLOG_CONFIG.image.size,
+        providerOptions: { openai: { quality: BLOG_CONFIG.image.quality } },
+    });
+    const img = result.images[0];
+    const base64 = typeof img === 'string' ? img : img?.base64;
+    return base64 ? Buffer.from(base64, 'base64') : null;
+}
+async function generateAiHero(root, post, topic) {
     try {
-        const gateway = createGateway({ apiKey });
-        const result = await generateImage({
-            model: gateway.imageModel(BLOG_CONFIG.image.model),
-            prompt: buildAiPrompt(post, topic),
-            size: BLOG_CONFIG.image.size,
-            providerOptions: { openai: { quality: BLOG_CONFIG.image.quality } },
-        });
-        const img = result.images[0];
-        const base64 = typeof img === 'string' ? img : img?.base64;
-        if (!base64)
+        const raw = await fetchRawHero(post, topic);
+        if (!raw)
             return null;
-        const raw = Buffer.from(base64, 'base64');
+        const format = BLOG_CONFIG.image.format;
         const watermarked = await applyWatermark(root, raw);
         const outDir = join(root, BLOG_CONFIG.paths.heroDir);
         ensureDir(outDir);
-        const outFile = join(outDir, `${post.slug}.${BLOG_CONFIG.image.format}`);
-        await sharp(watermarked).webp({ quality: 86 }).toFile(outFile);
+        const outFile = join(outDir, `${post.slug}.${format}`);
+        // applyWatermark returns WebP; re-encode only when the configured format differs.
+        const finalBuf = format === 'webp' ? watermarked : await encodeTo(format, sharp(watermarked));
+        writeFileSync(outFile, finalBuf);
         return {
-            image: `/${BLOG_CONFIG.paths.heroDir.replace(/^public\//, '')}/${post.slug}.${BLOG_CONFIG.image.format}`,
-            imageAlt: `${BLOG_CONFIG.identity.name} guide: ${post.title}`,
+            image: `/${BLOG_CONFIG.paths.heroDir.replace(/^public\//, '')}/${post.slug}.${format}`,
+            imageAlt: heroAltText(post),
         };
     }
     catch (err) {

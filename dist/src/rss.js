@@ -1,14 +1,31 @@
+import { existsSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 import { BLOG_CONFIG } from './config.js';
-import { xmlEscape } from './utils.js';
-export function buildBlogRss(posts) {
+import { mimeTypeFor, xmlEscape } from './utils.js';
+function enclosureLength(imagePath, options) {
+    if (!options.root || !imagePath.startsWith('/'))
+        return 0;
+    const file = join(options.root, options.publicDir || 'public', imagePath);
+    try {
+        if (existsSync(file))
+            return statSync(file).size;
+    }
+    catch {
+        // Fall through to 0; a missing file must not break feed generation.
+    }
+    return 0;
+}
+export function buildBlogRss(posts, options = {}) {
     const lastBuildDate = posts[0]?.date ?? new Date();
     const items = posts.slice(0, BLOG_CONFIG.rss.limit)
         .map((p) => {
         const url = `${BLOG_CONFIG.identity.siteUrl}/blog/${p.id}`;
         const imageUrl = p.ogImage || p.image;
+        const mime = imageUrl ? mimeTypeFor(imageUrl) : '';
+        const length = imageUrl ? enclosureLength(imageUrl, options) : 0;
         const imageLines = imageUrl
-            ? `\n      <enclosure url="${xmlEscape(new URL(imageUrl, BLOG_CONFIG.identity.siteUrl).href)}" type="image/jpeg" length="0"/>
-      <media:content url="${xmlEscape(new URL(imageUrl, BLOG_CONFIG.identity.siteUrl).href)}" medium="image" type="image/jpeg">
+            ? `\n      <enclosure url="${xmlEscape(new URL(imageUrl, BLOG_CONFIG.identity.siteUrl).href)}" type="${mime}" length="${length}"/>
+      <media:content url="${xmlEscape(new URL(imageUrl, BLOG_CONFIG.identity.siteUrl).href)}" medium="image" type="${mime}">
         <media:description type="plain">${xmlEscape(p.imageAlt || p.title)}</media:description>
       </media:content>`
             : '';

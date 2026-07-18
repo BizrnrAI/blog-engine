@@ -32,6 +32,33 @@ export function xmlEscape(s: string): string {
     .replace(/'/g, '&apos;');
 }
 
+/**
+ * Deterministically shorten text to maxChars on a word boundary. Models cannot
+ * count characters, so length limits are enforced here rather than by
+ * rejecting a generation attempt.
+ */
+export function clampText(s: string, maxChars: number): string {
+  const text = String(s).trim().replace(/\s+/g, ' ');
+  if (text.length <= maxChars) return text;
+  const cut = text.slice(0, maxChars + 1);
+  const lastSpace = cut.lastIndexOf(' ');
+  return cut.slice(0, lastSpace > 0 ? lastSpace : maxChars).replace(/[ ,.;:–—-]+$/, '');
+}
+
+export function mimeTypeFor(path: string): string {
+  const ext = path.toLowerCase().split('?')[0].split('.').pop() || '';
+  const map: Record<string, string> = {
+    webp: 'image/webp',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    png: 'image/png',
+    avif: 'image/avif',
+    gif: 'image/gif',
+    svg: 'image/svg+xml',
+  };
+  return map[ext] || 'image/jpeg';
+}
+
 export function env(name: string, required = true): string {
   const v = process.env[name];
   if (!v && required) throw new Error(`Missing required env: ${name}`);
