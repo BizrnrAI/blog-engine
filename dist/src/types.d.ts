@@ -28,6 +28,9 @@ export interface GeneratedBlogPost {
     category: TopicCategory;
     answer: string;
     readMins: number;
+    tags: string[];
+    /** Model-written literal description of the hero scene; the engine brands it. */
+    heroImageAlt?: string;
     faqs: Array<{
         q: string;
         a: string;
@@ -91,12 +94,19 @@ export interface BlogEngineConfig {
         key: string;
     };
     text: {
-        provider: 'openrouter';
+        /** 'openrouter' is the default; 'openai-compatible' works with any /chat/completions endpoint. */
+        provider: 'openrouter' | 'openai-compatible';
         url: string;
         model: string;
         maxTokens: number;
         temperature: number;
+        /** Env var holding the bearer token. Defaults to OPENROUTER_API_KEY. */
+        apiKeyEnv?: string;
+        /** Extra headers merged into the request (e.g. provider routing headers). */
+        headers?: Record<string, string>;
     };
+    /** Optional overrides for the ASEO content contract. Defaults are production-proven. */
+    content?: BlogContentRules;
     image: {
         model: string;
         size: '1024x1024' | '1536x1024' | '1024x1536' | `${number}x${number}`;
@@ -148,10 +158,48 @@ export interface BlogEngineTopics {
     categoryForQuery?: (query: string) => TopicCategory;
     gscAngleForQuery?: (query: string) => string;
 }
+export interface BlogContentRules {
+    /** Minimum body word count (default 450). */
+    minBodyWords?: number;
+    /** Soft ceiling for meta descriptions before deterministic clamping (default 300). */
+    maxDescriptionChars?: number;
+    /** Hard length descriptions are clamped to on a word boundary (default 158). */
+    clampDescriptionTo?: number;
+    /** Minimum H2 headings phrased as questions (default 2). Set 0 to disable. */
+    minQuestionH2s?: number;
+    /** Require one self-contained citable blockquote in the body (default true). */
+    requireCitableBlockquote?: boolean;
+    /** Case-insensitive phrases that block publication (claims discipline). */
+    blockedPhrases?: readonly string[];
+}
+export interface GenerateTextArgs {
+    messages: Array<{
+        role: string;
+        content: string;
+    }>;
+    text: BlogEngineConfig['text'];
+}
+export interface GenerateHeroImageArgs {
+    prompt: string;
+    post: GeneratedBlogPost;
+    topic: SeoTopic;
+}
+/**
+ * Infrastructure seams. Provide these to run the engine on your own model
+ * stack; leave them out to use the built-in OpenRouter + Vercel AI Gateway
+ * defaults. generateText returns the raw model text (strict JSON expected);
+ * generateHeroImage returns a raw image buffer (the engine watermarks,
+ * converts, and writes it) or null to use the curated fallback.
+ */
+export interface BlogEngineHooks {
+    generateText?: (args: GenerateTextArgs) => Promise<string>;
+    generateHeroImage?: (args: GenerateHeroImageArgs) => Promise<Buffer | null>;
+}
 export interface BlogEngineRuntime {
     config: BlogEngineConfig;
     topics: BlogEngineTopics;
     brandPersona: () => string;
+    hooks?: BlogEngineHooks;
 }
 export interface BlogAnswerSection {
     heading: string;

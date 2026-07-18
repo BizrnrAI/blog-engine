@@ -12,16 +12,19 @@ export function parseBlogFrontmatter(raw: string): {
   frontmatter: Frontmatter;
   content: string;
   faqs: ParsedBlogFaq[];
+  tags: string[];
 } {
-  if (!raw.startsWith('---')) return { frontmatter: {}, content: raw.trim(), faqs: [] };
+  if (!raw.startsWith('---')) return { frontmatter: {}, content: raw.trim(), faqs: [], tags: [] };
   const end = raw.indexOf('\n---', 3);
-  if (end === -1) return { frontmatter: {}, content: raw.trim(), faqs: [] };
+  if (end === -1) return { frontmatter: {}, content: raw.trim(), faqs: [], tags: [] };
 
   const yaml = raw.slice(3, end).trim();
   const content = raw.slice(end + 4).trim();
   const frontmatter: Frontmatter = {};
   const faqs: ParsedBlogFaq[] = [];
+  const tags: string[] = [];
   let currentFaq: Partial<ParsedBlogFaq> | null = null;
+  let currentList: 'faqs' | 'tags' | null = null;
 
   for (const line of yaml.split('\n')) {
     if (line.startsWith('  - q:')) {
@@ -33,15 +36,30 @@ export function parseBlogFrontmatter(raw: string): {
       currentFaq.answer = stripQuotes(line.replace('    a:', ''));
       continue;
     }
+    if (currentList === 'tags' && /^\s+-\s/.test(line)) {
+      const tag = stripQuotes(line.replace(/^\s+-\s*/, ''));
+      if (tag) tags.push(tag);
+      continue;
+    }
 
     const match = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
-    if (match) frontmatter[match[1]] = stripQuotes(match[2] || '');
+    if (match) {
+      currentList = match[1] === 'tags' ? 'tags' : match[1] === 'faqs' ? 'faqs' : null;
+      const value = stripQuotes(match[2] || '');
+      // Inline lists like `tags: [a, b]` are also accepted.
+      if (match[1] === 'tags' && /^\[.*\]$/.test(match[2] || '')) {
+        tags.push(...(match[2] || '').slice(1, -1).split(',').map((t) => stripQuotes(t)).filter(Boolean));
+      } else {
+        frontmatter[match[1]] = value;
+      }
+    }
   }
 
   return {
     frontmatter,
     content,
     faqs: faqs.filter((faq) => faq.question && faq.answer),
+    tags,
   };
 }
 
@@ -75,7 +93,7 @@ export function readGeneratedBlogPosts(options: ReadGeneratedPostsOptions = {}):
     .map((file) => {
       const slug = file.replace(/\.md$/, '');
       const raw = readFileSync(join(blogDir, file), 'utf8');
-      const { frontmatter, content, faqs } = parseBlogFrontmatter(raw);
+      const { frontmatter, content, faqs, tags } = parseBlogFrontmatter(raw);
       const title = frontmatter.title || fallback?.title || slug.replace(/-/g, ' ');
       const publishedAt = frontmatter.date || new Date().toISOString().slice(0, 10);
       const description = frontmatter.description || fallback?.description || title;
@@ -86,10 +104,10 @@ export function readGeneratedBlogPosts(options: ReadGeneratedPostsOptions = {}):
         title,
         description,
         category: frontmatter.category || fallback?.category || 'Service Guides',
-        tags: fallback?.tags || [frontmatter.category || 'Service Guides'],
+        tags: tags.length ? tags : fallback?.tags || [frontmatter.category || 'Service Guides'],
         author: fallback?.author || '',
         publishedAt,
-        updatedAt: publishedAt,
+        updatedAt: frontmatter.updated || publishedAt,
         heroImage: frontmatter.image || fallback?.heroImage || '',
         heroImageAlt:
           frontmatter.imageAlt || `${fallback?.heroImageAltPrefix || 'Blog'} guide: ${title}`,

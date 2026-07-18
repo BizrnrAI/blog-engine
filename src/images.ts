@@ -1,11 +1,11 @@
 import { experimental_generateImage as generateImage } from 'ai';
 import { createGateway } from '@ai-sdk/gateway';
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import sharp from 'sharp';
-import { BLOG_CONFIG } from './config.js';
+import { BLOG_CONFIG, getBlogHooks } from './config.js';
 import { GRADIENTS, HERO_PHOTOS } from './topics.js';
-import type { CoverImage, GeneratedBlogPost, SeoTopic } from './types.js';
+import type { BlogEngineConfig, CoverImage, GeneratedBlogPost, SeoTopic } from './types.js';
 import { xmlEscape } from './utils.js';
 
 function ensureDir(path: string): void {
@@ -77,31 +77,60 @@ function buildAiPrompt(post: GeneratedBlogPost, topic: SeoTopic): string {
   ].join(' ');
 }
 
-async function generateAiHero(root: string, post: GeneratedBlogPost, topic: SeoTopic): Promise<{ image: string; imageAlt: string } | null> {
+/**
+ * Branded, descriptive alt text: a literal scene description (model-written
+ * when available) behind a stable brand prefix. Never an identical literal
+ * across posts — that reads as keyword stuffing to search engines.
+ */
+export function heroAltText(post: GeneratedBlogPost): string {
+  const scene = (post.heroImageAlt || '').trim();
+  return scene
+    ? `${BLOG_CONFIG.identity.name} – ${scene}`
+    : `${BLOG_CONFIG.identity.name} guide: ${post.title}`;
+}
+
+async function encodeTo(format: BlogEngineConfig['image']['format'], image: sharp.Sharp): Promise<Buffer> {
+  if (format === 'jpg') return image.jpeg({ quality: 88, mozjpeg: true }).toBuffer();
+  if (format === 'png') return image.png().toBuffer();
+  return image.webp({ quality: 86 }).toBuffer();
+}
+
+async function fetchRawHero(post: GeneratedBlogPost, topic: SeoTopic): Promise<Buffer | null> {
+  const prompt = buildAiPrompt(post, topic);
+  const hook = getBlogHooks().generateHeroImage;
+  if (hook) return hook({ prompt, post, topic });
+
   const apiKey = (process.env.VERCEL_AI_GATEWAY_BLOG_KEY || process.env.VERCEL_AI_GATEWAY_KEY || '').trim();
   if (!apiKey) return null;
 
-  try {
-    const gateway = createGateway({ apiKey });
-    const result = await generateImage({
-      model: gateway.imageModel(BLOG_CONFIG.image.model),
-      prompt: buildAiPrompt(post, topic),
-      size: BLOG_CONFIG.image.size,
-      providerOptions: { openai: { quality: BLOG_CONFIG.image.quality } },
-    });
-    const img = result.images[0];
-    const base64 = typeof img === 'string' ? img : img?.base64;
-    if (!base64) return null;
+  const gateway = createGateway({ apiKey });
+  const result = await generateImage({
+    model: gateway.imageModel(BLOG_CONFIG.image.model),
+    prompt,
+    size: BLOG_CONFIG.image.size,
+    providerOptions: { openai: { quality: BLOG_CONFIG.image.quality } },
+  });
+  const img = result.images[0];
+  const base64 = typeof img === 'string' ? img : img?.base64;
+  return base64 ? Buffer.from(base64, 'base64') : null;
+}
 
-    const raw = Buffer.from(base64, 'base64');
+async function generateAiHero(root: string, post: GeneratedBlogPost, topic: SeoTopic): Promise<{ image: string; imageAlt: string } | null> {
+  try {
+    const raw = await fetchRawHero(post, topic);
+    if (!raw) return null;
+
+    const format = BLOG_CONFIG.image.format;
     const watermarked = await applyWatermark(root, raw);
     const outDir = join(root, BLOG_CONFIG.paths.heroDir);
     ensureDir(outDir);
-    const outFile = join(outDir, `${post.slug}.${BLOG_CONFIG.image.format}`);
-    await sharp(watermarked).webp({ quality: 86 }).toFile(outFile);
+    const outFile = join(outDir, `${post.slug}.${format}`);
+    // applyWatermark returns WebP; re-encode only when the configured format differs.
+    const finalBuf = format === 'webp' ? watermarked : await encodeTo(format, sharp(watermarked));
+    writeFileSync(outFile, finalBuf);
     return {
-      image: `/${BLOG_CONFIG.paths.heroDir.replace(/^public\//, '')}/${post.slug}.${BLOG_CONFIG.image.format}`,
-      imageAlt: `${BLOG_CONFIG.identity.name} guide: ${post.title}`,
+      image: `/${BLOG_CONFIG.paths.heroDir.replace(/^public\//, '')}/${post.slug}.${format}`,
+      imageAlt: heroAltText(post),
     };
   } catch (err) {
     console.warn('[blog-image] AI hero generation failed; using curated fallback:', err instanceof Error ? err.message : String(err));

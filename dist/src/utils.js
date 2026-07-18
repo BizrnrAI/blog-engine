@@ -27,6 +27,32 @@ export function xmlEscape(s) {
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&apos;');
 }
+/**
+ * Deterministically shorten text to maxChars on a word boundary. Models cannot
+ * count characters, so length limits are enforced here rather than by
+ * rejecting a generation attempt.
+ */
+export function clampText(s, maxChars) {
+    const text = String(s).trim().replace(/\s+/g, ' ');
+    if (text.length <= maxChars)
+        return text;
+    const cut = text.slice(0, maxChars + 1);
+    const lastSpace = cut.lastIndexOf(' ');
+    return cut.slice(0, lastSpace > 0 ? lastSpace : maxChars).replace(/[ ,.;:–—-]+$/, '');
+}
+export function mimeTypeFor(path) {
+    const ext = path.toLowerCase().split('?')[0].split('.').pop() || '';
+    const map = {
+        webp: 'image/webp',
+        jpg: 'image/jpeg',
+        jpeg: 'image/jpeg',
+        png: 'image/png',
+        avif: 'image/avif',
+        gif: 'image/gif',
+        svg: 'image/svg+xml',
+    };
+    return map[ext] || 'image/jpeg';
+}
 export function env(name, required = true) {
     const v = process.env[name];
     if (!v && required)
