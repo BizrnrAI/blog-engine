@@ -8,6 +8,7 @@ export { pickTopic } from './topic-rotation.js';
 export { readExistingPosts } from './existing-posts.js';
 export { parseBlogFrontmatter, markdownToAnswerSections, readGeneratedBlogPosts, mergeBlogPosts } from './content-reader.js';
 export { buildTemplateBlogEngineRuntime } from './template-runtime.js';
+export { assertBlogEngineRuntime, validateBlogEngineRuntime, BlogEngineConfigError } from './validate-runtime.js';
 export { cleanBlogSlugs, runBlogGenerateCli, runBlogIndexPublishedCli, waitUntilBlogUrlsLive } from './cli.js';
 export { blogGenerateWorkflow, blogIndexingWorkflow } from './workflows.js';
 export { getGoogleAccessToken, getGscQueries, pingGscSitemap } from './gsc.js';
@@ -25,12 +26,15 @@ export type {
   CrossPromoTopic,
   EditorialTopic,
   ExistingPost,
+  FetchGscQueriesArgs,
   GeneratedBlogPost,
   GenerateHeroImageArgs,
   GenerateRunOptions,
   GenerateRunResult,
   GenerateTextArgs,
   GscQuery,
+  RenderMarkdownArgs,
+  SubmitSitemapArgs,
   ParsedBlogFaq,
   ParsedBlogPost,
   ReadGeneratedPostsOptions,

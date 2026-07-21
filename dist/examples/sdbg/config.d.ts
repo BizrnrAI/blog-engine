@@ -14,7 +14,7 @@ export declare const BLOG_CONFIG: {
         readonly voice: {
             readonly name: "BRI";
             readonly homeCtaPath: "/";
-            readonly valuationPath: "/sell";
+            readonly secondaryCtaPath: "/sell";
         };
         readonly backlink: {
             readonly url: "https://bizrnr.com";
@@ -76,6 +76,15 @@ export declare const BLOG_CONFIG: {
         readonly description: "San Diego real estate guides, neighborhood notes, luxury market insights, and AI-enabled lead capture strategy from San Diego Buy Guy.";
         readonly path: "/blog/feed.xml";
         readonly limit: 20;
+    };
+    /**
+     * Brand-specific editorial direction. These used to be baked into the engine's prompt; they are
+     * SDBG's voice, not every site's, so they live here now. The engine's own defaults are neutral.
+     */
+    readonly content: {
+        readonly tone: "confident, polished, local-insider, helpful";
+        readonly extraRules: readonly ["- No contact forms. Conversion language must invite readers to speak with BRI by voice."];
+        readonly crossPromoInstruction: "- This is a cross-promo post: include ONE natural, descriptive contextual link to https://bizrnr.com/ai-voice-receptionist, tying the AI voice receptionist angle to how a real estate agent never misses a lead.";
     };
     readonly logPrefix: "[sdbg-blog]";
 };

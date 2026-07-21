@@ -61,20 +61,39 @@ export interface BlogEngineConfig {
         name: string;
         siteUrl: string;
         siteHost: string;
+        /**
+         * The person or entity the content speaks for. Only `name` is required — `title`, `license`
+         * and `since` describe credentialed professionals (an agent, a broker, a licensed trade) and
+         * are simply omitted for a shop, a SaaS product, or anything else without a credential.
+         */
         agent: {
             name: string;
-            title: string;
-            titleCap: string;
-            license: string;
+            title?: string;
+            titleCap?: string;
+            license?: string;
             since?: number;
         };
-        areas: readonly string[];
-        voice: {
+        /** Geographic areas served. Omit for a business that is not location-bound. */
+        areas?: readonly string[];
+        /**
+         * Where a reader should be sent to convert, e.g. '/contact'. Defaults to '/'.
+         * Pair with `content.ctaInstruction` to control the wording.
+         */
+        ctaPath?: string;
+        /**
+         * An AI voice agent, if the brand runs one. Optional: with no voice configured the engine
+         * writes a plain call-to-action instead of asking readers to call an assistant.
+         */
+        voice?: {
             name: string;
             homeCtaPath: string;
-            valuationPath?: string;
+            secondaryCtaPath?: string;
         };
-        backlink: {
+        /**
+         * A partner/parent site to cross-promote. Optional: with no backlink configured the engine
+         * skips cross-promo posts entirely rather than inventing an outbound link.
+         */
+        backlink?: {
             url: string;
             deepLink: string;
         };
@@ -122,6 +141,12 @@ export interface BlogEngineConfig {
             margin: number;
         };
         og: {
+            /**
+             * Generate the branded SVG Open Graph card. Default TRUE (existing behaviour).
+             * Set false when the hero image should serve as the OG card too — the engine then
+             * reports the hero path as `ogImage` instead of writing a second asset per post.
+             */
+            enabled?: boolean;
             width: number;
             height: number;
             colors: {
@@ -171,6 +196,27 @@ export interface BlogContentRules {
     requireCitableBlockquote?: boolean;
     /** Case-insensitive phrases that block publication (claims discipline). */
     blockedPhrases?: readonly string[];
+    /**
+     * Tone adjectives for the brand voice. Default: 'confident, clear, genuinely helpful'.
+     * A local service business might use 'warm, local-insider, practical'.
+     */
+    tone?: string;
+    /**
+     * How the closing call-to-action should read. Default is a plain invitation to get in touch
+     * via `identity.ctaPath`. Override for a specific conversion motion (book a demo, call a voice
+     * assistant, request a quote).
+     */
+    ctaInstruction?: string;
+    /**
+     * How a cross-promo post should reference `identity.backlink`. Default is a neutral contextual
+     * link. Override to frame the partner product in the brand's own terms.
+     */
+    crossPromoInstruction?: string;
+    /**
+     * Extra hard rules appended verbatim to the prompt — e.g. 'Never say "licensed"; this trade is
+     * registered, not licensed.' This is the seam for domain-specific editorial law.
+     */
+    extraRules?: readonly string[];
 }
 export interface GenerateTextArgs {
     messages: Array<{
@@ -184,6 +230,24 @@ export interface GenerateHeroImageArgs {
     post: GeneratedBlogPost;
     topic: SeoTopic;
 }
+export interface FetchGscQueriesArgs {
+    /** The configured Search Console property, e.g. `sc-domain:example.com`. */
+    property: string;
+    siteUrl: string;
+    /** Lookback window the engine wants, in days. */
+    days: number;
+}
+export interface SubmitSitemapArgs {
+    /** Absolute sitemap URL from config (`gsc.sitemap`). */
+    sitemap: string;
+    property: string;
+}
+export interface RenderMarkdownArgs {
+    post: GeneratedBlogPost;
+    cover: CoverImage;
+    gradient: string;
+    dateISO: string;
+}
 /**
  * Infrastructure seams. Provide these to run the engine on your own model
  * stack; leave them out to use the built-in OpenRouter + Vercel AI Gateway
@@ -194,6 +258,26 @@ export interface GenerateHeroImageArgs {
 export interface BlogEngineHooks {
     generateText?: (args: GenerateTextArgs) => Promise<string>;
     generateHeroImage?: (args: GenerateHeroImageArgs) => Promise<Buffer | null>;
+    /**
+     * Supply topic candidates from your own Search Console auth. The built-in reader needs an OAuth
+     * refresh token; a site using a SERVICE ACCOUNT (or any other analytics source) provides this
+     * instead. Returned queries still pass through the engine's own filters (>= 2 words, brand terms
+     * removed, sorted by impressions), so the topic-selection invariants hold either way.
+     * Return [] for "no candidates" — the engine falls back to the editorial pool.
+     */
+    fetchGscQueries?: (args: FetchGscQueriesArgs) => Promise<GscQuery[]>;
+    /**
+     * Submit/refresh the sitemap after publishing, with your own auth. Takes precedence over the
+     * built-in OAuth ping.
+     */
+    submitSitemap?: (args: SubmitSitemapArgs) => Promise<void>;
+    /**
+     * Serialize a post to its final Markdown. Provide this when the consuming site owns a different
+     * frontmatter shape (different field names, FAQs rendered into the body, extra fields). The
+     * engine still owns generation, validation, watermarking, encoding and the write itself — this
+     * hook only decides what the file looks like.
+     */
+    renderMarkdown?: (args: RenderMarkdownArgs) => string;
 }
 export interface BlogEngineRuntime {
     config: BlogEngineConfig;

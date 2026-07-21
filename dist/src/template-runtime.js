@@ -54,7 +54,7 @@ export function buildTemplateBlogEngineRuntime(site, options = {}) {
                 voice: {
                     name: site.businessRunner.agentName,
                     homeCtaPath: '/',
-                    valuationPath: '/',
+                    secondaryCtaPath: '/',
                 },
                 backlink: {
                     url: site.businessRunner.poweredByUrl,

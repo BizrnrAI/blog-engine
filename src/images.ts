@@ -159,7 +159,12 @@ export async function makeOgCard(root: string, post: GeneratedBlogPost, dryRun =
   const logoW = 280;
   const logoH = Math.round((112 / 320) * logoW);
   const logoUri = `data:image/png;base64,${logoBuf.toString('base64')}`;
-  const footer = `${BLOG_CONFIG.identity.agent.name} · ${BLOG_CONFIG.identity.agent.titleCap}, ${BLOG_CONFIG.identity.agent.license}`;
+  // Credential fields are optional — a shop has no licence. Build the footer from what exists so a
+  // minimal identity never renders "undefined" onto the card.
+  const a = BLOG_CONFIG.identity.agent;
+  const footer = [a?.name || BLOG_CONFIG.identity.name, [a?.titleCap, a?.license].filter(Boolean).join(', ')]
+    .filter(Boolean)
+    .join(' · ');
 
   const svg = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
   <defs>
@@ -197,12 +202,21 @@ export async function generateCoverImage(
   ordinal: number,
   dryRun = false,
 ): Promise<CoverImage> {
-  const ogImage = await makeOgCard(root, post, dryRun);
+  // The branded SVG card is on by default. When a site turns it off, the hero doubles as the OG
+  // image — one asset serving both, and `ogImage` stays a real path for downstream frontmatter.
+  const ogCardEnabled = BLOG_CONFIG.image.og.enabled !== false;
+  const ogCard = ogCardEnabled ? await makeOgCard(root, post, dryRun) : '';
+
   const aiHero = dryRun ? null : await generateAiHero(root, post, topic);
-  if (aiHero) return { ...aiHero, ogImage, source: 'ai-generated' };
+  if (aiHero) return { ...aiHero, ogImage: ogCard || aiHero.image, source: 'ai-generated' };
 
   const fallback = HERO_PHOTOS[ordinal % HERO_PHOTOS.length];
-  return { image: fallback.url, imageAlt: fallback.alt, ogImage, source: 'curated-fallback' };
+  return {
+    image: fallback.url,
+    imageAlt: fallback.alt,
+    ogImage: ogCard || fallback.url,
+    source: 'curated-fallback',
+  };
 }
 
 export function gradientForOrdinal(ordinal: number): string {

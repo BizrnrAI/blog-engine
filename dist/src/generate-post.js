@@ -8,6 +8,11 @@ const DEFAULT_RULES = {
     minQuestionH2s: 2,
     requireCitableBlockquote: true,
     blockedPhrases: [],
+    // Domain-neutral defaults. Anything industry-specific belongs in a site's own config, never here.
+    tone: 'confident, clear, genuinely helpful',
+    ctaInstruction: '',
+    crossPromoInstruction: '',
+    extraRules: [],
 };
 export function contentRules() {
     return { ...DEFAULT_RULES, ...(BLOG_CONFIG.content || {}) };
@@ -16,8 +21,22 @@ function monthYear() {
     return new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 }
 function buildMessages(topic, existingTitles) {
-    const v = BLOG_CONFIG.identity.voice;
+    const identity = BLOG_CONFIG.identity;
     const rules = contentRules();
+    /**
+     * The closing CTA. A brand with an AI voice agent routes readers to it; everything else gets a
+     * plain invitation to the site's conversion path. Either can be replaced wholesale via
+     * `content.ctaInstruction`, because no engine should presume how a business converts.
+     */
+    const ctaPath = identity.ctaPath || identity.voice?.homeCtaPath || '/';
+    const ctaInstruction = rules.ctaInstruction ||
+        (identity.voice
+            ? `- End with a short call-to-action paragraph inviting the reader to speak with ${identity.voice.name}; link it as [speak with ${identity.voice.name}](${identity.voice.homeCtaPath}).`
+            : `- End with a short, low-pressure call-to-action paragraph inviting the reader to get in touch with ${identity.name}; link it as [${identity.name}](${ctaPath}).`);
+    const crossPromoInstruction = topic.mustBacklink && identity.backlink
+        ? rules.crossPromoInstruction ||
+            `- This is a cross-promo post: include ONE natural, descriptive contextual link to ${identity.backlink.deepLink}, introduced in a way that genuinely serves the reader rather than as an aside.`
+        : '';
     const system = [
         brandPersona(),
         '',
@@ -26,9 +45,9 @@ function buildMessages(topic, existingTitles) {
         'HARD RULES (this publishes automatically to a public brand site):',
         '- NEVER fabricate specific prices, percentages, statistics, dates, interest rates, review counts, awards, or named sources. Speak qualitatively or in general ranges.',
         '- No legal, tax, medical, or financial guarantees or advice; where relevant, suggest consulting the appropriate professional.',
-        '- Be accurate and on-brand: confident, polished, local-insider, helpful. American English.',
+        `- Be accurate and on-brand: ${rules.tone}. American English.`,
         '- Do NOT duplicate any of these existing titles: ' + JSON.stringify(existingTitles) + '.',
-        '- No contact forms. Conversion language must invite readers to speak with ' + v.name + ' by voice.',
+        ...rules.extraRules,
         '',
         'STRUCTURE of the "body" (GitHub-flavored Markdown) — write for both human readers and answer engines:',
         '- Open with a 2-3 sentence answer-first lede that resolves the core question immediately. No throat-clearing, no "in this article".',
@@ -40,10 +59,8 @@ function buildMessages(topic, existingTitles) {
         '- Where the content compares options, steps, or trade-offs, prefer a compact Markdown table or bulleted list over dense prose.',
         '- Do NOT include an FAQ section or a "Quick answer" section in the body; those render automatically from the JSON fields.',
         '- Include 2-4 natural internal links chosen ONLY from this list: ' + JSON.stringify(INTERNAL_LINKS) + '.',
-        `- End with a short call-to-action paragraph inviting the reader to speak with ${v.name}; link the homepage as [speak with ${v.name}](${v.homeCtaPath}).`,
-        topic.mustBacklink
-            ? `- This is a cross-promo post: include ONE natural, descriptive contextual link to ${BLOG_CONFIG.identity.backlink.deepLink}, tying the AI voice receptionist angle to how a ${BLOG_CONFIG.identity.agent.title} never misses a lead.`
-            : '',
+        ctaInstruction,
+        crossPromoInstruction,
         rules.blockedPhrases.length
             ? '- NEVER use any of these phrases (claims discipline): ' + JSON.stringify(rules.blockedPhrases) + '.'
             : '',
@@ -166,9 +183,12 @@ export function validateGeneratedPost(post, args) {
     }
     if (!INTERNAL_LINKS.some((l) => (post.body || '').includes(`(${l})`)))
         errs.push('body needs >= 1 internal link from the allowed list');
-    const backlinkHost = new URL(BLOG_CONFIG.identity.backlink.url).host;
-    if (args.topic.mustBacklink && !(post.body || '').includes(backlinkHost))
-        errs.push(`cross-promo post must link ${backlinkHost}`);
+    const backlink = BLOG_CONFIG.identity.backlink;
+    if (args.topic.mustBacklink && backlink) {
+        const backlinkHost = new URL(backlink.url).host;
+        if (!(post.body || '').includes(backlinkHost))
+            errs.push(`cross-promo post must link ${backlinkHost}`);
+    }
     const badLinks = [...(post.body || '').matchAll(/\]\((\/[^)]*)\)/g)]
         .map((m) => m[1].split('#')[0].split('?')[0])
         .filter((p) => p !== '/' && !INTERNAL_LINKS.includes(p));

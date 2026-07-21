@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { BLOG_CONFIG } from './config.js';
+import { BLOG_CONFIG, getBlogHooks } from './config.js';
 import { readExistingPosts } from './existing-posts.js';
 import { generateBlogPost } from './generate-post.js';
 import { getGscQueries, pingGscSitemap } from './gsc.js';
@@ -22,7 +22,10 @@ export async function generateBlogRun(root, options) {
     const { token, queries } = await getGscQueries();
     console.log(`${logPrefix} GSC: ${queries.length} candidate queries (top: ${queries.slice(0, 3).map((q) => q.query).join(' | ') || 'none'})`);
     const blogDir = join(root, BLOG_CONFIG.paths.blogDir);
-    ensureDir(blogDir);
+    // A dry run must not touch the filesystem — it previously created the content directory before
+    // deciding it wasn't going to write anything, which litters a repo just for previewing a post.
+    if (!options.dryRun)
+        ensureDir(blogDir);
     const existing = readExistingPosts(root);
     console.log(`${logPrefix} existing posts: ${existing.length}`);
     const written = [];
@@ -34,7 +37,12 @@ export async function generateBlogRun(root, options) {
         const cover = await generateCoverImage(root, post, topic, ordinal, options.dryRun);
         const gradient = gradientForOrdinal(ordinal);
         const dateISO = new Date().toISOString().slice(0, 10);
-        const md = toMarkdown(post, { gradient, cover, dateISO });
+        // The consuming site may own its own frontmatter shape; the engine still owns everything
+        // around it (generation, validation, watermarking, encoding, the write).
+        const renderMarkdown = getBlogHooks().renderMarkdown;
+        const md = renderMarkdown
+            ? renderMarkdown({ post, cover, gradient, dateISO })
+            : toMarkdown(post, { gradient, cover, dateISO });
         const file = join(blogDir, `${post.slug}.md`);
         if (options.dryRun) {
             console.log(`\n-------- DRY RUN ${file} (${wordCount(post.body)} body words, image: ${cover.source}) --------\n${md}\n-------- END DRY RUN --------\n`);

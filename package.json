@@ -1,6 +1,6 @@
 {
   "name": "@bizrnr/blog-engine",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Canonical BizRnR autonomous blog engine for RSS, image generation, watermarking, and PR-based publishing.",
   "type": "module",
   "main": "./dist/src/index.js",
