@@ -1,6 +1,7 @@
 import type { BlogContentRules, ExistingPost, GeneratedBlogPost, SeoTopic } from './types.js';
-declare const DEFAULT_RULES: Required<Omit<BlogContentRules, 'blockedPhrases'>> & {
+declare const DEFAULT_RULES: Required<Omit<BlogContentRules, 'blockedPhrases' | 'extraRules'>> & {
     blockedPhrases: readonly string[];
+    extraRules: readonly string[];
 };
 export declare function contentRules(): typeof DEFAULT_RULES;
 export declare function parseModelJson(text: string): Record<string, unknown>;

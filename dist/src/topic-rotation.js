@@ -1,20 +1,19 @@
 import { BLOG_CONFIG, getBlogTopics } from './config.js';
-import { CROSS_PROMO_TOPICS, EDITORIAL_TOPICS, } from './topics.js';
+import { ALLOWED_CATEGORIES, CROSS_PROMO_TOPICS, EDITORIAL_TOPICS, } from './topics.js';
 import { norm, slugify } from './utils.js';
+/**
+ * Map a search query to one of the site's categories.
+ *
+ * The default deliberately returns the site's FIRST allowed category rather than guessing from
+ * keywords. A guess is only useful if the engine knows the industry, and it cannot — while a
+ * category outside `allowedCategories` fails validation on every retry and kills the run. Sites
+ * that want smarter routing supply `topics.categoryForQuery`; see examples/sdbg for one.
+ */
 function categoryForQuery(q) {
     const custom = getBlogTopics().categoryForQuery;
     if (custom)
         return custom(q);
-    const t = q.toLowerCase();
-    if (/(sell|selling|worth|valuation|list my)/.test(t))
-        return 'Selling';
-    if (/(market|trend|forecast|prices?)/.test(t))
-        return 'Market Insights';
-    if (/(la jolla|del mar|coronado|rancho santa fe|carlsbad|encinitas|downtown|point loma|pacific beach|neighborhood)/.test(t))
-        return 'Neighborhoods';
-    if (/(move|moving|relocat|family|families|lifestyle|best place)/.test(t))
-        return 'Lifestyle';
-    return 'Buying';
+    return ALLOWED_CATEGORIES[0];
 }
 function isCovered(keyword, existing) {
     const slug = slugify(keyword);
@@ -29,14 +28,17 @@ function isCovered(keyword, existing) {
 export function pickTopic(existing, gscQueries, offset) {
     const idx = existing.length + offset;
     const topics = getBlogTopics();
-    if (idx % topics.crossPromoEvery === topics.crossPromoEvery - 1) {
+    // Cross-promo only makes sense with a partner site to link to. With no backlink configured the
+    // engine skips the cadence entirely rather than inventing an outbound link.
+    const canCrossPromo = Boolean(BLOG_CONFIG.identity.backlink) && CROSS_PROMO_TOPICS.length > 0;
+    if (canCrossPromo && idx % topics.crossPromoEvery === topics.crossPromoEvery - 1) {
         for (let i = 0; i < CROSS_PROMO_TOPICS.length; i++) {
             const seed = CROSS_PROMO_TOPICS[(idx + i) % CROSS_PROMO_TOPICS.length];
             if (!isCovered(seed.keyword, existing)) {
                 return {
                     type: 'crosspromo',
                     keyword: seed.keyword,
-                    category: seed.category || 'AI & Real Estate',
+                    category: seed.category || ALLOWED_CATEGORIES[0],
                     angle: seed.angle,
                     mustBacklink: true,
                 };

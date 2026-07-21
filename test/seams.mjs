@@ -153,5 +153,57 @@ check('default path still emits the engine frontmatter', out2.includes('gradient
 check('default path still writes an og card path', /ogImage: "\/tmp-assets\//.test(out2));
 check('editorial fallback used when no GSC source', out2.includes('editorial fallback topic'));
 
+/* ------------------------------------------- 3. domain agnosticism (minimal site) --- */
+// A plain business: no voice agent, no partner backlink, no licence, no service areas, and its own
+// categories. Nothing about real estate, BizRnR, or any template may leak into the output.
+console.log('\nDOMAIN AGNOSTICISM (minimal identity, unrelated industry)');
+
+const minimalConfig = JSON.parse(JSON.stringify(baseConfig(undefined)));
+minimalConfig.identity = {
+  name: 'Fen & Field Bakery',
+  siteUrl: 'https://fenandfield.example',
+  siteHost: 'fenandfield.example',
+  agent: { name: 'Fen & Field Bakery' }, // no title/licence/since
+  ctaPath: '/visit',
+  // no areas, no voice, no backlink
+};
+
+let minimalPrompt = '';
+configureBlogEngine({
+  config: minimalConfig,
+  topics: {
+    allowedCategories: ['Baking Guides', 'Ingredients'],
+    crossPromoEvery: 2, // would fire on this ordinal if cross-promo were possible
+    gradients: ['g1'],
+    heroPhotos: [{ url: '/loaf.jpg', alt: 'loaf' }],
+    internalLinks: ['/', '/blog'],
+    editorial: [{ keyword: 'how to store sourdough', category: 'Baking Guides', angle: 'keeping crust and crumb' }],
+    crossPromo: [{ keyword: 'should never be used', angle: 'no backlink configured' }],
+  },
+  brandPersona: () => 'You write for a neighbourhood bakery.',
+  hooks: {
+    generateText: async ({ messages }) => {
+      minimalPrompt = messages.map((m) => m.content).join('\n');
+      return POST_JSON.replace('"category":"Guides"', '"category":"Baking Guides"');
+    },
+    generateHeroImage: async () => null,
+    fetchGscQueries: async () => [{ query: 'sourdough storage tips', impressions: 40 }],
+  },
+});
+
+const logs3 = [];
+console.log = (...a) => logs3.push(a.join(' '));
+await generateBlogRun(process.cwd(), { count: 1, dryRun: true, skipPing: true }).catch((e) => logs3.push('ERR ' + e.message));
+console.log = realLog;
+const out3 = logs3.join('\n');
+
+const leaks = ['real estate', 'realtor', 'broker', 'bizrnr', 'receptionist', 'la jolla', 'san diego', 'valuation', 'never misses a lead']
+  .filter((t) => minimalPrompt.toLowerCase().includes(t));
+check('no industry/vendor terms leak into the prompt', leaks.length === 0, leaks.length ? `LEAKED: ${leaks.join(', ')}` : 'clean');
+check('GSC topic mapped to a category the site actually allows', out3.includes('(Baking Guides)') || out3.includes('Baking Guides'), 'no Buying/Selling fallback');
+check('no cross-promo without a configured backlink', !out3.includes('should never be used'));
+check('generic CTA used when no voice agent is configured', minimalPrompt.includes('(/visit)') && !minimalPrompt.includes('by voice'));
+check('run completes for a minimal identity', !out3.includes('ERR '), out3.includes('ERR ') ? out3.split('ERR ')[1]?.slice(0, 80) : 'ok');
+
 console.log(failures === 0 ? '\nALL CHECKS PASSED' : `\n${failures} CHECK(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);

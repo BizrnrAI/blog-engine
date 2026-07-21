@@ -68,16 +68,35 @@ export interface BlogEngineConfig {
     name: string;
     siteUrl: string;
     siteHost: string;
+    /**
+     * The person or entity the content speaks for. Only `name` is required — `title`, `license`
+     * and `since` describe credentialed professionals (an agent, a broker, a licensed trade) and
+     * are simply omitted for a shop, a SaaS product, or anything else without a credential.
+     */
     agent: {
       name: string;
-      title: string;
-      titleCap: string;
-      license: string;
+      title?: string;
+      titleCap?: string;
+      license?: string;
       since?: number;
     };
-    areas: readonly string[];
-    voice: { name: string; homeCtaPath: string; valuationPath?: string };
-    backlink: { url: string; deepLink: string };
+    /** Geographic areas served. Omit for a business that is not location-bound. */
+    areas?: readonly string[];
+    /**
+     * Where a reader should be sent to convert, e.g. '/contact'. Defaults to '/'.
+     * Pair with `content.ctaInstruction` to control the wording.
+     */
+    ctaPath?: string;
+    /**
+     * An AI voice agent, if the brand runs one. Optional: with no voice configured the engine
+     * writes a plain call-to-action instead of asking readers to call an assistant.
+     */
+    voice?: { name: string; homeCtaPath: string; secondaryCtaPath?: string };
+    /**
+     * A partner/parent site to cross-promote. Optional: with no backlink configured the engine
+     * skips cross-promo posts entirely rather than inventing an outbound link.
+     */
+    backlink?: { url: string; deepLink: string };
   };
   paths: {
     blogDir: string;
@@ -176,6 +195,27 @@ export interface BlogContentRules {
   requireCitableBlockquote?: boolean;
   /** Case-insensitive phrases that block publication (claims discipline). */
   blockedPhrases?: readonly string[];
+  /**
+   * Tone adjectives for the brand voice. Default: 'confident, clear, genuinely helpful'.
+   * A local service business might use 'warm, local-insider, practical'.
+   */
+  tone?: string;
+  /**
+   * How the closing call-to-action should read. Default is a plain invitation to get in touch
+   * via `identity.ctaPath`. Override for a specific conversion motion (book a demo, call a voice
+   * assistant, request a quote).
+   */
+  ctaInstruction?: string;
+  /**
+   * How a cross-promo post should reference `identity.backlink`. Default is a neutral contextual
+   * link. Override to frame the partner product in the brand's own terms.
+   */
+  crossPromoInstruction?: string;
+  /**
+   * Extra hard rules appended verbatim to the prompt — e.g. 'Never say "licensed"; this trade is
+   * registered, not licensed.' This is the seam for domain-specific editorial law.
+   */
+  extraRules?: readonly string[];
 }
 
 export interface GenerateTextArgs {

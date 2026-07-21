@@ -7,12 +7,15 @@ const LOOKBACK_DAYS = 28;
  * already own those), and rank by impressions.
  */
 function filterQueries(rows) {
+    // agent/voice are optional identity fields; only the ones a site actually configured count.
     const brandStopwords = [
-        BLOG_CONFIG.identity.name.toLowerCase(),
+        BLOG_CONFIG.identity.name,
         BLOG_CONFIG.identity.siteHost.replace(/\.[a-z]+$/, ''),
-        BLOG_CONFIG.identity.agent.name.toLowerCase(),
-        BLOG_CONFIG.identity.voice.name.toLowerCase(),
-    ];
+        BLOG_CONFIG.identity.agent?.name,
+        BLOG_CONFIG.identity.voice?.name,
+    ]
+        .filter((s) => Boolean(s))
+        .map((s) => s.toLowerCase());
     return rows
         .filter((q) => q.query.split(/\s+/).length >= 2)
         .filter((q) => !brandStopwords.some((b) => norm(q.query).includes(norm(b))))

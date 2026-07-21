@@ -1,10 +1,17 @@
 # BizRnR Blog Engine
 
-Canonical autonomous blog engine for BizRnR websites and client templates. One
-shared core generates answer-first, ASEO-optimized posts with AI hero images,
-logo watermarks, branded Open Graph cards, alt text, meta tags, FAQ + article
+An autonomous blog engine for **any** website, in any industry. One shared core
+generates answer-first, ASEO-optimized posts with AI hero images, logo
+watermarks, branded Open Graph cards, alt text, meta tags, FAQ + article
 JSON-LD, an RSS feed with media tags, and PR-safe publishing with post-merge
 search-engine pings. Each site supplies only a small brand/topic adapter.
+
+**The core is domain-agnostic by design.** It knows nothing about your
+industry, your CRM, or any particular vendor: categories, topics, tone,
+call-to-action, and editorial law all come from your adapter, and the only
+required identity is a name, a URL, and a host. A bakery, a law firm, a SaaS
+product, and a real-estate brokerage all drive the same core — the bundled
+`examples/sdbg` adapter is one such site, not a dependency.
 
 **This repo is self-contained.** Everything an AI agent or developer needs to
 review, adopt, or extend the engine lives here — see [AGENTS.md](AGENTS.md)
@@ -80,6 +87,42 @@ To let the hero double as the Open Graph card instead of writing a second
 asset per post, set `image.og.enabled: false`. The engine then reports the
 hero path as `ogImage`. It defaults to `true`.
 
+### The minimum viable identity
+
+Everything industry-shaped is optional. This is a complete, valid identity:
+
+```ts
+identity: {
+  name: 'Fen & Field Bakery',
+  siteUrl: 'https://fenandfield.example',
+  siteHost: 'fenandfield.example',
+  agent: { name: 'Fen & Field Bakery' },
+  ctaPath: '/visit',
+}
+```
+
+`agent.title` / `agent.license` / `agent.since` describe credentialed
+professionals — omit them and nothing renders them. `areas` is for
+location-bound businesses. `voice` is for brands running an AI voice agent;
+without it the engine writes a plain call-to-action. `backlink` is for
+cross-promoting a partner site; without it the engine **skips cross-promo
+posts entirely** rather than inventing an outbound link.
+
+Shape the writing itself through `content`:
+
+```ts
+content: {
+  tone: 'warm, practical, unfussy',
+  ctaInstruction: '- End by inviting the reader to book a table at [Visit](/visit).',
+  extraRules: ['- Never claim a product is gluten-free unless the topic says so.'],
+  blockedPhrases: ['artisanal', 'world-class'],
+}
+```
+
+`extraRules` is the seam for **domain-specific editorial law** — the rules
+that keep a regulated industry's content lawful. They are appended verbatim to
+the prompt's hard rules.
+
 See [docs/PROVIDERS.md](docs/PROVIDERS.md) for the built-in providers, env
 vars, and hook contracts.
 
@@ -87,9 +130,11 @@ vars, and hook contracts.
 
 Each website supplies only a small adapter:
 
-- `BlogEngineConfig` — brand identity, site URLs, content paths, logo paths,
-  GSC property, IndexNow key, text/image model settings, RSS settings, and
-  optional `content` rules (blocked claim phrases, word counts).
+- `BlogEngineConfig` — brand identity (only `name` / `siteUrl` / `siteHost` /
+  `agent.name` are required), site URLs, content paths, logo paths, GSC
+  property, IndexNow key, text/image model settings, RSS settings, and optional
+  `content` rules (tone, CTA wording, extra editorial law, blocked claim
+  phrases, word counts).
 - `BlogEngineTopics` — allowed categories, internal-link allowlist, fallback
   hero photos, editorial topics, cross-promo topics.
 - `brandPersona()` — the brand-safe system persona used for text generation.

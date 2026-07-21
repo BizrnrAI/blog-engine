@@ -154,7 +154,12 @@ export async function makeOgCard(root, post, dryRun = false) {
     const logoW = 280;
     const logoH = Math.round((112 / 320) * logoW);
     const logoUri = `data:image/png;base64,${logoBuf.toString('base64')}`;
-    const footer = `${BLOG_CONFIG.identity.agent.name} · ${BLOG_CONFIG.identity.agent.titleCap}, ${BLOG_CONFIG.identity.agent.license}`;
+    // Credential fields are optional — a shop has no licence. Build the footer from what exists so a
+    // minimal identity never renders "undefined" onto the card.
+    const a = BLOG_CONFIG.identity.agent;
+    const footer = [a?.name || BLOG_CONFIG.identity.name, [a?.titleCap, a?.license].filter(Boolean).join(', ')]
+        .filter(Boolean)
+        .join(' · ');
     const svg = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0.4" y2="1">

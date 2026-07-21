@@ -23,7 +23,7 @@ export const BLOG_CONFIG = {
       'North Park',
       'Carmel Valley',
     ],
-    voice: { name: 'BRI', homeCtaPath: '/', valuationPath: '/sell' },
+    voice: { name: 'BRI', homeCtaPath: '/', secondaryCtaPath: '/sell' },
     backlink: {
       url: 'https://bizrnr.com',
       deepLink: 'https://bizrnr.com/ai-voice-receptionist',
@@ -93,6 +93,19 @@ export const BLOG_CONFIG = {
       'San Diego real estate guides, neighborhood notes, luxury market insights, and AI-enabled lead capture strategy from San Diego Buy Guy.',
     path: '/blog/feed.xml',
     limit: 20,
+  },
+
+  /**
+   * Brand-specific editorial direction. These used to be baked into the engine's prompt; they are
+   * SDBG's voice, not every site's, so they live here now. The engine's own defaults are neutral.
+   */
+  content: {
+    tone: 'confident, polished, local-insider, helpful',
+    extraRules: [
+      '- No contact forms. Conversion language must invite readers to speak with BRI by voice.',
+    ],
+    crossPromoInstruction:
+      '- This is a cross-promo post: include ONE natural, descriptive contextual link to https://bizrnr.com/ai-voice-receptionist, tying the AI voice receptionist angle to how a real estate agent never misses a lead.',
   },
 
   logPrefix: '[sdbg-blog]',
