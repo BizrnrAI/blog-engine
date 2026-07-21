@@ -71,6 +71,70 @@ The engine always applies the logo watermark, encodes to the configured
 format, and writes the file — your hook only produces pixels. This keeps the
 watermark invariant impossible to skip.
 
+## Search Console
+
+### Default: OAuth refresh token
+
+Set `GOOGLE_OAUTH_CLIENT_ID` / `_SECRET` / `_REFRESH_TOKEN` and the engine
+reads Search Analytics itself and resubmits the sitemap after publishing.
+Absent → no demand queries, and topic selection falls back to the editorial
+pool. Nothing fails.
+
+### Hook: any Search Console auth (e.g. a service account)
+
+A site that authenticates with a **service-account JWT** — or wants topics
+from any other demand source — supplies them directly:
+
+```ts
+hooks: {
+  fetchGscQueries: async ({ property, siteUrl, days }) => {
+    // property is e.g. "sc-domain:example.com"; days is the lookback window.
+    return await myServiceAccountGsc.topQueries(property, days); // GscQuery[]
+  },
+  submitSitemap: async ({ sitemap, property }) => {
+    await myServiceAccountGsc.submitSitemap(property, sitemap);
+  },
+}
+```
+
+Rows you return still pass through the engine's own filters — single-word
+queries dropped, brand terms removed, ranked by impressions — so the
+topic-selection invariants hold no matter where the data came from. Return
+`[]` for "nothing to suggest"; the editorial pool takes over.
+
+`submitSitemap` takes precedence over the OAuth ping and needs no token, so
+it works in `runBlogIndexPublishedCli` without any `GOOGLE_OAUTH_*` env.
+
+## Markdown / frontmatter
+
+### Default: the engine's frontmatter
+
+`src/markdown.ts` emits title, description, category, dates, `readMins`,
+`answer`, tags, gradient, images, and FAQs as frontmatter.
+
+### Hook: your own file shape
+
+Sites whose reader expects different field names — or that render FAQs into
+the body rather than frontmatter — own the serialization:
+
+```ts
+hooks: {
+  renderMarkdown: ({ post, cover, gradient, dateISO }) =>
+    `---\ntitle: "${post.title}"\ndate: "${dateISO}"\naudience: "homeowner"\n---\n\n${post.body}\n`,
+}
+```
+
+The engine still owns topic selection, generation, validation, watermarking,
+encoding, and the write — this hook only decides what the file looks like.
+
+## Open Graph cards
+
+The branded SVG→JPEG card is generated per post by default. Set
+`image.og.enabled: false` when the hero image should serve as the OG card
+too; the engine then reports the hero path as `cover.ogImage` instead of
+writing a second asset. Defaults to `true`, so existing adapters are
+unaffected.
+
 ## Environment variables
 
 See [.env.example](../.env.example) for the complete annotated list:
@@ -79,7 +143,7 @@ See [.env.example](../.env.example) for the complete annotated list:
 |---|---|---|
 | `OPENROUTER_API_KEY` (or `text.apiKeyEnv`) | default text provider | not needed with a `generateText` hook |
 | `VERCEL_AI_GATEWAY_BLOG_KEY` / `VERCEL_AI_GATEWAY_KEY` | default image provider | absent → curated fallback photos |
-| `GOOGLE_OAUTH_CLIENT_ID/SECRET/REFRESH_TOKEN` | GSC demand queries + sitemap resubmit | optional; absent → editorial pool only |
+| `GOOGLE_OAUTH_CLIENT_ID/SECRET/REFRESH_TOKEN` | GSC demand queries + sitemap resubmit | optional; absent → editorial pool only; not needed with `fetchGscQueries` / `submitSitemap` hooks |
 | `INDEXNOW_KEY` | IndexNow submission | overrides `config.indexNow.key`; host `/<key>.txt` publicly |
 | `BLOG_ENGINE_DISABLED=1` | kill switch | run exits cleanly without generating |
 | `DRY_RUN` / `SKIP_PING` / `BLOG_SLUGS` / `WAIT_FOR_LIVE` | CLI env equivalents | see docs/ADOPTION.md |

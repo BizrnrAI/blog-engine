@@ -122,6 +122,12 @@ export interface BlogEngineConfig {
             margin: number;
         };
         og: {
+            /**
+             * Generate the branded SVG Open Graph card. Default TRUE (existing behaviour).
+             * Set false when the hero image should serve as the OG card too — the engine then
+             * reports the hero path as `ogImage` instead of writing a second asset per post.
+             */
+            enabled?: boolean;
             width: number;
             height: number;
             colors: {
@@ -184,6 +190,24 @@ export interface GenerateHeroImageArgs {
     post: GeneratedBlogPost;
     topic: SeoTopic;
 }
+export interface FetchGscQueriesArgs {
+    /** The configured Search Console property, e.g. `sc-domain:example.com`. */
+    property: string;
+    siteUrl: string;
+    /** Lookback window the engine wants, in days. */
+    days: number;
+}
+export interface SubmitSitemapArgs {
+    /** Absolute sitemap URL from config (`gsc.sitemap`). */
+    sitemap: string;
+    property: string;
+}
+export interface RenderMarkdownArgs {
+    post: GeneratedBlogPost;
+    cover: CoverImage;
+    gradient: string;
+    dateISO: string;
+}
 /**
  * Infrastructure seams. Provide these to run the engine on your own model
  * stack; leave them out to use the built-in OpenRouter + Vercel AI Gateway
@@ -194,6 +218,26 @@ export interface GenerateHeroImageArgs {
 export interface BlogEngineHooks {
     generateText?: (args: GenerateTextArgs) => Promise<string>;
     generateHeroImage?: (args: GenerateHeroImageArgs) => Promise<Buffer | null>;
+    /**
+     * Supply topic candidates from your own Search Console auth. The built-in reader needs an OAuth
+     * refresh token; a site using a SERVICE ACCOUNT (or any other analytics source) provides this
+     * instead. Returned queries still pass through the engine's own filters (>= 2 words, brand terms
+     * removed, sorted by impressions), so the topic-selection invariants hold either way.
+     * Return [] for "no candidates" — the engine falls back to the editorial pool.
+     */
+    fetchGscQueries?: (args: FetchGscQueriesArgs) => Promise<GscQuery[]>;
+    /**
+     * Submit/refresh the sitemap after publishing, with your own auth. Takes precedence over the
+     * built-in OAuth ping.
+     */
+    submitSitemap?: (args: SubmitSitemapArgs) => Promise<void>;
+    /**
+     * Serialize a post to its final Markdown. Provide this when the consuming site owns a different
+     * frontmatter shape (different field names, FAQs rendered into the body, extra fields). The
+     * engine still owns generation, validation, watermarking, encoding and the write itself — this
+     * hook only decides what the file looks like.
+     */
+    renderMarkdown?: (args: RenderMarkdownArgs) => string;
 }
 export interface BlogEngineRuntime {
     config: BlogEngineConfig;

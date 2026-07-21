@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { BLOG_CONFIG } from './config.js';
+import { BLOG_CONFIG, getBlogHooks } from './config.js';
 import { readExistingPosts } from './existing-posts.js';
 import { generateBlogPost } from './generate-post.js';
 import { getGscQueries, pingGscSitemap } from './gsc.js';
@@ -34,7 +34,12 @@ export async function generateBlogRun(root, options) {
         const cover = await generateCoverImage(root, post, topic, ordinal, options.dryRun);
         const gradient = gradientForOrdinal(ordinal);
         const dateISO = new Date().toISOString().slice(0, 10);
-        const md = toMarkdown(post, { gradient, cover, dateISO });
+        // The consuming site may own its own frontmatter shape; the engine still owns everything
+        // around it (generation, validation, watermarking, encoding, the write).
+        const renderMarkdown = getBlogHooks().renderMarkdown;
+        const md = renderMarkdown
+            ? renderMarkdown({ post, cover, gradient, dateISO })
+            : toMarkdown(post, { gradient, cover, dateISO });
         const file = join(blogDir, `${post.slug}.md`);
         if (options.dryRun) {
             console.log(`\n-------- DRY RUN ${file} (${wordCount(post.body)} body words, image: ${cover.source}) --------\n${md}\n-------- END DRY RUN --------\n`);

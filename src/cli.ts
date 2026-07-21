@@ -1,5 +1,5 @@
 import { writeFileSync } from 'node:fs';
-import { BLOG_CONFIG, configureBlogEngine } from './config.js';
+import { BLOG_CONFIG, configureBlogEngine, getBlogHooks } from './config.js';
 import { generateBlogRun } from './publisher.js';
 import { getGoogleAccessToken, pingGscSitemap } from './gsc.js';
 import { pingIndexNow } from './indexing.js';
@@ -98,7 +98,10 @@ export async function runBlogIndexPublishedCli(runtime: BlogEngineRuntime): Prom
 
   await pingIndexNow(urls);
 
-  if (
+  // A submitSitemap hook owns its own auth, so it needs no OAuth token (pingGscSitemap routes to it).
+  if (getBlogHooks().submitSitemap) {
+    await pingGscSitemap(null);
+  } else if (
     process.env.GOOGLE_OAUTH_CLIENT_ID &&
     process.env.GOOGLE_OAUTH_CLIENT_SECRET &&
     process.env.GOOGLE_OAUTH_REFRESH_TOKEN

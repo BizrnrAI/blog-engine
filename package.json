@@ -1,6 +1,6 @@
 {
   "name": "@bizrnr/blog-engine",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Canonical BizRnR autonomous blog engine for RSS, image generation, watermarking, and PR-based publishing.",
   "type": "module",
   "main": "./dist/src/index.js",
@@ -21,8 +21,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.typecheck.json --noEmit",
-    "test": "node --import tsx --test tests/*.test.ts",
-    "verify": "npm run typecheck && npm run test && npm run build",
+    "test": "node test/seams.mjs",
+    "verify": "npm run typecheck && npm run build && npm test",
     "prepare": "npm run build"
   },
   "dependencies": {

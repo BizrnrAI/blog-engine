@@ -183,12 +183,20 @@ export async function makeOgCard(root, post, dryRun = false) {
     return rel;
 }
 export async function generateCoverImage(root, post, topic, ordinal, dryRun = false) {
-    const ogImage = await makeOgCard(root, post, dryRun);
+    // The branded SVG card is on by default. When a site turns it off, the hero doubles as the OG
+    // image — one asset serving both, and `ogImage` stays a real path for downstream frontmatter.
+    const ogCardEnabled = BLOG_CONFIG.image.og.enabled !== false;
+    const ogCard = ogCardEnabled ? await makeOgCard(root, post, dryRun) : '';
     const aiHero = dryRun ? null : await generateAiHero(root, post, topic);
     if (aiHero)
-        return { ...aiHero, ogImage, source: 'ai-generated' };
+        return { ...aiHero, ogImage: ogCard || aiHero.image, source: 'ai-generated' };
     const fallback = HERO_PHOTOS[ordinal % HERO_PHOTOS.length];
-    return { image: fallback.url, imageAlt: fallback.alt, ogImage, source: 'curated-fallback' };
+    return {
+        image: fallback.url,
+        imageAlt: fallback.alt,
+        ogImage: ogCard || fallback.url,
+        source: 'curated-fallback',
+    };
 }
 export function gradientForOrdinal(ordinal) {
     return GRADIENTS[ordinal % GRADIENTS.length];

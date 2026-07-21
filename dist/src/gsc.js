@@ -1,5 +1,23 @@
-import { BLOG_CONFIG } from './config.js';
+import { BLOG_CONFIG, getBlogHooks } from './config.js';
 import { env, norm } from './utils.js';
+const LOOKBACK_DAYS = 28;
+/**
+ * The engine's topic-candidate invariants, applied to EVERY source (built-in reader or a
+ * fetchGscQueries hook): drop single-word queries, drop anything containing a brand term (we
+ * already own those), and rank by impressions.
+ */
+function filterQueries(rows) {
+    const brandStopwords = [
+        BLOG_CONFIG.identity.name.toLowerCase(),
+        BLOG_CONFIG.identity.siteHost.replace(/\.[a-z]+$/, ''),
+        BLOG_CONFIG.identity.agent.name.toLowerCase(),
+        BLOG_CONFIG.identity.voice.name.toLowerCase(),
+    ];
+    return rows
+        .filter((q) => q.query.split(/\s+/).length >= 2)
+        .filter((q) => !brandStopwords.some((b) => norm(q.query).includes(norm(b))))
+        .sort((a, b) => b.impressions - a.impressions);
+}
 export async function getGoogleAccessToken() {
     const body = new URLSearchParams({
         client_id: env('GOOGLE_OAUTH_CLIENT_ID'),
@@ -14,20 +32,32 @@ export async function getGoogleAccessToken() {
     return j.access_token;
 }
 export async function getGscQueries() {
+    // A site that authenticates Search Console its own way (service account, or any other analytics
+    // source) supplies candidates here. No OAuth token exists in that case, so sitemap submission
+    // routes through the submitSitemap hook instead.
+    const hook = getBlogHooks().fetchGscQueries;
+    if (hook) {
+        try {
+            const rows = await hook({
+                property: BLOG_CONFIG.gsc.property,
+                siteUrl: BLOG_CONFIG.identity.siteUrl,
+                days: LOOKBACK_DAYS,
+            });
+            return { token: null, queries: filterQueries(rows || []) };
+        }
+        catch (err) {
+            console.warn('[blog-gsc] fetchGscQueries hook failed, falling back to editorial pool:', err instanceof Error ? err.message : String(err));
+            return { token: null, queries: [] };
+        }
+    }
     if (!process.env.GOOGLE_OAUTH_CLIENT_ID ||
         !process.env.GOOGLE_OAUTH_CLIENT_SECRET ||
         !process.env.GOOGLE_OAUTH_REFRESH_TOKEN) {
         return { token: null, queries: [] };
     }
     const token = await getGoogleAccessToken();
-    const brandStopwords = [
-        BLOG_CONFIG.identity.name.toLowerCase(),
-        BLOG_CONFIG.identity.siteHost.replace(/\.[a-z]+$/, ''),
-        BLOG_CONFIG.identity.agent.name.toLowerCase(),
-        BLOG_CONFIG.identity.voice.name.toLowerCase(),
-    ];
     const end = new Date();
-    const start = new Date(end.getTime() - 28 * 864e5);
+    const start = new Date(end.getTime() - LOOKBACK_DAYS * 864e5);
     const fmt = (d) => d.toISOString().slice(0, 10);
     try {
         const r = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(BLOG_CONFIG.gsc.property)}/searchAnalytics/query`, {
@@ -41,14 +71,10 @@ export async function getGscQueries() {
             }),
         });
         const j = await r.json();
-        const queries = (j.rows || [])
-            .map((row) => ({
+        const queries = filterQueries((j.rows || []).map((row) => ({
             query: row.keys[0],
             impressions: row.impressions,
-        }))
-            .filter((q) => q.query.split(/\s+/).length >= 2)
-            .filter((q) => !brandStopwords.some((b) => norm(q.query).includes(norm(b))))
-            .sort((a, b) => b.impressions - a.impressions);
+        })));
         return { token, queries };
     }
     catch (err) {
@@ -57,6 +83,18 @@ export async function getGscQueries() {
     }
 }
 export async function pingGscSitemap(token) {
+    // A site with its own Search Console auth submits through the hook; there is no OAuth token.
+    const hook = getBlogHooks().submitSitemap;
+    if (hook) {
+        try {
+            await hook({ sitemap: BLOG_CONFIG.gsc.sitemap, property: BLOG_CONFIG.gsc.property });
+            console.log('[blog-indexing] GSC sitemap resubmit: via submitSitemap hook');
+        }
+        catch (err) {
+            console.warn('[blog-indexing] submitSitemap hook failed:', err instanceof Error ? err.message : String(err));
+        }
+        return;
+    }
     if (!token)
         return;
     try {

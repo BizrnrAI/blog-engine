@@ -17,12 +17,12 @@ pluggable seam you can point at your own stack.
 | Concern | Module | Notes |
 |---|---|---|
 | Topic selection | `src/topic-rotation.ts` | GSC demand queries → editorial pool → cross-promo cadence, with duplicate-coverage detection |
-| GSC integration | `src/gsc.ts` | Search Analytics queries + sitemap resubmission (optional; degrades gracefully) |
+| GSC integration | `src/gsc.ts` | Search Analytics queries + sitemap resubmission (optional; degrades gracefully). Built-in OAuth, or bring your own auth via the `fetchGscQueries` / `submitSitemap` hooks |
 | Post generation | `src/generate-post.ts` | ASEO content contract, strict-JSON prompting, tolerant parsing, 3-attempt validate-and-retry |
 | Validation | `src/generate-post.ts` | Question-led H2s, citable blockquote, internal-link allowlist, claims discipline, deterministic description clamping |
 | Hero images | `src/images.ts` | AI generation (pluggable), Sharp logo watermarking, curated fallback, branded descriptive alt text |
-| OG cards | `src/images.ts` | Deterministic branded 1200×630 SVG→JPEG cards, no model call |
-| Markdown output | `src/markdown.ts` | Frontmatter with title/description/tags/dates/answer/FAQs/images |
+| OG cards | `src/images.ts` | Deterministic branded 1200×630 SVG→JPEG cards, no model call. Disable with `image.og.enabled: false` to let the hero serve as the OG image |
+| Markdown output | `src/markdown.ts` | Frontmatter with title/description/tags/dates/answer/FAQs/images. Override the whole shape with the `renderMarkdown` hook |
 | Content reading | `src/content-reader.ts` | Parse generated posts back for blog index, RSS, sitemap, `llms.txt` |
 | JSON-LD | `src/schema.ts` | `BlogPosting` + `FAQPage` + `BreadcrumbList` graph builders with stable `@id`s |
 | RSS | `src/rss.ts` | RSS 2.0 with `atom:self`, `media:content`, `enclosure` (real byte lengths, correct MIME) |
@@ -45,10 +45,10 @@ await generateBlogRun(process.cwd(), { count: 1, dryRun: false, skipPing: true }
 pinged only after the URL is live on production (see
 [docs/WORKFLOWS.md](docs/WORKFLOWS.md)).
 
-### Bring your own model stack
+### Bring your own stack
 
-The engine defaults to OpenRouter (text) and Vercel AI Gateway (images), but
-both are seams, not requirements:
+Every external dependency is a seam, not a requirement. Supply only the hooks
+you need — anything you leave out keeps the built-in behaviour:
 
 ```ts
 configureBlogEngine({
@@ -59,9 +59,26 @@ configureBlogEngine({
     // Return a raw image Buffer (engine watermarks + writes it), or null to
     // use the curated fallback photos.
     generateHeroImage: async ({ prompt }) => myImageModel.generate(prompt),
+
+    // Search Console from your own auth — e.g. a SERVICE ACCOUNT rather than
+    // the built-in OAuth refresh token. Returned rows still pass through the
+    // engine's filters (>= 2 words, brand terms removed, ranked by
+    // impressions), so topic-selection invariants hold either way.
+    fetchGscQueries: async ({ property, days }) => myGsc.topQueries(property, days),
+    // Sitemap submission with that same auth; replaces the OAuth ping.
+    submitSitemap: async ({ sitemap }) => myGsc.submit(sitemap),
+
+    // Own the file's frontmatter shape (different field names, FAQs rendered
+    // into the body, extra fields). The engine still owns generation,
+    // validation, watermarking, encoding and the write itself.
+    renderMarkdown: ({ post, cover, dateISO }) => myFrontmatter(post, cover, dateISO),
   },
 });
 ```
+
+To let the hero double as the Open Graph card instead of writing a second
+asset per post, set `image.og.enabled: false`. The engine then reports the
+hero path as `ogImage`. It defaults to `true`.
 
 See [docs/PROVIDERS.md](docs/PROVIDERS.md) for the built-in providers, env
 vars, and hook contracts.

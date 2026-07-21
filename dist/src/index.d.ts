@@ -14,5 +14,5 @@ export { getGoogleAccessToken, getGscQueries, pingGscSitemap } from './gsc.js';
 export { pingIndexNow } from './indexing.js';
 export { clampText, mimeTypeFor, norm, slugify, wordCount, xmlEscape } from './utils.js';
 export { toMarkdown } from './markdown.js';
-export type { BlogAnswerSection, BlogContentRules, BlogEngineConfig, BlogEngineHooks, BlogEngineRuntime, BlogEngineTopics, CoverImage, CrossPromoTopic, EditorialTopic, ExistingPost, GeneratedBlogPost, GenerateHeroImageArgs, GenerateRunOptions, GenerateRunResult, GenerateTextArgs, GscQuery, ParsedBlogFaq, ParsedBlogPost, ReadGeneratedPostsOptions, SeedBlogPost, SeoTopic, TemplateRuntimeOptions, TemplateSiteProfile, TopicCategory, } from './types.js';
+export type { BlogAnswerSection, BlogContentRules, BlogEngineConfig, BlogEngineHooks, BlogEngineRuntime, BlogEngineTopics, CoverImage, CrossPromoTopic, EditorialTopic, ExistingPost, FetchGscQueriesArgs, GeneratedBlogPost, GenerateHeroImageArgs, GenerateRunOptions, GenerateRunResult, GenerateTextArgs, GscQuery, RenderMarkdownArgs, SubmitSitemapArgs, ParsedBlogFaq, ParsedBlogPost, ReadGeneratedPostsOptions, SeedBlogPost, SeoTopic, TemplateRuntimeOptions, TemplateSiteProfile, TopicCategory, } from './types.js';
 //# sourceMappingURL=index.d.ts.map
