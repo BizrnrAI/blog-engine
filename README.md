@@ -192,10 +192,17 @@ The compiled `dist/` is committed so consumers can install straight from git.
 
 ```
 src/            engine core (see table above)
-tests/          node:test suite (runs via tsx, no network)
-examples/       sdbg (brand adapter) + template (site-profile runtime)
+tests/          node:test suite (runs via tsx, no network, no API keys)
+examples/       minimal (START HERE) + sdbg (brand adapter) + template runtime
 docs/           ADOPTION, CONTENT-SPEC, PROVIDERS, WORKFLOWS
 docs/skills/aseo/  the full ASEO operating skill this engine implements
 AGENTS.md       entry point for AI agents working in or adopting this repo
+CHANGELOG.md    what changed per version
 .env.example    every env var the engine reads, with comments
 ```
+
+**Adopting?** Copy [examples/minimal/runtime.ts](examples/minimal/runtime.ts)
+— the smallest complete adapter, for a business with no voice agent, partner
+site, licence or service areas. It is covered by the test suite, so it cannot
+drift out of date. `configureBlogEngine()` validates whatever you write and
+names every field that is wrong before a single model call is made.

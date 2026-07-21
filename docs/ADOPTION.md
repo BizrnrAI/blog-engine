@@ -14,6 +14,29 @@ npm install github:BizrnrAI/blog-engine
 
 The package ships compiled `dist/`, so no build step is required on install.
 
+## 0.5 Start from the minimal example
+
+The fastest correct start is to copy
+[examples/minimal/runtime.ts](../examples/minimal/runtime.ts) and change the
+strings. It is a complete adapter for a business with **no** AI voice agent, no
+partner site, no professional licence and no service areas — i.e. most
+websites — and it is covered by the test suite, so it cannot drift out of date.
+
+`configureBlogEngine()` validates your adapter the moment you call it and
+throws a single error listing every problem, each naming the exact config path:
+
+```
+Blog engine configuration is not usable:
+  • topics.internalLinks must contain at least one path — posts are required to
+    link internally, so an empty list can never validate
+  • identity.siteHost must be a bare host, without https://
+
+See docs/ADOPTION.md for a minimal working adapter.
+```
+
+To lint an adapter in CI without configuring the engine, call
+`validateBlogEngineRuntime(runtime)` and assert it returns `[]`.
+
 ## 1. Write the adapter
 
 Create `scripts/blog/adapter.ts` (or `.mjs`) exporting three things:

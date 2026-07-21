@@ -22,7 +22,10 @@ export async function generateBlogRun(root, options) {
     const { token, queries } = await getGscQueries();
     console.log(`${logPrefix} GSC: ${queries.length} candidate queries (top: ${queries.slice(0, 3).map((q) => q.query).join(' | ') || 'none'})`);
     const blogDir = join(root, BLOG_CONFIG.paths.blogDir);
-    ensureDir(blogDir);
+    // A dry run must not touch the filesystem — it previously created the content directory before
+    // deciding it wasn't going to write anything, which litters a repo just for previewing a post.
+    if (!options.dryRun)
+        ensureDir(blogDir);
     const existing = readExistingPosts(root);
     console.log(`${logPrefix} existing posts: ${existing.length}`);
     const written = [];

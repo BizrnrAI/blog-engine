@@ -1,8 +1,15 @@
 import type { BlogEngineConfig, BlogEngineHooks, BlogEngineRuntime, BlogEngineTopics } from './types.js';
+import { assertBlogEngineRuntime } from './validate-runtime.js';
 
 let runtime: BlogEngineRuntime | null = null;
 
-export function configureBlogEngine(nextRuntime: BlogEngineRuntime): void {
+/**
+ * Install the adapter. The runtime is validated here so a malformed adapter fails immediately with
+ * a list of what to fix, rather than deep inside the image pipeline or after a paid model call.
+ * Pass `{ validate: false }` only to inspect a deliberately partial config (tests, tooling).
+ */
+export function configureBlogEngine(nextRuntime: BlogEngineRuntime, options: { validate?: boolean } = {}): void {
+  if (options.validate !== false) assertBlogEngineRuntime(nextRuntime);
   runtime = nextRuntime;
 }
 

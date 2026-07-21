@@ -1,9 +1,25 @@
-# AGENTS.md — working with the BizRnR Blog Engine
+# AGENTS.md — working with the blog engine
 
 You are an AI agent. This file is your entry point for reviewing, adopting,
 extending, or operating this repo. The repo is deliberately self-contained:
-you do not need access to any BizRnR-internal system, memory, or credential
-store to do correct work here.
+you do not need access to any internal system, memory, or credential store to
+do correct work here.
+
+## Plug-and-play in four steps
+
+1. `npm install github:BizrnrAI/blog-engine`
+2. Copy [examples/minimal/runtime.ts](examples/minimal/runtime.ts) — the
+   smallest complete adapter — and change the strings.
+3. `configureBlogEngine(myRuntime())`. It **validates the adapter immediately**
+   and throws one error listing every field that is wrong, so you find out at
+   config time rather than after a model call. Lint without configuring via
+   `validateBlogEngineRuntime(runtime)`.
+4. `await generateBlogRun(process.cwd(), { count: 1, dryRun: true, skipPing: true })`
+   to preview. A dry run writes nothing to disk.
+
+The engine is **domain-agnostic**: it knows nothing about your industry. A
+bakery, a law firm, a SaaS product and a brokerage all drive the same core.
+The only required identity is `name`, `siteUrl`, `siteHost`, `agent.name`.
 
 ## Orientation (read in this order)
 
@@ -39,6 +55,16 @@ store to do correct work here.
 - **Backward compatibility.** Existing site adapters supply only
   `{ config, topics, brandPersona }`. New runtime fields must be optional with
   production-safe defaults.
+- **Keep the core domain-agnostic.** Never add an industry assumption to
+  `src/` — no vertical-specific categories, keyword regexes, CTA wording, or
+  vendor product copy. If a behaviour only makes sense for one kind of site, it
+  belongs in that site's adapter (or `content.extraRules` /
+  `content.ctaInstruction`), not in the engine. A default that names an
+  industry is a bug: it silently breaks every other adopter. The
+  `tests/seams.test.ts` agnosticism cases guard this.
+- **Fail fast, name the field.** A misconfigured adapter must be rejected by
+  `validateBlogEngineRuntime` with a message naming the offending config path —
+  never by an undefined read deep in the pipeline.
 - **dist/ is committed.** Consumers install from git. Run `npm run build` and
   commit `dist/` with any `src/` change.
 
@@ -52,6 +78,21 @@ You don't need OpenRouter or Vercel AI Gateway. Provide `hooks` when calling
 - `generateHeroImage({ prompt, post, topic })` → return a raw image `Buffer`
   (the engine watermarks it with the site logo, encodes it, and writes it
   locally) or `null` to use the adapter's curated fallback photos.
+- `fetchGscQueries({ property, siteUrl, days })` → return `GscQuery[]` from
+  your own Search Console auth (a service account, say) or any other demand
+  source. The engine still applies its own filters to whatever you return.
+- `submitSitemap({ sitemap, property })` → resubmit the sitemap with that same
+  auth. Takes precedence over the built-in OAuth ping and needs no token.
+- `renderMarkdown({ post, cover, gradient, dateISO })` → return the finished
+  file contents when your site owns a different frontmatter shape (different
+  field names, FAQs rendered into the body, extra fields).
+
+Every hook is optional and replaces exactly one dependency. The engine keeps
+ownership of the invariants either way — topic filtering, validation,
+watermarking, encoding, and the write itself are never delegated.
+
+Set `image.og.enabled: false` when the hero should double as the Open Graph
+card instead of generating a second asset per post.
 
 Alternatively keep the built-in providers and set
 `config.text.provider = 'openai-compatible'`, `config.text.url` to any
