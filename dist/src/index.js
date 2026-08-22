@@ -1,5 +1,5 @@
 export { BLOG_CONFIG, blogBasePath, brandPersona, configureBlogEngine, getBlogConfig, getBlogHooks, getBlogRuntime, getBlogTopics } from './config.js';
-export { contentRules, generateBlogPost, normalizeGeneratedPost, parseModelJson, relatedLinkTargets, validateGeneratedPost } from './generate-post.js';
+export { contentRules, generateBlogPost, normalizeGeneratedPost, parseModelJson, relatedLinkTargets, repairJsonStringNewlines, validateGeneratedPost } from './generate-post.js';
 export { generateCoverImage, applyWatermark, heroAltText, makeOgCard, writeHeroVariants } from './images.js';
 export { countPostsSince, generateBlogRun } from './publisher.js';
 export { buildRefreshMessages, refreshBlogPost, refreshBlogRun } from './refresh.js';
@@ -13,9 +13,10 @@ export { createAfterIndexedHook, linkedinAdapter, slackAdapter, webhookAdapter }
 export { buildBlogRss } from './rss.js';
 export { authorProfileSchema, blogPostGraph, blogPostingSchema, blogSchema, breadcrumbSchema, faqPageSchema } from './schema.js';
 export { blogSitemapEntries, buildBlogLlmsTxt, relatedPosts } from './discovery.js';
-export { pickTopic } from './topic-rotation.js';
+export { allEditorialTopicsCovered, pickTopic, resolveTopic } from './topic-rotation.js';
 export { readExistingPosts } from './existing-posts.js';
-export { parseBlogFrontmatter, markdownToAnswerSections, readGeneratedBlogPosts, mergeBlogPosts } from './content-reader.js';
+export { parseBlogFrontmatter, parsePostFile, markdownToAnswerSections, readGeneratedBlogPosts, mergeBlogPosts } from './content-reader.js';
+export { DEFAULT_FRONTMATTER_ALIASES, coerceFrontmatterValue, normalizeFrontmatter, resolveFrontmatterAliases } from './frontmatter.js';
 export { buildTemplateBlogEngineRuntime } from './template-runtime.js';
 export { assertBlogEngineRuntime, validateBlogEngineRuntime, BlogEngineConfigError } from './validate-runtime.js';
 export { cleanBlogSlugs, runBlogAuditCli, runBlogFanoutCli, runBlogGenerateCli, runBlogIndexPublishedCli, runBlogRefreshCli, runBlogScorecardCli, waitUntilBlogUrlsLive } from './cli.js';

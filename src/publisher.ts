@@ -9,7 +9,7 @@ import { pingIndexNow } from './indexing.js';
 import { toMarkdown } from './markdown.js';
 import { contentRules } from './generate-post.js';
 import { hasSecondDemandSignal } from './demand.js';
-import { describeTopic, pickTopic } from './topic-rotation.js';
+import { describeTopic, resolveTopic } from './topic-rotation.js';
 import type { GenerateRunOptions, GenerateRunResult } from './types.js';
 import { wordCount } from './utils.js';
 
@@ -61,7 +61,7 @@ export async function generateBlogRun(root: string, options: GenerateRunOptions)
 
   const written: string[] = [];
   for (let i = 0; i < options.count; i++) {
-    const topic = pickTopic(existing, queries, i);
+    const topic = await resolveTopic(existing, queries, i);
     console.log(`${logPrefix} topic #${existing.length + i}: ${describeTopic(topic)}`);
     const post = await generateBlogPost(topic, existing);
     const ordinal = existing.length + i;

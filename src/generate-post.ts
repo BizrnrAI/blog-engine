@@ -105,9 +105,17 @@ function buildMessages(topic: SeoTopic, existing: readonly ExistingPost[]) {
       : '',
   ].filter(Boolean).join('\n');
 
+  // A pinned slug/title is enforced deterministically in normalizeGeneratedPost, but the model is
+  // told as well: an unexplained rewrite of its own output reads as a bug in the next diff.
+  const pins = [
+    topic.title ? `- The title MUST be EXACTLY: ${JSON.stringify(topic.title)} — do not rephrase, shorten, or re-punctuate it.` : '',
+    topic.slug ? `- The slug MUST be EXACTLY: ${JSON.stringify(topic.slug)} — do not re-derive it from the title.` : '',
+  ].filter(Boolean);
+
   const user = [
     `Write the post on this topic: "${topic.keyword}".`,
     `Category: ${topic.category}. Editorial angle: ${topic.angle}.`,
+    ...(pins.length ? ['', 'PINNED VALUES (exact match required):', ...pins] : []),
     '',
     'Return ONLY this JSON object:',
     '{',
@@ -163,14 +171,73 @@ async function callLLM(messages: Array<{ role: string; content: string }>): Prom
   return String(j.choices?.[0]?.message?.content || '');
 }
 
+function outermostObject(text: string): string | null {
+  const first = text.indexOf('{');
+  const last = text.lastIndexOf('}');
+  return first !== -1 && last > first ? text.slice(first, last + 1) : null;
+}
+
+/**
+ * Escape raw control characters that appear INSIDE string literals. Models routinely emit a
+ * literal newline inside a JSON string (Markdown bodies especially), which is invalid JSON but
+ * unambiguous to repair: outside strings the whitespace is untouched.
+ */
+export function repairJsonStringNewlines(text: string): string {
+  let out = '';
+  let inString = false;
+  let escaped = false;
+  for (const ch of text) {
+    if (escaped) { out += ch; escaped = false; continue; }
+    if (ch === '\\' && inString) { out += ch; escaped = true; continue; }
+    if (ch === '"') { inString = !inString; out += ch; continue; }
+    if (inString && (ch === '\n' || ch === '\r' || ch === '\t')) {
+      out += ch === '\n' ? '\\n' : ch === '\r' ? '\\r' : '\\t';
+      continue;
+    }
+    out += ch;
+  }
+  return out;
+}
+
+/**
+ * Parse the model's JSON out of whatever it wrapped it in.
+ *
+ * Real failures this handles: a fenced block whose body contains its own ``` fences (the lazy
+ * first-fence match then stops early and yields a truncated object), a preamble/epilogue around
+ * the object, and raw newlines inside string values. Candidates are tried widest-usable-first and
+ * the first one that parses to an object wins.
+ */
 export function parseModelJson(text: string): Record<string, unknown> {
-  let t = text.trim();
-  const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fence) t = fence[1].trim();
-  const first = t.indexOf('{');
-  const last = t.lastIndexOf('}');
-  if (first !== -1 && last !== -1) t = t.slice(first, last + 1);
-  return JSON.parse(t);
+  const t = text.trim();
+  const candidates: string[] = [];
+  const push = (value: string | null | undefined) => {
+    const v = (value || '').trim();
+    if (v && !candidates.includes(v)) candidates.push(v);
+  };
+
+  // Widest fenced span first: from the first opening fence to the last closing fence, so a body
+  // containing its own fences survives intact.
+  const firstFence = t.indexOf('\u0060\u0060\u0060');
+  const lastFence = t.lastIndexOf('\u0060\u0060\u0060');
+  if (firstFence !== -1 && lastFence > firstFence) {
+    push(t.slice(firstFence + 3, lastFence).replace(/^json\b/i, ''));
+  }
+  for (const m of t.matchAll(/\u0060\u0060\u0060(?:json)?\s*([\s\S]*?)\u0060\u0060\u0060/g)) push(m[1]);
+  push(t);
+
+  const errors: string[] = [];
+  for (const candidate of candidates) {
+    for (const attempt of [candidate, outermostObject(candidate), repairJsonStringNewlines(candidate), outermostObject(repairJsonStringNewlines(candidate))]) {
+      if (!attempt) continue;
+      try {
+        const parsed = JSON.parse(attempt);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed as Record<string, unknown>;
+      } catch (err) {
+        errors.push(err instanceof Error ? err.message : String(err));
+      }
+    }
+  }
+  throw new SyntaxError(`no JSON object found in model output (${candidates.length} candidate(s); last error: ${errors[errors.length - 1] || 'none'})`);
 }
 
 function questionH2Count(body: string): number {
@@ -191,6 +258,10 @@ export function validateGeneratedPost(
   if (!post.title || post.title.length > 90) errs.push('title missing or > 90 chars');
   if (!post.slug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(post.slug)) errs.push('slug missing or not kebab-case');
   if (post.slug && args.existingSlugs.includes(post.slug)) errs.push('slug already exists: ' + post.slug);
+  // Pinned values are applied in normalizeGeneratedPost; assert them for callers that validate
+  // model output directly.
+  if (args.topic.slug && post.slug !== args.topic.slug) errs.push(`slug must be exactly "${args.topic.slug}" (pinned)`);
+  if (args.topic.title && post.title !== args.topic.title) errs.push(`title must be exactly "${args.topic.title}" (pinned)`);
   // Descriptions are clamped deterministically in normalizeGeneratedPost; only
   // reject when the model produced something unusably short or absurdly long.
   if (!post.description || post.description.length < 70) errs.push('description too short (< 70 chars)');
@@ -237,11 +308,13 @@ export function validateGeneratedPost(
   return errs;
 }
 
-export function normalizeGeneratedPost(raw: Record<string, unknown>): GeneratedBlogPost {
+export function normalizeGeneratedPost(raw: Record<string, unknown>, topic?: Pick<SeoTopic, 'slug' | 'title'>): GeneratedBlogPost {
   const rules = contentRules();
-  const slug = slugify(String(raw.slug || raw.title || ''));
+  // A pinned slug is used verbatim: slugify() strips stop words ("to", "a", "of"), which would
+  // silently move a curated URL.
+  const slug = topic?.slug || slugify(String(raw.slug || raw.title || ''));
   return {
-    title: String(raw.title || '').trim(),
+    title: topic?.title || String(raw.title || '').trim(),
     slug,
     description: clampText(String(raw.description || ''), rules.clampDescriptionTo),
     category: String(raw.category || '') as GeneratedBlogPost['category'],
@@ -268,7 +341,7 @@ export async function generateBlogPost(topic: SeoTopic, existing: ExistingPost[]
     let rawText = '';
     try {
       rawText = await callLLM(messages);
-      const post = normalizeGeneratedPost(parseModelJson(rawText));
+      const post = normalizeGeneratedPost(parseModelJson(rawText), topic);
       errs = validateGeneratedPost(post, { existingSlugs, topic });
       if (errs.length === 0 && contentRules().requireSources) errs = await verifySources(post.sources || []);
       if (errs.length === 0) return post;
@@ -278,7 +351,10 @@ export async function generateBlogPost(topic: SeoTopic, existing: ExistingPost[]
       // A parse throw must consume an attempt with structural feedback, never
       // abort the retry loop (models add preambles, fences, and stray text).
       errs = ['model output was not parseable JSON: ' + (err instanceof Error ? err.message : String(err))];
-      console.warn(`[blog-generate] attempt ${attempt} unparseable; head: ${rawText.slice(0, 200)}`);
+      console.warn(
+        `[blog-generate] attempt ${attempt} unparseable; head: ${rawText.slice(0, 200)}` +
+          (rawText.length > 400 ? ` ... tail: ${rawText.slice(-200)}` : ''),
+      );
       messages.push({ role: 'user', content: 'Your previous output was not valid JSON. Return ONLY the strict JSON object, no fences, no prose.' });
       continue;
     }

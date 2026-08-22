@@ -30,6 +30,22 @@ any other endpoint speaking the `/chat/completions` dialect. The engine sends
 
 ### Hook: run any model yourself
 
+> **Vercel AI SDK v7:** `generateText` rejects a `system` role inside `messages`. The engine's first
+> message is its system turn, so a hook built on the AI SDK must split it out:
+>
+> ```ts
+> hooks.generateText = async ({ messages }) => {
+>   const system = messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n\n');
+>   const rest = messages.filter((m) => m.role !== 'system');
+>   const { text } = await generateText({ model, instructions: system, messages: rest as ModelMessage[] });
+>   return text;
+> };
+> ```
+>
+> Passing the system turn through as a message fails the whole run on attempt 1 (observed on
+> Claude Sonnet via the Vercel AI Gateway). OpenAI-compatible endpoints accept system roles
+> normally — this is an AI-SDK-specific contract.
+
 ```ts
 configureBlogEngine({
   config, topics, brandPersona,

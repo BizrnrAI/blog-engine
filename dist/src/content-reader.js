@@ -1,9 +1,15 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { getBlogHooks } from './config.js';
+import { normalizeFrontmatter, resolveFrontmatterAliases } from './frontmatter.js';
 function stripQuotes(value) {
     return value.trim().replace(/^['"]|['"]$/g, '');
 }
-export function parseBlogFrontmatter(raw) {
+/**
+ * Parse frontmatter and normalize site-specific key aliases onto the engine canonical keys
+ * (see src/frontmatter.ts). Original keys are always preserved.
+ */
+export function parseBlogFrontmatter(raw, options = {}) {
     if (!raw.startsWith('---'))
         return { frontmatter: {}, content: raw.trim(), faqs: [], tags: [], sources: [] };
     const end = raw.indexOf('\n---', 3);
@@ -61,12 +67,38 @@ export function parseBlogFrontmatter(raw) {
         }
     }
     return {
-        frontmatter,
+        frontmatter: options.normalize === false ? frontmatter : normalizeFrontmatter(frontmatter, options.aliases || resolveFrontmatterAliases()),
         content,
         faqs: faqs.filter((faq) => faq.question && faq.answer),
         tags,
         sources: sources.filter((s) => s.title && s.url),
     };
+}
+/**
+ * Parse one post honouring hooks.parseFrontmatter when a site owns the format. Hook output is
+ * alias-normalized too, so a hook can return its native keys.
+ */
+export function parsePostFile(raw, slug) {
+    let hook;
+    try {
+        hook = getBlogHooks().parseFrontmatter;
+    }
+    catch {
+        hook = undefined; // no runtime configured: engine parser only
+    }
+    if (hook) {
+        const result = hook({ raw, slug });
+        if (result) {
+            return {
+                frontmatter: normalizeFrontmatter(result.frontmatter),
+                content: result.content,
+                faqs: result.faqs || [],
+                tags: result.tags || [],
+                sources: result.sources || [],
+            };
+        }
+    }
+    return parseBlogFrontmatter(raw);
 }
 export function markdownToAnswerSections(content, fallbackAnswer) {
     const chunks = content
@@ -95,9 +127,9 @@ export function readGeneratedBlogPosts(options = {}) {
         .map((file) => {
         const slug = file.replace(/\.md$/, '');
         const raw = readFileSync(join(blogDir, file), 'utf8');
-        const { frontmatter, content, faqs, tags, sources } = parseBlogFrontmatter(raw);
+        const { frontmatter, content, faqs, tags, sources } = parsePostFile(raw, slug);
         const title = frontmatter.title || fallback?.title || slug.replace(/-/g, ' ');
-        const publishedAt = frontmatter.date || frontmatter.pubDate || new Date().toISOString().slice(0, 10);
+        const publishedAt = frontmatter.date || new Date().toISOString().slice(0, 10);
         const description = frontmatter.description || fallback?.description || title;
         const answer = frontmatter.answer || description;
         return {
@@ -108,9 +140,9 @@ export function readGeneratedBlogPosts(options = {}) {
             tags: tags.length ? tags : fallback?.tags || [frontmatter.category || 'Service Guides'],
             author: frontmatter.author || fallback?.author || '',
             publishedAt,
-            updatedAt: frontmatter.updated || frontmatter.updatedDate || publishedAt,
-            heroImage: frontmatter.image || frontmatter.heroImage || frontmatter.cover || fallback?.heroImage || '',
-            heroImageAlt: frontmatter.imageAlt || frontmatter.heroAlt || frontmatter.coverAlt || `${fallback?.heroImageAltPrefix || 'Blog'} guide: ${title}`,
+            updatedAt: frontmatter.updated || publishedAt,
+            heroImage: frontmatter.image || fallback?.heroImage || '',
+            heroImageAlt: frontmatter.imageAlt || `${fallback?.heroImageAltPrefix || 'Blog'} guide: ${title}`,
             heroImageWidth: Number(frontmatter.imageWidth) || undefined,
             heroImageHeight: Number(frontmatter.imageHeight) || undefined,
             heroImageSrcset: frontmatter.imageSrcset || undefined,

@@ -95,6 +95,13 @@ transparent scoping, disclosed authorship).
 - Honest dates only: `date`/`updated` are the real generation date; never
   backdate, never fake-freshen.
 
+## Pinned topics (v0.5.2)
+
+When a topic carries `slug` or `title` (a curated catalog entry, or refresh mode pinning the slug of
+the post being rewritten), the value is stated in the prompt, applied deterministically in
+`normalizeGeneratedPost` (a pinned slug skips `slugify`, which would strip stop words and move the
+URL), and asserted by `validateGeneratedPost` — prompt, normalizer and validator move together.
+
 ## Validation behavior (for engine maintainers)
 
 - Three attempts; each failure feeds the exact error list back to the model.

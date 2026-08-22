@@ -1,10 +1,10 @@
-import { BLOG_CONFIG, getBlogTopics } from './config.js';
+import { BLOG_CONFIG, getBlogHooks, getBlogTopics } from './config.js';
 import {
   ALLOWED_CATEGORIES,
   CROSS_PROMO_TOPICS,
   EDITORIAL_TOPICS,
 } from './topics.js';
-import type { ExistingPost, GscQuery, SeoTopic, TopicCategory } from './types.js';
+import type { EditorialTopic, ExistingPost, GscQuery, SeoTopic, TopicCategory } from './types.js';
 import { norm, slugify } from './utils.js';
 
 /**
@@ -21,14 +21,34 @@ function categoryForQuery(q: string): TopicCategory {
   return ALLOWED_CATEGORIES[0];
 }
 
-function isCovered(keyword: string, existing: ExistingPost[]): boolean {
-  const slug = slugify(keyword);
+/**
+  * Has this topic already been published?
+  *
+  * A curated topic that pins its own slug/title is matched EXACTLY — the two-distinctive-words
+  * heuristic below is a guess that misfires on question-style titles ("How do I ...?"), which
+  * would silently skip catalog entries. The heuristic stays for topics that carry no pin, where
+  * a keyword is all the engine has.
+  */
+function isCovered(topic: { keyword: string; slug?: string; title?: string }, existing: ExistingPost[]): boolean {
+  if (topic.slug || topic.title) {
+    return existing.some(
+      (p) =>
+        (topic.slug ? p.slug === topic.slug : false) ||
+        (topic.title ? norm(p.title) === norm(topic.title) : false),
+    );
+  }
+  const slug = slugify(topic.keyword);
   if (existing.some((p) => p.slug === slug)) return true;
-  const distinctive = norm(keyword).split(' ').filter((w) => w.length > 3).slice(0, 2);
+  const distinctive = norm(topic.keyword).split(' ').filter((w) => w.length > 3).slice(0, 2);
   return existing.some((p) => {
     const t = norm(p.title);
     return distinctive.length >= 2 && distinctive.every((w) => t.includes(w));
   });
+}
+
+/** True when every configured editorial topic already has a published post. */
+export function allEditorialTopicsCovered(existing: ExistingPost[]): boolean {
+  return EDITORIAL_TOPICS.length > 0 && EDITORIAL_TOPICS.every((seed) => isCovered(seed, existing));
 }
 
 export function pickTopic(existing: ExistingPost[], gscQueries: GscQuery[], offset: number): SeoTopic {
@@ -40,7 +60,7 @@ export function pickTopic(existing: ExistingPost[], gscQueries: GscQuery[], offs
   if (canCrossPromo && idx % topics.crossPromoEvery === topics.crossPromoEvery - 1) {
     for (let i = 0; i < CROSS_PROMO_TOPICS.length; i++) {
       const seed = CROSS_PROMO_TOPICS[(idx + i) % CROSS_PROMO_TOPICS.length];
-      if (!isCovered(seed.keyword, existing)) {
+      if (!isCovered(seed, existing)) {
         return {
           type: 'crosspromo',
           keyword: seed.keyword,
@@ -53,7 +73,7 @@ export function pickTopic(existing: ExistingPost[], gscQueries: GscQuery[], offs
   }
 
   if (idx % 2 === 0) {
-    const hit = gscQueries.find((q) => !isCovered(q.query, existing));
+    const hit = gscQueries.find((q) => !isCovered({ keyword: q.query }, existing));
     if (hit) {
       return {
         type: 'gsc',
@@ -68,7 +88,7 @@ export function pickTopic(existing: ExistingPost[], gscQueries: GscQuery[], offs
 
   for (let i = 0; i < EDITORIAL_TOPICS.length; i++) {
     const seed = EDITORIAL_TOPICS[(idx + i) % EDITORIAL_TOPICS.length];
-    if (!isCovered(seed.keyword, existing)) {
+    if (!isCovered(seed, existing)) {
       return { type: 'editorial', ...seed, mustBacklink: false };
     }
   }
@@ -77,7 +97,26 @@ export function pickTopic(existing: ExistingPost[], gscQueries: GscQuery[], offs
   return { type: 'editorial', ...seed, mustBacklink: false };
 }
 
+/**
+ * The topic the engine will actually write about: `hooks.pickTopic` first (a curated,
+ * priority-ordered catalog or an external calendar), then `hooks.deriveTopic` when the editorial
+ * pool is exhausted, then the built-in rotation. With no hooks this is exactly `pickTopic`.
+ */
+export async function resolveTopic(existing: ExistingPost[], gscQueries: GscQuery[], offset: number): Promise<SeoTopic> {
+  const hooks = getBlogHooks();
+  if (hooks.pickTopic) {
+    const picked = await hooks.pickTopic({ existing, gscQueries, offset });
+    if (picked) return picked;
+  }
+  if (hooks.deriveTopic && allEditorialTopicsCovered(existing)) {
+    const derived: EditorialTopic = await hooks.deriveTopic({ existing });
+    return { type: 'editorial', ...derived, mustBacklink: false };
+  }
+  return pickTopic(existing, gscQueries, offset);
+}
+
 export function describeTopic(topic: SeoTopic): string {
   const impressions = topic.impressions ? ` · ${topic.impressions} impressions` : '';
-  return `[${topic.type}] "${topic.keyword}" (${topic.category})${impressions} · ${BLOG_CONFIG.identity.siteHost}`;
+  const pinned = topic.slug ? ` · pinned slug ${topic.slug}` : '';
+  return `[${topic.type}] "${topic.keyword}" (${topic.category})${impressions}${pinned} · ${BLOG_CONFIG.identity.siteHost}`;
 }

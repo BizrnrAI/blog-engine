@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { BLOG_CONFIG } from './config.js';
+import { parsePostFile } from './content-reader.js';
 export function readExistingPosts(root) {
     const blogDir = join(root, BLOG_CONFIG.paths.blogDir);
     if (!existsSync(blogDir))
@@ -8,11 +9,13 @@ export function readExistingPosts(root) {
     return readdirSync(blogDir)
         .filter((f) => f.endsWith('.md') && !f.startsWith('_'))
         .map((f) => {
+        const slug = f.replace(/\.md$/, '');
         const raw = readFileSync(join(blogDir, f), 'utf8');
-        const title = (raw.match(/^title:\s*["']?(.+?)["']?\s*$/m) || [])[1] || '';
-        // Engine frontmatter uses `date:`; sites with their own shape commonly use `pubDate:`.
-        const date = (raw.match(/^(?:date|pubDate):\s*["']?(\d{4}-\d{2}-\d{2})/m) || [])[1];
-        return { slug: f.replace(/\.md$/, ''), title, ...(date ? { date } : {}) };
+        // Alias-aware: a site writing pubDate: still feeds the cadence guard and refresh.
+        const { frontmatter } = parsePostFile(raw, slug);
+        const title = frontmatter.title || '';
+        const date = /^\d{4}-\d{2}-\d{2}$/.test(frontmatter.date || '') ? frontmatter.date : undefined;
+        return { slug, title, ...(date ? { date } : {}) };
     });
 }
 //# sourceMappingURL=existing-posts.js.map

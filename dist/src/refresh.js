@@ -113,7 +113,9 @@ export async function refreshBlogPost(root, slug, args = {}) {
     const existing = readExistingPosts(root);
     const otherTitles = existing.filter((p) => p.slug !== slug).map((p) => p.title);
     const otherSlugs = existing.filter((p) => p.slug !== slug).map((p) => p.slug);
-    const topic = { type: 'editorial', keyword: frontmatter.title || slug, category: frontmatter.category || '', angle: 'refresh', mustBacklink: false };
+    // The slug is the one invariant of a refresh — pin it so normalizeGeneratedPost keeps it
+    // verbatim and the validator asserts it. The title stays free: a refresh may sharpen it.
+    const topic = { type: 'editorial', keyword: frontmatter.title || slug, category: frontmatter.category || '', angle: 'refresh', mustBacklink: false, slug };
     const messages = buildRefreshMessages({
         title: frontmatter.title || slug,
         slug,
@@ -129,8 +131,7 @@ export async function refreshBlogPost(root, slug, args = {}) {
         let rawText = '';
         try {
             rawText = await callLLM(messages);
-            const candidate = normalizeGeneratedPost(parseModelJson(rawText));
-            candidate.slug = slug; // the slug is the one invariant of a refresh
+            const candidate = normalizeGeneratedPost(parseModelJson(rawText), topic);
             errs = validateGeneratedPost(candidate, { existingSlugs: otherSlugs, topic });
             if (!errs.length) {
                 post = candidate;
@@ -141,7 +142,8 @@ export async function refreshBlogPost(root, slug, args = {}) {
         }
         catch (err) {
             errs = ['model output was not parseable JSON: ' + (err instanceof Error ? err.message : String(err))];
-            console.warn(`[blog-refresh] attempt ${attempt} unparseable; head: ${rawText.slice(0, 200)}`);
+            console.warn(`[blog-refresh] attempt ${attempt} unparseable; head: ${rawText.slice(0, 200)}` +
+                (rawText.length > 400 ? ` ... tail: ${rawText.slice(-200)}` : ''));
             messages.push({ role: 'user', content: 'Your previous output was not valid JSON. Return ONLY the strict JSON object.' });
             continue;
         }

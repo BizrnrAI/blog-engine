@@ -232,6 +232,33 @@ blogPostGraph(post, { speakableSelectors: ['.speakable-answer'] }); // only if y
 
 Use `heroImageWidth`/`heroImageHeight` from parsed posts for explicit `<img width height>`.
 
+## 8.5 Keeping your own frontmatter shape, and owning topic choice (v0.5.2)
+
+**Frontmatter aliases.** A site whose posts use `pubDate/updatedDate/cover/coverAlt/readingTime`
+needs no translation layer: the readers normalize those onto the engine's canonical keys, so the
+cadence guard, corpus audit, scorecard, refresh and schema all see real dates and images. Original
+keys are preserved and a canonical key always wins over an alias. Two escape hatches:
+
+```ts
+config.paths.frontmatterAliases = { summary: 'description' };   // extend the default table
+hooks.parseFrontmatter = ({ raw, slug }) => myYamlParser(raw);  // or own the parse entirely (null = fall back)
+```
+
+**Topic pinning.** A curated, priority-ordered catalog can own its URLs and headlines:
+
+```ts
+topics.editorial = [
+  { keyword: 'when to automate', category: 'Guides', angle: 'judgement',
+    slug: 'when-not-to-automate', title: 'When Not to Automate' },   // pinned: exact URL + headline
+];
+hooks.pickTopic = ({ existing, gscQueries, offset }) => myCatalog.next(existing) ?? null; // null = engine rotation
+hooks.deriveTopic = ({ existing }) => askModelForFreshTopic(existing); // when the pool is exhausted
+```
+
+A pinned `slug` is written verbatim (no stop-word stripping), a pinned `title` is used as-is, the
+prompt states both, and the validator asserts them. Pinned topics also make coverage detection
+exact instead of heuristic — question-style titles no longer look "already covered".
+
 ## 9. Measurement, distribution, and evidence (v0.5.0)
 
 ```json

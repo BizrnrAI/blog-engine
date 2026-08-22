@@ -6,11 +6,23 @@ export interface SeoTopic {
     angle: string;
     mustBacklink: boolean;
     impressions?: number;
+    /**
+     * Pin the published slug exactly (no slugify, no stop-word stripping). Use when a curated
+     * catalog owns its URLs. The engine instructs the model, enforces the value deterministically
+     * in normalizeGeneratedPost, and validateGeneratedPost asserts it.
+     */
+    slug?: string;
+    /** Pin the published title exactly. Same enforcement path as slug. */
+    title?: string;
 }
 export interface EditorialTopic {
     keyword: string;
     category: TopicCategory;
     angle: string;
+    /** Curated slug: pins the URL and makes coverage detection exact instead of heuristic. */
+    slug?: string;
+    /** Curated title: pins the headline and makes coverage detection exact instead of heuristic. */
+    title?: string;
 }
 export interface CrossPromoTopic {
     keyword: string;
@@ -172,6 +184,13 @@ export interface BlogEngineConfig {
     paths: {
         /** URL path prefix for posts (default '/blog'); e.g. '/log' for a site whose posts live at /log/<slug>. */
         blogBasePath?: string;
+        /**
+         * Extra frontmatter key aliases (alias -> canonical engine key), merged OVER
+         * DEFAULT_FRONTMATTER_ALIASES (pubDate->date, updatedDate->updated, cover->image,
+         * coverAlt->imageAlt, readingTime->readMins, ...). Only needed for shapes the defaults miss,
+         * e.g. { summary: 'description' }.
+         */
+        frontmatterAliases?: Readonly<Record<string, string>>;
         blogDir: string;
         assetDir: string;
         heroDir: string;
@@ -381,6 +400,27 @@ export interface SubmitSitemapArgs {
     sitemap: string;
     property: string;
 }
+export interface ParseFrontmatterArgs {
+    /** Raw file contents, frontmatter included. */
+    raw: string;
+    slug: string;
+}
+export interface ParsedFrontmatterResult {
+    frontmatter: Record<string, string>;
+    content: string;
+    faqs: ParsedBlogFaq[];
+    tags: string[];
+    sources?: BlogSource[];
+}
+export interface PickTopicArgs {
+    existing: ExistingPost[];
+    gscQueries: GscQuery[];
+    /** Index of this post within the current run (0-based). */
+    offset: number;
+}
+export interface DeriveTopicArgs {
+    existing: ExistingPost[];
+}
 export interface RenderMarkdownArgs {
     post: GeneratedBlogPost;
     cover: CoverImage;
@@ -439,6 +479,23 @@ export interface BlogEngineHooks {
      * hook only decides what the file looks like.
      */
     renderMarkdown?: (args: RenderMarkdownArgs) => string;
+    /**
+     * Own the frontmatter parse entirely (a real YAML parser, a different file format, extra
+     * fields). Return null to fall back to the engine parser + alias normalization. Keys returned
+     * by the hook are alias-normalized too, so a hook may emit its native shape.
+     */
+    parseFrontmatter?: (args: ParseFrontmatterArgs) => ParsedFrontmatterResult | null;
+    /**
+     * Choose the topic for this post. Return null to fall back to the engine rotation
+     * (cross-promo cadence -> GSC demand -> editorial pool). Use for a priority-ordered curated
+     * catalog, an external content calendar, or any selection the engine cannot know about.
+     */
+    pickTopic?: (args: PickTopicArgs) => SeoTopic | null | Promise<SeoTopic | null>;
+    /**
+     * Produce a fresh editorial topic when every configured editorial topic is already covered,
+     * so the pool never dries up. Without it the engine recycles the pool as it always has.
+     */
+    deriveTopic?: (args: DeriveTopicArgs) => EditorialTopic | Promise<EditorialTopic>;
 }
 export interface BlogEngineRuntime {
     config: BlogEngineConfig;
