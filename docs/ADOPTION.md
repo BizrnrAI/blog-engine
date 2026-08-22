@@ -189,6 +189,29 @@ Verify: the Markdown file, the watermarked hero under `heroDir`, the OG card
 under `assetDir`, tags/description/answer/FAQs in frontmatter. Then open the
 PR and let the post-merge indexing workflow handle pings.
 
+## 8. Growth loop (v0.4.0)
+
+```json
+{ "scripts": { "blog:refresh": "tsx scripts/blog/refresh.ts", "blog:audit": "tsx scripts/blog/audit.ts" } }
+```
+
+```ts
+// scripts/blog/refresh.ts — rank rescue picks a post at position 8–30 and refreshes it (PR flow)
+import { runBlogRefreshCli } from '@bizrnr/blog-engine';
+await runBlogRefreshCli({ config, topics, brandPersona });   // --slugs=a,b | --max=N | --dry-run
+
+// scripts/blog/audit.ts — SHIP / FIX / BLOCK for every post
+import { runBlogAuditCli } from '@bizrnr/blog-engine';
+await runBlogAuditCli({ config, topics, brandPersona });     // --json | --strict | --stale-days=365
+```
+
+Stamp the weekly refresh workflow with `blogRefreshWorkflow()` (needs the
+GOOGLE_OAUTH_* secrets or a `fetchGscPageQueries` hook; without Search Console
+data refresh still works for explicit `--slugs`). Render `relatedPosts(post,
+posts, 3)` under every article, emit `blogSchema({ name })` on the hub and
+`authorProfileSchema({...})` on the author page, and wire syndication in
+`hooks.afterIndexed`.
+
 ## 7. v0.3.0 additions worth turning on
 
 ```ts

@@ -163,3 +163,11 @@ See [.env.example](../.env.example) for the complete annotated list:
   uses the stable name. `@ai-sdk/gateway` v4 pairs with it.
 - `sharp` 0.35 ships libvips with the 2026 CVE fixes; stay on ≥0.35.
 - Node ≥ 20.9 (`engines` field). CI runs Node 22.
+
+## Growth-loop hooks (v0.4.0)
+
+- `fetchGscPageQueries({ property, siteUrl, days, pathPrefix })` → page×query rows
+  with your own Search Console auth (refresh mode / rank rescue). Return [] for
+  no data.
+- `afterIndexed({ urls, slugs })` → runs after IndexNow/GSC submission of live
+  URLs; the syndication seam. Errors are logged and never block publish.

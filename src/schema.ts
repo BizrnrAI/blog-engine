@@ -23,6 +23,57 @@ export interface BlogSchemaOptions {
    * must mirror visible content.
    */
   speakableSelectors?: readonly string[];
+  /** BCP-47 locale for inLanguage (default identity.locale or 'en-US'). */
+  locale?: string;
+}
+
+/** The Blog node for the hub page; post graphs point at it via isPartOf. */
+export function blogSchema(options: BlogSchemaOptions & { name: string; description?: string } ): JsonLd {
+  const siteUrl = resolveSiteUrl(options);
+  const base = options.blogBasePath || '/blog';
+  return {
+    '@type': 'Blog',
+    '@id': `${siteUrl}${base}#blog`,
+    url: `${siteUrl}${base}`,
+    name: options.name,
+    ...(options.description ? { description: options.description } : {}),
+    inLanguage: options.locale || configuredLocale(),
+    ...(options.publisher?.id ? { publisher: { '@id': options.publisher.id } } : {}),
+  };
+}
+
+/** ProfilePage + Person for an author page — the verifiable identity behind every post. */
+export function authorProfileSchema(args: {
+  siteUrl?: string;
+  path: string;
+  id: string;
+  name: string;
+  jobTitle?: string;
+  description?: string;
+  image?: string;
+  sameAs?: readonly string[];
+  worksForId?: string;
+}): JsonLd {
+  const siteUrl = resolveSiteUrl({ siteUrl: args.siteUrl });
+  const url = absolute(siteUrl, args.path);
+  const person: JsonLd = {
+    '@type': 'Person',
+    '@id': args.id,
+    name: args.name,
+    url,
+    ...(args.jobTitle ? { jobTitle: args.jobTitle } : {}),
+    ...(args.description ? { description: args.description } : {}),
+    ...(args.image ? { image: absolute(siteUrl, args.image) } : {}),
+    ...(args.sameAs?.length ? { sameAs: [...args.sameAs] } : {}),
+    ...(args.worksForId ? { worksFor: { '@id': args.worksForId } } : {}),
+  };
+  return {
+    '@context': 'https://schema.org',
+    '@graph': [
+      { '@type': 'ProfilePage', '@id': `${url}#profile`, url, mainEntity: { '@id': args.id } },
+      person,
+    ],
+  };
 }
 
 type JsonLd = Record<string, unknown>;
@@ -30,6 +81,14 @@ type JsonLd = Record<string, unknown>;
 function resolveSiteUrl(options: BlogSchemaOptions): string {
   if (options.siteUrl) return options.siteUrl.replace(/\/$/, '');
   return getBlogConfig().identity.siteUrl.replace(/\/$/, '');
+}
+
+function configuredLocale(): string {
+  try {
+    return getBlogConfig().identity.locale || 'en-US';
+  } catch {
+    return 'en-US';
+  }
 }
 
 function configuredAuthor(): BlogSchemaOptions['author'] | undefined {
@@ -69,6 +128,9 @@ export function blogPostingSchema(post: ParsedBlogPost, options: BlogSchemaOptio
     dateModified: post.updatedAt || post.publishedAt,
     articleSection: post.category,
     keywords: post.tags.join(', '),
+    inLanguage: options.locale || configuredLocale(),
+    ...(post.content ? { wordCount: post.content.trim().split(/\s+/).filter(Boolean).length } : {}),
+    isPartOf: { '@id': `${siteUrl}${base}#blog` },
     ...(images.length ? { image: images } : {}),
     ...(options.speakableSelectors?.length
       ? { speakable: { '@type': 'SpeakableSpecification', cssSelector: [...options.speakableSelectors] } }

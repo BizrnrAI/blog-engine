@@ -29,10 +29,20 @@ function monthYear(): string {
   return new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 }
 
-function buildMessages(topic: SeoTopic, existingTitles: string[]) {
+/** Existing posts offered as link targets: the most recent 30, as { title, path }. */
+export function relatedLinkTargets(existing: readonly ExistingPost[], limit = 30): Array<{ title: string; path: string }> {
+  return existing
+    .filter((p) => p.title)
+    .slice(-limit)
+    .map((p) => ({ title: p.title, path: `/blog/${p.slug}` }));
+}
+
+function buildMessages(topic: SeoTopic, existing: readonly ExistingPost[]) {
   const identity = BLOG_CONFIG.identity;
   const rules = contentRules();
   const ownerPages = getBlogTopics().ownerPages || [];
+  const existingTitles = existing.map((p) => p.title);
+  const linkTargets = relatedLinkTargets(existing);
 
   /**
    * The closing CTA. A brand with an AI voice agent routes readers to it; everything else gets a
@@ -73,6 +83,9 @@ function buildMessages(topic: SeoTopic, existingTitles: string[]) {
     '- Where the content compares options, steps, or trade-offs, prefer a compact Markdown table or bulleted list over dense prose.',
     '- Do NOT include an FAQ section or a "Quick answer" section in the body; those render automatically from the JSON fields.',
     '- Include 2-4 natural internal links chosen ONLY from this list: ' + JSON.stringify(INTERNAL_LINKS) + '.',
+    linkTargets.length
+      ? '- Internal link graph: where genuinely relevant, link 1-2 of these EXISTING posts by their exact path (descriptive anchor text, no "click here"): ' + JSON.stringify(linkTargets) + '. Never link a post that is off-topic just to add a link.'
+      : '',
     ownerPages.length
       ? '- These pages are the canonical OWNERS of their commercial topics: ' + JSON.stringify(ownerPages) + '. Support them — link the most relevant one naturally — and never write this post to compete with an owner for the same query; the post must answer a distinct, more specific question and hand off to the owner for the decision.'
       : '',
@@ -195,9 +208,10 @@ export function validateGeneratedPost(
     const backlinkHost = new URL(backlink.url).host;
     if (!(post.body || '').includes(backlinkHost)) errs.push(`cross-promo post must link ${backlinkHost}`);
   }
+  const existingPostPaths = new Set(args.existingSlugs.map((s) => `/blog/${s}`));
   const badLinks = [...(post.body || '').matchAll(/\]\((\/[^)]*)\)/g)]
     .map((m) => m[1].split('#')[0].split('?')[0])
-    .filter((p) => p !== '/' && !(INTERNAL_LINKS as readonly string[]).includes(p));
+    .filter((p) => p !== '/' && !(INTERNAL_LINKS as readonly string[]).includes(p) && !existingPostPaths.has(p));
   if (badLinks.length) errs.push('body links to non-existent internal paths: ' + [...new Set(badLinks)].join(', '));
   const haystack = [post.title, post.description, post.answer, post.body, ...(post.faqs || []).flatMap((f) => [f?.q, f?.a])]
     .join('\n')
@@ -230,7 +244,7 @@ export function normalizeGeneratedPost(raw: Record<string, unknown>): GeneratedB
 
 export async function generateBlogPost(topic: SeoTopic, existing: ExistingPost[]): Promise<GeneratedBlogPost> {
   const existingSlugs = existing.map((p) => p.slug);
-  const messages = buildMessages(topic, existing.map((p) => p.title));
+  const messages = buildMessages(topic, existing);
 
   let errs: string[] = [];
   for (let attempt = 1; attempt <= 3; attempt++) {

@@ -41,8 +41,10 @@ transparent scoping, disclosed authorship).
 5. **Tables/lists over prose** wherever the content compares options, steps,
    or trade-offs. Parallel, scannable structure is what gets extracted.
 6. **2–4 internal links** chosen only from the adapter's `internalLinks`
-   allowlist. The validator rejects any relative link outside the list —
-   models otherwise invent plausible-but-404 paths.
+   allowlist **or existing posts** (`/blog/<slug>`, offered to the model as
+   `{ title, path }` link targets — the internal link graph). The validator
+   rejects any relative link outside that set — models otherwise invent
+   plausible-but-404 paths.
 7. **Voice CTA close** — final paragraph invites the reader to speak with the
    site's voice agent, linking the configured CTA path. Never a form.
 8. **No FAQ or quick-answer section in the body** — both render from the JSON

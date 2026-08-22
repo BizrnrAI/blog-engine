@@ -99,3 +99,12 @@ is noticed within a day, not a quarter.
    `workflow_dispatch` for manual backfill by slug. Verified incident: an
    adopter's autonomous posts went unpinged for five weeks with the push trigger
    alone. Alternative: merge with a PAT so the push counts as a user event.
+
+## Refresh workflow (v0.4.0)
+
+`blogRefreshWorkflow()` emits a weekly (default Tuesday 14:00 UTC) PR-safe job:
+rank rescue reads Search Console page×query rows, picks the best post at
+position 8–30, regenerates it under the content contract with its real queries,
+and opens a PR labelled `blog, automation, seo`. Manual `workflow_dispatch`
+accepts explicit slugs. Refreshed posts keep their URL and publish date; only
+`updated` moves — so the post-merge indexing sweep resubmits them.

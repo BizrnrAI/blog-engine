@@ -57,6 +57,52 @@ export interface GscQuery {
   impressions: number;
 }
 
+/** One Search Console row at page × query granularity (28-day window). */
+export interface GscPageQuery {
+  page: string;
+  query: string;
+  impressions: number;
+  clicks: number;
+  position: number;
+}
+
+export type RankRescueAction = 'refresh' | 'authority' | 'audit' | 'title-experiment';
+
+export interface RankRescueCandidate {
+  page: string;
+  slug: string;
+  impressions: number;
+  clicks: number;
+  ctr: number;
+  position: number;
+  score: number;
+  action: RankRescueAction;
+  /** Top queries by impressions for this page — fed to refresh mode. */
+  queries: Array<{ query: string; impressions: number; position: number }>;
+}
+
+export interface RefreshRunOptions {
+  /** Explicit slugs to refresh; when empty, rank-rescue picks candidates from Search Console. */
+  slugs?: string[];
+  /** Max posts to refresh this run when picking automatically (default 1). */
+  max?: number;
+  dryRun: boolean;
+}
+
+export interface RefreshRunResult {
+  refreshed: string[];
+  candidates: RankRescueCandidate[];
+  skipped?: string;
+}
+
+export type CorpusVerdict = 'SHIP' | 'FIX' | 'BLOCK';
+
+export interface CorpusAuditEntry {
+  slug: string;
+  verdict: CorpusVerdict;
+  issues: string[];
+}
+
 export interface GenerateRunOptions {
   count: number;
   dryRun: boolean;
@@ -87,6 +133,8 @@ export interface BlogEngineConfig {
     };
     /** Geographic areas served. Omit for a business that is not location-bound. */
     areas?: readonly string[];
+    /** BCP-47 locale for feeds/schema (default 'en-US'). */
+    locale?: string;
     /**
      * Where a reader should be sent to convert, e.g. '/contact'. Defaults to '/'.
      * Pair with `content.ctaInstruction` to control the wording.
@@ -252,6 +300,19 @@ export interface GenerateHeroImageArgs {
   topic: SeoTopic;
 }
 
+export interface FetchGscPageQueriesArgs {
+  property: string;
+  siteUrl: string;
+  days: number;
+  /** Only pages whose path starts with this prefix matter (default '/blog/'). */
+  pathPrefix: string;
+}
+
+export interface AfterIndexedArgs {
+  urls: string[];
+  slugs: string[];
+}
+
 export interface FetchGscQueriesArgs {
   /** The configured Search Console property, e.g. `sc-domain:example.com`. */
   property: string;
@@ -293,6 +354,17 @@ export interface BlogEngineHooks {
    * Return [] for "no candidates" — the engine falls back to the editorial pool.
    */
   fetchGscQueries?: (args: FetchGscQueriesArgs) => Promise<GscQuery[]>;
+  /**
+   * Page × query rows for rank rescue / refresh mode, with your own Search Console auth. Return
+   * [] for "no data" — refresh mode then only runs for explicitly passed slugs.
+   */
+  fetchGscPageQueries?: (args: FetchGscPageQueriesArgs) => Promise<GscPageQuery[]>;
+  /**
+   * Runs after URLs are confirmed live and submitted (IndexNow/GSC) — the seam for syndication
+   * (LinkedIn, X, GBP, newsletter). Failures are logged, never re-thrown: distribution must not
+   * block or un-publish anything.
+   */
+  afterIndexed?: (args: AfterIndexedArgs) => Promise<void>;
   /**
    * Submit/refresh the sitemap after publishing, with your own auth. Takes precedence over the
    * built-in OAuth ping.

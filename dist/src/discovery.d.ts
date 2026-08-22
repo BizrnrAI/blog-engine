@@ -31,4 +31,10 @@ export interface LlmsTxtOptions extends DiscoveryOptions {
  * AI context and visible metadata cannot drift apart.
  */
 export declare function buildBlogLlmsTxt(posts: readonly ParsedBlogPost[], options?: LlmsTxtOptions): string;
+/**
+ * Related posts for templates: tag overlap (2 pts each) + same category (1 pt), recency as the
+ * tiebreak. Rendering 3 related posts under every article is the cheapest internal-discovery
+ * win a blog can ship (no orphans, crawl paths between old and new).
+ */
+export declare function relatedPosts(post: ParsedBlogPost, posts: readonly ParsedBlogPost[], limit?: number): ParsedBlogPost[];
 //# sourceMappingURL=discovery.d.ts.map

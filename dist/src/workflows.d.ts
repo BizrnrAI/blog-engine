@@ -8,4 +8,12 @@ export interface BlogWorkflowOptions {
 }
 export declare function blogGenerateWorkflow(options?: BlogWorkflowOptions): string;
 export declare function blogIndexingWorkflow(options?: BlogWorkflowOptions): string;
+/**
+ * Weekly refresh workflow: rank rescue picks the best existing post (position 8–30) and
+ * regenerates it under the content contract on a PR. Same PR-safe shape as generate.
+ */
+export declare function blogRefreshWorkflow(options?: BlogWorkflowOptions & {
+    refreshCommand?: string;
+    refreshCron?: string;
+}): string;
 //# sourceMappingURL=workflows.d.ts.map

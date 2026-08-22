@@ -38,4 +38,23 @@ export function buildBlogLlmsTxt(posts, options = {}) {
     ];
     return lines.join('\n');
 }
+/**
+ * Related posts for templates: tag overlap (2 pts each) + same category (1 pt), recency as the
+ * tiebreak. Rendering 3 related posts under every article is the cheapest internal-discovery
+ * win a blog can ship (no orphans, crawl paths between old and new).
+ */
+export function relatedPosts(post, posts, limit = 3) {
+    const tags = new Set(post.tags.map((t) => t.toLowerCase()));
+    return posts
+        .filter((p) => p.slug !== post.slug)
+        .map((p) => {
+        const overlap = p.tags.filter((t) => tags.has(t.toLowerCase())).length;
+        const score = overlap * 2 + (p.category === post.category ? 1 : 0);
+        return { p, score, ts: Date.parse(p.updatedAt || p.publishedAt) || 0 };
+    })
+        .filter((x) => x.score > 0)
+        .sort((a, b) => b.score - a.score || b.ts - a.ts)
+        .slice(0, limit)
+        .map((x) => x.p);
+}
 //# sourceMappingURL=discovery.js.map
