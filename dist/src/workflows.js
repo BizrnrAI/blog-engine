@@ -58,7 +58,13 @@ export function blogIndexingWorkflow(options = {}) {
     const siteId = options.defaultSiteId || 'generic-service-business';
     const nodeVersion = options.nodeVersion || 22;
     const command = options.indexCommand || 'npm run blog:index -- --slugs=${{ steps.changed.outputs.slugs }} --wait-live';
+    const sweepCron = options.indexSweepCron || '30 16 * * *';
     return `name: Blog Indexing
+
+# GitHub never runs a workflow for a push made by the GITHUB_TOKEN, so a PR that
+# the generate workflow auto-merges does NOT fire the push trigger below. The
+# scheduled sweep catches those posts (anything changed on main in the last 36h);
+# workflow_dispatch is the manual backfill.
 
 on:
   workflow_dispatch:
@@ -70,6 +76,8 @@ on:
         description: Site profile id for this template clone
         required: false
         default: ${siteId}
+  schedule:
+    - cron: "${sweepCron}"
   push:
     branches:
       - main
@@ -85,7 +93,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          fetch-depth: 2
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: ${nodeVersion}
@@ -98,7 +106,12 @@ jobs:
             echo "slugs=\${{ inputs.slugs }}" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          slugs="$(git diff --name-only HEAD^ HEAD -- 'src/content/blog/*.md' | sed -E 's#src/content/blog/(.+)\\.md#\\1#' | paste -sd, -)"
+          if [ "\${{ github.event_name }}" = "schedule" ]; then
+            files="$(git log --since='36 hours ago' --name-only --format= -- src/content/blog)"
+          else
+            files="$(git diff --name-only HEAD^ HEAD -- src/content/blog)"
+          fi
+          slugs="$(printf '%s\\n' "$files" | sed -nE 's#^src/content/blog/(.+)\\.md$#\\1#p' | sort -u | paste -sd, -)"
           echo "slugs=$slugs" >> "$GITHUB_OUTPUT"
       - if: steps.changed.outputs.slugs != ''
         run: ${command}
