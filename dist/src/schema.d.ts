@@ -28,7 +28,26 @@ export interface BlogSchemaOptions {
      * must mirror visible content.
      */
     speakableSelectors?: readonly string[];
+    /** BCP-47 locale for inLanguage (default identity.locale or 'en-US'). */
+    locale?: string;
 }
+/** The Blog node for the hub page; post graphs point at it via isPartOf. */
+export declare function blogSchema(options: BlogSchemaOptions & {
+    name: string;
+    description?: string;
+}): JsonLd;
+/** ProfilePage + Person for an author page — the verifiable identity behind every post. */
+export declare function authorProfileSchema(args: {
+    siteUrl?: string;
+    path: string;
+    id: string;
+    name: string;
+    jobTitle?: string;
+    description?: string;
+    image?: string;
+    sameAs?: readonly string[];
+    worksForId?: string;
+}): JsonLd;
 type JsonLd = Record<string, unknown>;
 export declare function blogPostingSchema(post: ParsedBlogPost, options?: BlogSchemaOptions): JsonLd;
 export declare function faqPageSchema(postUrl: string, faqs: readonly ParsedBlogFaq[]): JsonLd;

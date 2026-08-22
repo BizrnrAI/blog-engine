@@ -136,3 +136,60 @@ jobs:
           GOOGLE_OAUTH_REFRESH_TOKEN: \${{ secrets.GOOGLE_OAUTH_REFRESH_TOKEN }}
 `;
 }
+
+/**
+ * Weekly refresh workflow: rank rescue picks the best existing post (position 8–30) and
+ * regenerates it under the content contract on a PR. Same PR-safe shape as generate.
+ */
+export function blogRefreshWorkflow(options: BlogWorkflowOptions & { refreshCommand?: string; refreshCron?: string } = {}): string {
+  const nodeVersion = options.nodeVersion || 22;
+  const command = options.refreshCommand || 'npm run blog:refresh -- --max=1';
+  const cron = options.refreshCron || '0 14 * * 2';
+  return `name: Blog Refresh
+
+on:
+  workflow_dispatch:
+    inputs:
+      slugs:
+        description: Comma-separated slugs to refresh (blank = rank rescue picks)
+        required: false
+  schedule:
+    - cron: "${cron}"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${nodeVersion}
+          cache: npm
+      - run: npm ci
+      - id: blog
+        run: ${command}
+        env:
+          BLOG_SLUGS: \${{ inputs.slugs }}
+          OPENROUTER_API_KEY: \${{ secrets.OPENROUTER_API_KEY }}
+          GOOGLE_OAUTH_CLIENT_ID: \${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: \${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          GOOGLE_OAUTH_REFRESH_TOKEN: \${{ secrets.GOOGLE_OAUTH_REFRESH_TOKEN }}
+      - run: npm run typecheck
+      - run: npm run build
+      - uses: peter-evans/create-pull-request@v8
+        if: steps.blog.outputs.slugs != ''
+        with:
+          branch: automation/blog-refresh-\${{ github.run_id }}
+          title: "Refresh blog post(s): \${{ steps.blog.outputs.slugs }}"
+          commit-message: "Refresh blog post(s): \${{ steps.blog.outputs.slugs }}"
+          body: |
+            Rank-rescue refresh by the canonical blog engine (existing URL, honest updated date).
+
+            Slugs: \`\${{ steps.blog.outputs.slugs }}\`
+          labels: blog, automation, seo
+`;
+}

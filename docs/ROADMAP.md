@@ -25,7 +25,12 @@ measurably working on the production adopters.
 + `llms.txt` helpers, IndexNow only after the URL is live. A site that uses all
 of these plus a server-rendered template is already ahead of most blogs.
 
-## Tier 1 — next engine releases (content quality & ownership)
+## Tier 1 — content quality & ownership (v0.4.0 shipped the core)
+
+Shipped in 0.4.0: **refresh mode + rank rescue**, **internal link graph**
+(generation-time link targets + `relatedPosts()`), **schema completeness**
+(`inLanguage`, `wordCount`, `isPartOf`, `blogSchema`, `authorProfileSchema`),
+**locale**. Remaining:
 
 | Capability | Shape | Why it moves traffic |
 |---|---|---|
@@ -39,6 +44,10 @@ of these plus a server-rendered template is already ahead of most blogs.
 | **Locale** | `identity.locale` (default `en-US`) flowing into RSS `language`, schema `inLanguage`, date formatting | Correct for non-US adopters |
 
 ## Tier 2 — measurement loop (so optimization is evidence-led)
+
+Shipped in 0.4.0: the **`blog:audit` corpus verdict CLI** (SHIP/FIX/BLOCK) and
+exported `GscPageQuery` / `RankRescueCandidate` / `CorpusAuditEntry` types.
+Remaining:
 
 - **`blog:audit` CLI** — runs the skill's corpus verdict on every post:
   owner/intent, word count, author, dates, sources, links, index state (via
@@ -58,6 +67,8 @@ of these plus a server-rendered template is already ahead of most blogs.
   SDBG outage in a day.
 
 ## Tier 3 — distribution (reach beyond the crawl)
+
+Shipped in 0.4.0: the `hooks.afterIndexed` syndication seam. Remaining:
 
 - Post-merge **syndication hooks** (`hooks.afterPublish`) with built-in
   adapters: LinkedIn page post, X hook + link, Google Business Profile post,

@@ -65,7 +65,7 @@ export function buildBlogRss(posts: RssPost[], options: BuildRssOptions = {}): s
     <title>${xmlEscape(BLOG_CONFIG.rss.title)}</title>
     <link>${BLOG_CONFIG.identity.siteUrl}/blog</link>
     <description>${xmlEscape(BLOG_CONFIG.rss.description)}</description>
-    <language>en-us</language>
+    <language>${(BLOG_CONFIG.identity.locale || 'en-US').toLowerCase()}</language>
     <lastBuildDate>${lastBuildDate.toUTCString()}</lastBuildDate>
     <atom:link href="${BLOG_CONFIG.identity.siteUrl}${BLOG_CONFIG.rss.path}" rel="self" type="application/rss+xml"/>
 ${items}

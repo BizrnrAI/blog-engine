@@ -3,6 +3,30 @@
 All notable changes to `@bizrnr/blog-engine`. Consumers install from git, so
 the version in `package.json` is the contract marker.
 
+## 0.4.0 — 2026-08-22
+
+Growth-loop release: the engine now improves what already ranks, links the
+corpus together, and audits itself.
+
+### Added
+- **Refresh mode** — `refreshBlogRun` / `refreshBlogPost` / `runBlogRefreshCli`:
+  regenerate an existing post under the content contract using its real Search
+  Console queries; slug, publish date, hero, OG card, gradient and author are
+  preserved, `updated` is bumped honestly. `blogRefreshWorkflow()` builder.
+- **Rank rescue** — `getGscPageQueries` (page×query, 28d) +
+  `rankRescueCandidates` implementing the skill's scoring
+  (impressions × intent × position multiplier × zero-click) and action classes.
+- **Internal link graph** — generation offers existing posts as validated link
+  targets (`relatedLinkTargets`); `relatedPosts()` for templates.
+- **Corpus audit** — `auditBlogCorpus` / `runBlogAuditCli` SHIP / FIX / BLOCK.
+- Schema: `inLanguage`, `wordCount`, `isPartOf` on posts; `blogSchema()`,
+  `authorProfileSchema()`; `identity.locale` (also RSS `language`).
+- Hooks: `fetchGscPageQueries`, `afterIndexed` (syndication seam).
+
+### Compatibility
+- All additive; adapters unaffected. Validation now also accepts links to
+  existing posts' `/blog/<slug>` paths.
+
 ## 0.3.0 — 2026-08-22
 
 Portability + audit release: the engine runs on any stack for any website,

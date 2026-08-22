@@ -1,17 +1,20 @@
 export { BLOG_CONFIG, brandPersona, configureBlogEngine, getBlogConfig, getBlogHooks, getBlogRuntime, getBlogTopics } from './config.js';
-export { contentRules, generateBlogPost, normalizeGeneratedPost, parseModelJson, validateGeneratedPost } from './generate-post.js';
+export { contentRules, generateBlogPost, normalizeGeneratedPost, parseModelJson, relatedLinkTargets, validateGeneratedPost } from './generate-post.js';
 export { generateCoverImage, applyWatermark, heroAltText, makeOgCard } from './images.js';
 export { countPostsSince, generateBlogRun } from './publisher.js';
+export { buildRefreshMessages, refreshBlogPost, refreshBlogRun } from './refresh.js';
+export { classifyAction, positionMultiplier, rankRescueCandidates, slugFromPage, type RankRescueOptions } from './rank-rescue.js';
+export { auditBlogCorpus, auditPost, formatAuditReport, type AuditOptions } from './audit.js';
 export { buildBlogRss, type BuildRssOptions, type RssPost } from './rss.js';
-export { blogPostGraph, blogPostingSchema, breadcrumbSchema, faqPageSchema, type BlogSchemaOptions } from './schema.js';
-export { blogSitemapEntries, buildBlogLlmsTxt, type DiscoveryOptions, type LlmsTxtOptions, type SitemapEntry } from './discovery.js';
+export { authorProfileSchema, blogPostGraph, blogPostingSchema, blogSchema, breadcrumbSchema, faqPageSchema, type BlogSchemaOptions } from './schema.js';
+export { blogSitemapEntries, buildBlogLlmsTxt, relatedPosts, type DiscoveryOptions, type LlmsTxtOptions, type SitemapEntry } from './discovery.js';
 export { pickTopic } from './topic-rotation.js';
 export { readExistingPosts } from './existing-posts.js';
 export { parseBlogFrontmatter, markdownToAnswerSections, readGeneratedBlogPosts, mergeBlogPosts } from './content-reader.js';
 export { buildTemplateBlogEngineRuntime } from './template-runtime.js';
 export { assertBlogEngineRuntime, validateBlogEngineRuntime, BlogEngineConfigError } from './validate-runtime.js';
-export { cleanBlogSlugs, runBlogGenerateCli, runBlogIndexPublishedCli, waitUntilBlogUrlsLive } from './cli.js';
-export { blogGenerateWorkflow, blogIndexingWorkflow } from './workflows.js';
+export { cleanBlogSlugs, runBlogAuditCli, runBlogGenerateCli, runBlogIndexPublishedCli, runBlogRefreshCli, waitUntilBlogUrlsLive } from './cli.js';
+export { blogGenerateWorkflow, blogIndexingWorkflow, blogRefreshWorkflow } from './workflows.js';
 export { getGoogleAccessToken, getGscQueries, pingGscSitemap } from './gsc.js';
 export { pingIndexNow } from './indexing.js';
 export { clampText, mimeTypeFor, norm, slugify, wordCount, xmlEscape } from './utils.js';
@@ -33,7 +36,16 @@ export type {
   GenerateRunOptions,
   GenerateRunResult,
   GenerateTextArgs,
+  GscPageQuery,
   GscQuery,
+  RankRescueAction,
+  RankRescueCandidate,
+  RefreshRunOptions,
+  RefreshRunResult,
+  CorpusVerdict,
+  CorpusAuditEntry,
+  FetchGscPageQueriesArgs,
+  AfterIndexedArgs,
   RenderMarkdownArgs,
   SubmitSitemapArgs,
   ParsedBlogFaq,

@@ -1,0 +1,185 @@
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { BLOG_CONFIG, brandPersona, getBlogHooks } from './config.js';
+import { parseBlogFrontmatter } from './content-reader.js';
+import { readExistingPosts } from './existing-posts.js';
+import { contentRules, normalizeGeneratedPost, parseModelJson, validateGeneratedPost } from './generate-post.js';
+import { getGscPageQueries } from './gsc.js';
+import { toMarkdown } from './markdown.js';
+import { rankRescueCandidates } from './rank-rescue.js';
+import { INTERNAL_LINKS } from './topics.js';
+import { env } from './utils.js';
+/**
+ * Refresh mode — re-optimize an EXISTING post for the queries it already earns impressions on,
+ * instead of publishing a new competitor. Slug, publish date, hero, OG card and gradient are
+ * preserved; title/description/answer/tags/FAQs/body are regenerated under the full content
+ * contract; `updated` is bumped honestly to today. This is the ASEO rank-rescue action for
+ * posts at position 8–30 and the highest-ROI thing an autonomous blog can do.
+ */
+function monthYear() {
+    return new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+}
+async function callLLM(messages) {
+    const hook = getBlogHooks().generateText;
+    if (hook)
+        return hook({ messages, text: BLOG_CONFIG.text });
+    const apiKeyEnv = BLOG_CONFIG.text.apiKeyEnv || 'OPENROUTER_API_KEY';
+    const r = await fetch(BLOG_CONFIG.text.url, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${env(apiKeyEnv)}`, 'Content-Type': 'application/json', ...(BLOG_CONFIG.text.headers || {}) },
+        body: JSON.stringify({ model: BLOG_CONFIG.text.model, messages, temperature: BLOG_CONFIG.text.temperature, max_tokens: BLOG_CONFIG.text.maxTokens, response_format: { type: 'json_object' } }),
+    });
+    if (!r.ok)
+        throw new Error(`LLM ${r.status}: ${(await r.text()).slice(0, 300)}`);
+    const j = await r.json();
+    return String(j.choices?.[0]?.message?.content || '');
+}
+export function buildRefreshMessages(args) {
+    const rules = contentRules();
+    const identity = BLOG_CONFIG.identity;
+    const queryLines = args.queries.length
+        ? args.queries.map((q) => `  - "${q.query}" (${q.impressions} impressions, avg position ${q.position})`).join('\n')
+        : '  - (no Search Console data; improve structure, clarity, and currency)';
+    const system = [
+        brandPersona(),
+        '',
+        `You are REFRESHING an existing published post on ${identity.name}'s site so it better answers the searches it already earns. Return STRICT JSON only.`,
+        '',
+        'HARD RULES:',
+        '- NEVER fabricate specific prices, percentages, statistics, dates, interest rates, review counts, awards, or named sources.',
+        '- No legal, tax, medical, or financial guarantees or advice.',
+        `- Be accurate and on-brand: ${rules.tone}. American English.`,
+        '- Keep the post\'s core subject and the same slug; you may sharpen the title, but do not change what the page is about.',
+        '- Keep anything in the existing body that is accurate and useful; cut filler; add the missing answers the queries below reveal.',
+        `- Update all timeframe language to "as of ${monthYear()}".`,
+        '- Do NOT duplicate these other post titles: ' + JSON.stringify(args.otherTitles.slice(0, 40)) + '.',
+        ...rules.extraRules,
+        '',
+        'STRUCTURE of the "body" (GitHub-flavored Markdown):',
+        '- Answer-first lede (2-3 sentences). 4-6 "## " H2 sections, 700-1100 words, NO H1.',
+        `- At least ${rules.minQuestionH2s} H2s phrased as the real search questions below, each opening with a DIRECT 40-60 word answer.`,
+        rules.requireCitableBlockquote
+            ? `- Exactly ONE "> " blockquote of 120-160 words: a self-contained, citable passage with concrete scope and the timeframe "as of ${monthYear()}".`
+            : '',
+        '- Tables/lists over prose for comparisons. No FAQ or quick-answer section in the body.',
+        '- Include 2-4 internal links chosen ONLY from: ' + JSON.stringify(INTERNAL_LINKS) + '.',
+        rules.blockedPhrases.length ? '- NEVER use these phrases: ' + JSON.stringify(rules.blockedPhrases) + '.' : '',
+    ].filter(Boolean).join('\n');
+    const user = [
+        `Existing post: "${args.title}" (slug: ${args.slug}, category: ${args.category}).`,
+        '',
+        'Real search queries this page currently earns (from Search Console, last 28 days):',
+        queryLines,
+        '',
+        'Existing body (Markdown):',
+        '"""',
+        args.existingBody.slice(0, 9000),
+        '"""',
+        '',
+        'Return ONLY this JSON object:',
+        '{',
+        '  "title": string (keep meaning; may sharpen; aim <= 65 chars),',
+        `  "slug": ${JSON.stringify(args.slug)},`,
+        '  "description": string (meta description, aim 120-158 chars, active voice),',
+        `  "category": ${JSON.stringify(args.category)},`,
+        '  "answer": string (DIRECT 40-55 word answer to the core question),',
+        '  "readMins": integer 5-9,',
+        '  "tags": array of 3-6 short lowercase topical tags,',
+        '  "faqs": array of EXACTLY 3 objects { "q": string (a real search question, ideally from the list above), "a": string (2-4 sentences) },',
+        '  "body": string (the refreshed Markdown body per the rules above)',
+        '}',
+    ].join('\n');
+    return [
+        { role: 'system', content: system },
+        { role: 'user', content: user },
+    ];
+}
+export async function refreshBlogPost(root, slug, args = {}) {
+    const file = join(root, BLOG_CONFIG.paths.blogDir, `${slug}.md`);
+    if (!existsSync(file))
+        throw new Error(`refresh: no such post ${file}`);
+    const raw = readFileSync(file, 'utf8');
+    const { frontmatter, content } = parseBlogFrontmatter(raw);
+    const existing = readExistingPosts(root);
+    const otherTitles = existing.filter((p) => p.slug !== slug).map((p) => p.title);
+    const otherSlugs = existing.filter((p) => p.slug !== slug).map((p) => p.slug);
+    const topic = { type: 'editorial', keyword: frontmatter.title || slug, category: frontmatter.category || '', angle: 'refresh', mustBacklink: false };
+    const messages = buildRefreshMessages({
+        title: frontmatter.title || slug,
+        slug,
+        category: frontmatter.category || '',
+        existingBody: content,
+        queries: args.queries || [],
+        otherTitles,
+    });
+    let errs = [];
+    let post = null;
+    for (let attempt = 1; attempt <= 3 && !post; attempt++) {
+        let rawText = '';
+        try {
+            rawText = await callLLM(messages);
+            const candidate = normalizeGeneratedPost(parseModelJson(rawText));
+            candidate.slug = slug; // the slug is the one invariant of a refresh
+            errs = validateGeneratedPost(candidate, { existingSlugs: otherSlugs, topic });
+            if (!errs.length) {
+                post = candidate;
+                break;
+            }
+            messages.push({ role: 'assistant', content: JSON.stringify(candidate).slice(0, 500) });
+            messages.push({ role: 'user', content: `That JSON failed validation: ${errs.join('; ')}. Return corrected STRICT JSON only.` });
+        }
+        catch (err) {
+            errs = ['model output was not parseable JSON: ' + (err instanceof Error ? err.message : String(err))];
+            console.warn(`[blog-refresh] attempt ${attempt} unparseable; head: ${rawText.slice(0, 200)}`);
+            messages.push({ role: 'user', content: 'Your previous output was not valid JSON. Return ONLY the strict JSON object.' });
+            continue;
+        }
+        console.warn(`[blog-refresh] attempt ${attempt} rejected: ${errs.join('; ')}`);
+    }
+    if (!post)
+        throw new Error(`Could not refresh ${slug} after 3 attempts: ` + errs.join('; '));
+    // Preserve the visual + date identity of the post; only `updated` moves.
+    post.heroImageAlt = undefined;
+    const cover = {
+        image: frontmatter.image || '',
+        imageAlt: frontmatter.imageAlt || `${BLOG_CONFIG.identity.name} guide: ${post.title}`,
+        ogImage: frontmatter.ogImage || frontmatter.image || '',
+        source: 'ai-generated',
+        ...(Number(frontmatter.imageWidth) ? { width: Number(frontmatter.imageWidth), height: Number(frontmatter.imageHeight) } : {}),
+    };
+    const today = new Date().toISOString().slice(0, 10);
+    const renderArgs = { post, cover, gradient: frontmatter.gradient || '', dateISO: frontmatter.date || today, author: frontmatter.author || BLOG_CONFIG.identity.author?.name };
+    const render = getBlogHooks().renderMarkdown;
+    let markdown = render ? render(renderArgs) : toMarkdown(post, renderArgs);
+    // toMarkdown writes updated = dateISO; a refresh must carry today's date there.
+    markdown = markdown.replace(/^updated: .*$/m, `updated: ${today}`);
+    if (!args.dryRun)
+        writeFileSync(file, markdown, 'utf8');
+    return { post, markdown, file };
+}
+export async function refreshBlogRun(root, options) {
+    const logPrefix = BLOG_CONFIG.logPrefix || '[blog-engine]';
+    if (process.env.BLOG_ENGINE_DISABLED === '1')
+        return { refreshed: [], candidates: [], skipped: 'BLOG_ENGINE_DISABLED' };
+    const rows = await getGscPageQueries('/blog/');
+    const candidates = rankRescueCandidates(rows);
+    const byslug = new Map(candidates.map((c) => [c.slug, c]));
+    let slugs = options.slugs && options.slugs.length ? options.slugs : candidates.filter((c) => c.action === 'refresh').slice(0, options.max ?? 1).map((c) => c.slug);
+    slugs = slugs.filter((s) => existsSync(join(root, BLOG_CONFIG.paths.blogDir, `${s}.md`)));
+    if (!slugs.length) {
+        console.log(`${logPrefix} refresh: no candidates (${candidates.length} scored pages; pass --slugs to force).`);
+        return { refreshed: [], candidates, skipped: 'NO_CANDIDATES' };
+    }
+    const refreshed = [];
+    for (const slug of slugs) {
+        const c = byslug.get(slug);
+        console.log(`${logPrefix} refreshing ${slug}${c ? ` (pos ${c.position}, ${c.impressions} impr, score ${c.score})` : ''}`);
+        const { markdown } = await refreshBlogPost(root, slug, { queries: c?.queries, dryRun: options.dryRun });
+        if (options.dryRun)
+            console.log(`\n-------- DRY RUN refresh ${slug} --------\n${markdown}\n-------- END --------\n`);
+        else
+            refreshed.push(slug);
+    }
+    return { refreshed, candidates };
+}
+//# sourceMappingURL=refresh.js.map

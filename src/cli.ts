@@ -1,6 +1,8 @@
 import { writeFileSync } from 'node:fs';
 import { BLOG_CONFIG, configureBlogEngine, getBlogHooks } from './config.js';
 import { generateBlogRun } from './publisher.js';
+import { refreshBlogRun } from './refresh.js';
+import { auditBlogCorpus, formatAuditReport } from './audit.js';
 import { getGoogleAccessToken, pingGscSitemap } from './gsc.js';
 import { pingIndexNow } from './indexing.js';
 import type { BlogEngineRuntime } from './types.js';
@@ -114,4 +116,44 @@ export async function runBlogIndexPublishedCli(runtime: BlogEngineRuntime): Prom
   }
 
   console.log(`[blog-indexing] Submitted ${urls.length} live URL(s): ${urls.join(', ')}`);
+
+  // Distribution seam: syndication runs only after URLs are live + submitted, and never blocks.
+  const afterIndexed = getBlogHooks().afterIndexed;
+  if (afterIndexed) {
+    try {
+      await afterIndexed({ urls, slugs });
+    } catch (err) {
+      console.warn('[blog-indexing] afterIndexed hook failed (publish unaffected):', err instanceof Error ? err.message : String(err));
+    }
+  }
+}
+
+/**
+ * Refresh mode CLI: `--slugs=a,b` to force, otherwise rank rescue picks up to `--max=N` (default 1)
+ * posts at position 8–30 from Search Console. Writes `slugs=` to GITHUB_OUTPUT for PR flows.
+ */
+export async function runBlogRefreshCli(runtime: BlogEngineRuntime, root = process.cwd()): Promise<void> {
+  configureBlogEngine(runtime);
+  const dryRun = process.argv.includes('--dry-run') || process.env.DRY_RUN === '1';
+  const slugs = cleanBlogSlugs(parseArg('slugs') || process.env.BLOG_SLUGS);
+  const max = Math.max(1, Number(parseArg('max') || '1') || 1);
+  const result = await refreshBlogRun(root, { slugs, max, dryRun });
+  if (result.candidates.length) {
+    console.log('[blog-refresh] rank-rescue candidates (top 10):');
+    for (const c of result.candidates.slice(0, 10)) {
+      console.log(`  ${c.action.padEnd(16)} ${c.slug.padEnd(50)} pos ${String(c.position).padStart(5)}  impr ${String(c.impressions).padStart(6)}  ctr ${(c.ctr * 100).toFixed(1)}%  score ${c.score}`);
+    }
+  }
+  if (process.env.GITHUB_OUTPUT && result.refreshed.length) {
+    writeFileSync(process.env.GITHUB_OUTPUT, `slugs=${result.refreshed.join(',')}\n`, { flag: 'a' });
+  }
+}
+
+/** Corpus audit CLI: prints SHIP/FIX/BLOCK per post; `--json` for machine output; `--strict` exits 1 on any BLOCK. */
+export async function runBlogAuditCli(runtime: BlogEngineRuntime, root = process.cwd()): Promise<void> {
+  configureBlogEngine(runtime);
+  const entries = auditBlogCorpus(root, { staleAfterDays: Number(parseArg('stale-days') || '365') || 365 });
+  if (process.argv.includes('--json')) console.log(JSON.stringify(entries, null, 2));
+  else console.log(formatAuditReport(entries));
+  if (process.argv.includes('--strict') && entries.some((e) => e.verdict === 'BLOCK')) process.exitCode = 1;
 }

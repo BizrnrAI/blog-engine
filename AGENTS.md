@@ -130,3 +130,10 @@ var. All env vars are listed in [.env.example](.env.example).
   the engine against the ASEO gap matrix in the audit doc, and revisit
   docs/ROADMAP.md. Check adopter cron health (a red cron for weeks is the
   most expensive silent failure this system has).
+
+## Growth loop (v0.4.0)
+
+Refresh mode (`src/refresh.ts`) reuses the generate contract; any change to
+`validateGeneratedPost` applies to refreshes too. Rank rescue scoring
+(`src/rank-rescue.ts`) mirrors the ASEO skill table exactly — change it only
+with the skill. The corpus audit (`src/audit.ts`) must stay pure/offline.

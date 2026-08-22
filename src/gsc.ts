@@ -1,6 +1,6 @@
 import { BLOG_CONFIG, getBlogHooks } from './config.js';
 import { env, norm } from './utils.js';
-import type { GscQuery } from './types.js';
+import type { GscPageQuery, GscQuery } from './types.js';
 
 const LOOKBACK_DAYS = 28;
 
@@ -95,6 +95,54 @@ export async function getGscQueries(): Promise<{ token: string | null; queries: 
   } catch (err) {
     console.warn('[blog-gsc] query fetch failed, falling back to editorial pool:', err instanceof Error ? err.message : String(err));
     return { token, queries: [] };
+  }
+}
+
+/**
+ * Page × query rows for posts under pathPrefix (default '/blog/'), 28-day window. Used by rank
+ * rescue and refresh mode. Returns [] (never throws) when Search Console is not configured.
+ */
+export async function getGscPageQueries(pathPrefix = '/blog/'): Promise<GscPageQuery[]> {
+  const hook = getBlogHooks().fetchGscPageQueries;
+  if (hook) {
+    try {
+      return (await hook({ property: BLOG_CONFIG.gsc.property, siteUrl: BLOG_CONFIG.identity.siteUrl, days: LOOKBACK_DAYS, pathPrefix })) || [];
+    } catch (err) {
+      console.warn('[blog-gsc] fetchGscPageQueries hook failed:', err instanceof Error ? err.message : String(err));
+      return [];
+    }
+  }
+  if (!process.env.GOOGLE_OAUTH_CLIENT_ID || !process.env.GOOGLE_OAUTH_CLIENT_SECRET || !process.env.GOOGLE_OAUTH_REFRESH_TOKEN) return [];
+  try {
+    const token = await getGoogleAccessToken();
+    const end = new Date();
+    const start = new Date(end.getTime() - LOOKBACK_DAYS * 864e5);
+    const fmt = (d: Date) => d.toISOString().slice(0, 10);
+    const r = await fetch(
+      `https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(BLOG_CONFIG.gsc.property)}/searchAnalytics/query`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          startDate: fmt(start),
+          endDate: fmt(end),
+          dimensions: ['page', 'query'],
+          rowLimit: 2500,
+          dimensionFilterGroups: [{ filters: [{ dimension: 'page', operator: 'contains', expression: pathPrefix }] }],
+        }),
+      },
+    );
+    const j = await r.json();
+    return (j.rows || []).map((row: { keys: string[]; impressions: number; clicks: number; position: number }) => ({
+      page: row.keys[0],
+      query: row.keys[1],
+      impressions: row.impressions,
+      clicks: row.clicks,
+      position: row.position,
+    }));
+  } catch (err) {
+    console.warn('[blog-gsc] page/query fetch failed:', err instanceof Error ? err.message : String(err));
+    return [];
   }
 }
 

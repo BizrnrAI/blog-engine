@@ -37,7 +37,10 @@ pluggable seam you can point at your own stack.
 | CLI runners | `src/cli.ts` | Generate + index-published commands, live-URL polling |
 | GitHub Actions | `src/workflows.ts` | PR-safe generate + post-merge indexing workflow YAML builders |
 | Template runtime | `src/template-runtime.ts` | Full runtime derived from a generic `TemplateSiteProfile` |
-| Discovery | `src/discovery.ts` | Sitemap entries + `llms.txt` blog section from the same parsed posts (parity by construction) |
+| Refresh mode | `src/refresh.ts` | Re-optimize an existing post for the queries it already earns; slug/date/hero preserved, `updated` bumped honestly |
+| Rank rescue | `src/rank-rescue.ts` | ASEO scoring of Search Console page×query rows → refresh / authority / audit / title-experiment |
+| Corpus audit | `src/audit.ts` | SHIP / FIX / BLOCK verdicts for every published post against the content contract |
+| Discovery | `src/discovery.ts` | Sitemap entries, `llms.txt` blog section, and `relatedPosts()` for the internal link graph |
 
 ## Quickstart
 
@@ -177,6 +180,23 @@ Full spec and rationale: [docs/CONTENT-SPEC.md](docs/CONTENT-SPEC.md).
   `media:content` and `enclosure` with real byte lengths.
 - Generated Markdown lives under `src/content/blog`; assets stay local.
 - Frontmatter dates are honest — never backdated, never fake-freshened.
+
+## Growth loop (v0.4.0)
+
+Publishing is only half the engine. The other half compounds what already ranks:
+
+- **Refresh mode** — `runBlogRefreshCli` / `refreshBlogRun`: rank rescue scores every
+  post from Search Console page×query data (`score = impressions × intent ×
+  positionMultiplier × zeroClick`), picks posts at position 8–30, and regenerates
+  them under the full contract with their real queries in the prompt. Weekly via
+  `blogRefreshWorkflow()`. This is the highest-ROI autonomous action a blog has.
+- **Internal link graph** — new posts are offered the existing posts as link
+  targets (validated), and `relatedPosts()` gives templates 3 related articles
+  per page: no orphans, crawl paths between old and new.
+- **Corpus audit** — `runBlogAuditCli` prints SHIP / FIX / BLOCK with reasons for
+  the whole corpus (`--json`, `--strict`); fix or quarantine before scaling.
+- **Distribution seam** — `hooks.afterIndexed` runs only after URLs are live and
+  submitted; wire LinkedIn / X / GBP / newsletter there. Never blocks publish.
 
 ## Develop
 
