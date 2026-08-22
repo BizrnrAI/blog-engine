@@ -1,7 +1,7 @@
-import type { BlogEngineRuntime } from './types.js';
+import type { BlogEngineRuntime, GenerateRunResult } from './types.js';
 export declare function cleanBlogSlugs(raw: string | undefined): string[];
 export declare function waitUntilBlogUrlsLive(urls: string[], timeoutMs?: number): Promise<void>;
-export declare function runBlogGenerateCli(runtime: BlogEngineRuntime, root?: string): Promise<void>;
+export declare function runBlogGenerateCli(runtime: BlogEngineRuntime, root?: string): Promise<GenerateRunResult>;
 export declare function runBlogIndexPublishedCli(runtime: BlogEngineRuntime): Promise<void>;
 /**
  * Refresh mode CLI: `--slugs=a,b` to force, otherwise rank rescue picks up to `--max=N` (default 1)

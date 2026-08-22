@@ -147,3 +147,21 @@ test('createAfterIndexedHook fans out to adapters with page metadata and survive
   assert.deepEqual(seen, ['Title X|https://acme-plumbing.example/blog/x']);
   await assert.rejects(webhookAdapter({ urlEnv: 'DEFINITELY_UNSET_ENV' }).publish({ url: 'u', slug: 's', title: 't', description: 'd' }), /missing env/);
 });
+
+test('0.5.1: pubDate/updatedDate/heroImage aliases are read; refresh fills missing hero dimensions from disk', async () => {
+  const { readExistingPosts } = await import('../src/existing-posts.js');
+  configureTestEngine({}, { generateText: async () => JSON.stringify(validPost()) });
+  const root = mkdtempSync(join(tmpdir(), 'blog-engine-alias-'));
+  mkdirSync(join(root, 'src/content/blog'), { recursive: true });
+  mkdirSync(join(root, 'public/assets/blog/generated'), { recursive: true });
+  await sharp({ create: { width: 1200, height: 800, channels: 3, background: { r: 1, g: 2, b: 3 } } }).webp().toFile(join(root, 'public/assets/blog/generated/drain-cleaning-cost-springfield.webp'));
+  writeFileSync(join(root, 'src/content/blog/drain-cleaning-cost-springfield.md'), '---\ntitle: "Old"\npubDate: 2025-02-02\nupdatedDate: 2025-03-03\nheroImage: "/assets/blog/generated/drain-cleaning-cost-springfield.webp"\nheroAlt: "old alt"\n---\n' + Array(320).fill('w').join(' '));
+  assert.equal(readExistingPosts(root)[0].date, '2025-02-02');
+  const [p] = readGeneratedBlogPosts({ root, fallback: { description: 'd', author: 'a', heroImage: '', heroImageAltPrefix: 'x' } });
+  assert.equal(p.publishedAt, '2025-02-02'); assert.equal(p.updatedAt, '2025-03-03'); assert.equal(p.heroImageAlt, 'old alt');
+  // refresh through the engine's own frontmatter (image:) shape
+  writeFileSync(join(root, 'src/content/blog/drain-cleaning-cost-springfield.md'), '---\ntitle: "Old"\ndate: 2025-02-02\nimage: "/assets/blog/generated/drain-cleaning-cost-springfield.webp"\nimageAlt: "old alt"\n---\n' + Array(320).fill('w').join(' '));
+  await refreshBlogRun(root, { slugs: ['drain-cleaning-cost-springfield'], dryRun: false });
+  const md = readFileSync(join(root, 'src/content/blog/drain-cleaning-cost-springfield.md'), 'utf8');
+  assert.ok(md.includes('imageWidth: 1200') && md.includes('imageHeight: 800'), md.split('\n').slice(0, 20).join('\n'));
+});

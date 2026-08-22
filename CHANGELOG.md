@@ -3,6 +3,16 @@
 All notable changes to `@bizrnr/blog-engine`. Consumers install from git, so
 the version in `package.json` is the contract marker.
 
+## 0.5.1 — 2026-08-22
+
+- Refresh mode fills missing hero dimensions from the local image, so a
+  pre-contract post's refresh also closes the CLS gap.
+- Readers accept common frontmatter aliases: `pubDate`/`updatedDate`,
+  `heroImage`/`cover`, `heroAlt`/`coverAlt` (cadence guard, audit, scorecard,
+  schema all see sites that keep their own shape).
+- `runBlogGenerateCli` returns the `GenerateRunResult` (written slugs) so
+  wrapper scripts no longer need to diff the content directory.
+
 ## 0.5.0 — 2026-08-22
 
 Evidence, measurement, and distribution — the rest of the roadmap that the
