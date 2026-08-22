@@ -79,3 +79,14 @@ during setup:
   build, ASEO/contract gate if the site has one) *before* the PR opens, so a
   bad generation never even reaches review.
 - `BLOG_ENGINE_DISABLED=1` as a repo variable is the emergency stop.
+
+## Action versions (keep current)
+
+The builders emit `actions/checkout@v7`, `actions/setup-node@v7`, and
+`peter-evans/create-pull-request@v8` (v0.3.0). Older majors run on Node 20,
+which GitHub is deprecating on hosted runners — bump site workflows that still
+pin `@v4`/`@v6`. Verified incident (Aug 2026): a site whose repo setting had
+`default_workflow_permissions=read` failed every cron for seven weeks with
+generation succeeding and only PR creation dying — the branch pushes pile up
+silently. Gotcha #1 above is the fix; add a workflow-failure alert so a red cron
+is noticed within a day, not a quarter.

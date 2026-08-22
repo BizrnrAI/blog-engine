@@ -37,6 +37,7 @@ pluggable seam you can point at your own stack.
 | CLI runners | `src/cli.ts` | Generate + index-published commands, live-URL polling |
 | GitHub Actions | `src/workflows.ts` | PR-safe generate + post-merge indexing workflow YAML builders |
 | Template runtime | `src/template-runtime.ts` | Full runtime derived from a generic `TemplateSiteProfile` |
+| Discovery | `src/discovery.ts` | Sitemap entries + `llms.txt` blog section from the same parsed posts (parity by construction) |
 
 ## Quickstart
 
@@ -151,7 +152,7 @@ Every generated post ships:
 - An answer-first lede and a 40–55-word direct `answer` field (quick-answer block).
 - 4–6 H2 sections, at least 2 phrased as real search questions, each question
   H2 opening with a 40–60-word direct answer.
-- Exactly one self-contained citable blockquote (80–140 words, scoped
+- Exactly one self-contained citable blockquote (120–160 words, scoped
   "as of <month year>") — the passage an AI assistant should quote.
 - Exactly 3 FAQs (rendered on-page and as `FAQPage` JSON-LD).
 - 2–4 internal links drawn only from the adapter's allowlist; validated, no
@@ -187,6 +188,17 @@ npm test         # node:test suite only
 
 The compiled `dist/` is committed so consumers can install straight from git.
 `npm run verify` must pass before any PR; CI enforces it.
+
+## Dependencies and upkeep
+
+Runtime deps are intentionally few: `ai` + `@ai-sdk/gateway` (default image
+provider only) and `sharp` (watermark/OG/encoding). They are pinned by caret
+to current majors and audited in CI. Policy: run `npm outdated` + `npm audit`
+at least monthly; security advisories (e.g. libvips CVEs via `sharp`) are
+patched immediately; majors are adopted once `npm run verify` and the offline
+e2e smoke pass. The periodic audit lives in [docs/AUDIT-2026-08.md](docs/AUDIT-2026-08.md)
+and the forward plan in [docs/ROADMAP.md](docs/ROADMAP.md); the release log is
+[CHANGELOG.md](CHANGELOG.md).
 
 ## Repository map
 

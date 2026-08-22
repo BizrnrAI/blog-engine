@@ -22,6 +22,12 @@ export interface BlogSchemaOptions {
         name: string;
         logo?: string;
     };
+    /**
+     * CSS selectors of the visible quick-answer / citable blocks (e.g. ['.speakable-answer']).
+     * Emits a SpeakableSpecification. Only pass selectors your template really renders — schema
+     * must mirror visible content.
+     */
+    speakableSelectors?: readonly string[];
 }
 type JsonLd = Record<string, unknown>;
 export declare function blogPostingSchema(post: ParsedBlogPost, options?: BlogSchemaOptions): JsonLd;

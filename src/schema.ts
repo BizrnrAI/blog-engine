@@ -17,6 +17,12 @@ export interface BlogSchemaOptions {
   author?: { id?: string; name: string; url?: string };
   /** Stable organization entity, e.g. { id: 'https://example.com/#organization', name: 'Brand', logo: '/logo.png' }. */
   publisher?: { id?: string; name: string; logo?: string };
+  /**
+   * CSS selectors of the visible quick-answer / citable blocks (e.g. ['.speakable-answer']).
+   * Emits a SpeakableSpecification. Only pass selectors your template really renders — schema
+   * must mirror visible content.
+   */
+  speakableSelectors?: readonly string[];
 }
 
 type JsonLd = Record<string, unknown>;
@@ -24,6 +30,14 @@ type JsonLd = Record<string, unknown>;
 function resolveSiteUrl(options: BlogSchemaOptions): string {
   if (options.siteUrl) return options.siteUrl.replace(/\/$/, '');
   return getBlogConfig().identity.siteUrl.replace(/\/$/, '');
+}
+
+function configuredAuthor(): BlogSchemaOptions['author'] | undefined {
+  try {
+    return getBlogConfig().identity.author;
+  } catch {
+    return undefined; // standalone use without a configured runtime
+  }
 }
 
 function absolute(siteUrl: string, path: string): string {
@@ -34,9 +48,15 @@ export function blogPostingSchema(post: ParsedBlogPost, options: BlogSchemaOptio
   const siteUrl = resolveSiteUrl(options);
   const base = options.blogBasePath || '/blog';
   const url = `${siteUrl}${base}/${post.slug}`;
-  const images = [post.ogImage, post.heroImage]
-    .filter((img): img is string => Boolean(img))
-    .map((img) => absolute(siteUrl, img));
+  const images: unknown[] = [];
+  if (post.ogImage) images.push(absolute(siteUrl, post.ogImage));
+  if (post.heroImage) {
+    images.push(
+      post.heroImageWidth && post.heroImageHeight
+        ? { '@type': 'ImageObject', url: absolute(siteUrl, post.heroImage), width: post.heroImageWidth, height: post.heroImageHeight }
+        : absolute(siteUrl, post.heroImage),
+    );
+  }
 
   const node: JsonLd = {
     '@type': 'BlogPosting',
@@ -50,12 +70,16 @@ export function blogPostingSchema(post: ParsedBlogPost, options: BlogSchemaOptio
     articleSection: post.category,
     keywords: post.tags.join(', '),
     ...(images.length ? { image: images } : {}),
+    ...(options.speakableSelectors?.length
+      ? { speakable: { '@type': 'SpeakableSpecification', cssSelector: [...options.speakableSelectors] } }
+      : {}),
   };
 
-  if (options.author) {
-    node.author = options.author.id
-      ? { '@id': options.author.id }
-      : { '@type': 'Person', name: options.author.name, ...(options.author.url ? { url: options.author.url } : {}) };
+  const author = options.author || configuredAuthor();
+  if (author) {
+    node.author = author.id
+      ? { '@id': author.id }
+      : { '@type': 'Person', name: author.name, ...(author.url ? { url: author.url } : {}) };
   }
   if (options.publisher) {
     node.publisher = options.publisher.id

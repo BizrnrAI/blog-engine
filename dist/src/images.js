@@ -1,4 +1,4 @@
-import { experimental_generateImage as generateImage } from 'ai';
+import { generateImage } from 'ai';
 import { createGateway } from '@ai-sdk/gateway';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -124,9 +124,11 @@ async function generateAiHero(root, post, topic) {
         // applyWatermark returns WebP; re-encode only when the configured format differs.
         const finalBuf = format === 'webp' ? watermarked : await encodeTo(format, sharp(watermarked));
         writeFileSync(outFile, finalBuf);
+        const dims = await sharp(finalBuf).metadata();
         return {
             image: `/${BLOG_CONFIG.paths.heroDir.replace(/^public\//, '')}/${post.slug}.${format}`,
             imageAlt: heroAltText(post),
+            ...(dims.width && dims.height ? { width: dims.width, height: dims.height } : {}),
         };
     }
     catch (err) {
