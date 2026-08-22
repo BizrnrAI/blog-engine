@@ -20,6 +20,7 @@ export function toMarkdown(
     `image: ${yamlString(args.cover.image)}`,
     `imageAlt: ${yamlString(args.cover.imageAlt)}`,
     ...(args.cover.width && args.cover.height ? [`imageWidth: ${args.cover.width}`, `imageHeight: ${args.cover.height}`] : []),
+    ...(args.cover.srcset ? [`imageSrcset: ${yamlString(args.cover.srcset)}`] : []),
     `ogImage: ${yamlString(args.cover.ogImage)}`,
     'feature: false',
     'faqs:',
@@ -27,6 +28,9 @@ export function toMarkdown(
       `  - q: ${yamlString(f.q)}`,
       `    a: ${yamlString(f.a)}`,
     ]),
+    ...(post.sources?.length
+      ? ['sources:', ...post.sources.flatMap((s) => [`  - title: ${yamlString(s.title)}`, `    url: ${yamlString(s.url)}`, ...(s.publisher ? [`    publisher: ${yamlString(s.publisher)}`] : [])])]
+      : []),
     'draft: false',
     '---',
     '',

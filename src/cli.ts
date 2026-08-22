@@ -3,6 +3,10 @@ import { BLOG_CONFIG, blogBasePath, configureBlogEngine, getBlogHooks } from './
 import { generateBlogRun } from './publisher.js';
 import { refreshBlogRun } from './refresh.js';
 import { auditBlogCorpus, formatAuditReport } from './audit.js';
+import { generateFanoutPassages } from './fanout.js';
+import { formatScorecard, postScorecard, runScorecard } from './scorecard.js';
+import { mkdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { getGoogleAccessToken, pingGscSitemap } from './gsc.js';
 import { pingIndexNow } from './indexing.js';
 import type { BlogEngineRuntime } from './types.js';
@@ -147,6 +151,45 @@ export async function runBlogRefreshCli(runtime: BlogEngineRuntime, root = proce
   if (process.env.GITHUB_OUTPUT && result.refreshed.length) {
     writeFileSync(process.env.GITHUB_OUTPUT, `slugs=${result.refreshed.join(',')}\n`, { flag: 'a' });
   }
+}
+
+/**
+ * Fan-out CLI: `--owner=/buy` (required) `--count=4` `--queries=a|b|c` (optional, else Search Console)
+ * `--out=src/content/fanout/buy.json` (default). Writes { ownerPath, generatedAt, sourceQueries, passages }.
+ */
+export async function runBlogFanoutCli(runtime: BlogEngineRuntime, root = process.cwd()): Promise<void> {
+  configureBlogEngine(runtime);
+  const owner = parseArg('owner');
+  if (!owner) throw new Error('--owner=/path is required');
+  const count = Math.max(2, Number(parseArg('count') || '4') || 4);
+  const queries = (parseArg('queries') || '').split('|').map((q) => q.trim()).filter(Boolean);
+  const out = parseArg('out') || join('src/content/fanout', `${owner.replace(/^\/+|\/+$/g, '').replace(/\//g, '-') || 'home'}.json`);
+  const result = await generateFanoutPassages(owner, { count, queries });
+  const file = join(root, out);
+  if (process.argv.includes('--dry-run')) console.log(JSON.stringify(result, null, 2));
+  else {
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, JSON.stringify(result, null, 2) + '\n');
+    console.log(`[blog-fanout] wrote ${file} (${result.passages.length} passages for ${owner})`);
+  }
+}
+
+/**
+ * Scorecard CLI: `--repo=owner/name --workflows=a.yml,b.yml --cadence-days=7 --queries=q1|q2 --json --strict`.
+ * Posts to SCORECARD_WEBHOOK_URL when set; `--strict` exits 1 on any FAIL.
+ */
+export async function runBlogScorecardCli(runtime: BlogEngineRuntime, root = process.cwd()): Promise<void> {
+  configureBlogEngine(runtime);
+  const card = await runScorecard(root, {
+    repo: parseArg('repo') || process.env.GITHUB_REPOSITORY,
+    workflows: (parseArg('workflows') || '').split(',').map((s) => s.trim()).filter(Boolean),
+    expectedCadenceDays: Number(parseArg('cadence-days') || '7') || 7,
+    citationQueries: (parseArg('queries') || '').split('|').map((s) => s.trim()).filter(Boolean),
+  });
+  console.log(process.argv.includes('--json') ? JSON.stringify(card, null, 2) : formatScorecard(card));
+  const posted = await postScorecard(card);
+  if (posted) console.log('[blog-scorecard] posted to webhook');
+  if (process.argv.includes('--strict') && card.failing > 0) process.exitCode = 1;
 }
 
 /** Corpus audit CLI: prints SHIP/FIX/BLOCK per post; `--json` for machine output; `--strict` exits 1 on any BLOCK. */

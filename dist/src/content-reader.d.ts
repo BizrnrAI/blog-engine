@@ -5,6 +5,11 @@ export declare function parseBlogFrontmatter(raw: string): {
     content: string;
     faqs: ParsedBlogFaq[];
     tags: string[];
+    sources: Array<{
+        title: string;
+        url: string;
+        publisher?: string;
+    }>;
 };
 export declare function markdownToAnswerSections(content: string, fallbackAnswer: string): {
     heading: string;

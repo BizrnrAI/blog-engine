@@ -25,6 +25,15 @@ measurably working on the production adopters.
 + `llms.txt` helpers, IndexNow only after the URL is live. A site that uses all
 of these plus a server-rendered template is already ahead of most blogs.
 
+## Status after v0.5.0
+
+Shipped: refresh mode + rank rescue + backlog healing, internal link graph,
+corpus audit, two-signal demand gate, fan-out into owners, verified sources,
+responsive hero variants, schema completeness, daily scorecard with workflow
+health + webhook alerting, citation-probe seam, syndication adapters
+(webhook/Slack/LinkedIn). Remaining below are integrations that need external
+accounts or data the engine cannot own.
+
 ## Tier 1 — content quality & ownership (v0.4.0 shipped the core)
 
 Shipped in 0.4.0: **refresh mode + rank rescue**, **internal link graph**

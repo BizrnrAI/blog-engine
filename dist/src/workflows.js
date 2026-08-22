@@ -179,4 +179,41 @@ jobs:
           labels: blog, automation, seo
 `;
 }
+/** Daily scorecard workflow: cadence, corpus, feed, sibling workflow health, Search Console, citations → webhook. */
+export function blogScorecardWorkflow(options = {}) {
+    const nodeVersion = options.nodeVersion || 22;
+    const watch = (options.workflowsToWatch || ['blog-generate.yml', 'blog-indexing.yml', 'blog-refresh.yml']).join(',');
+    const command = options.scorecardCommand || `npm run blog:scorecard -- --workflows=${watch} --strict`;
+    const cron = options.scorecardCron || '0 13 * * *';
+    return `name: Blog Scorecard
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "${cron}"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  scorecard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${nodeVersion}
+          cache: npm
+      - run: npm ci
+      - run: ${command}
+        env:
+          GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: \${{ github.repository }}
+          SCORECARD_WEBHOOK_URL: \${{ secrets.SCORECARD_WEBHOOK_URL }}
+          GOOGLE_OAUTH_CLIENT_ID: \${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: \${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          GOOGLE_OAUTH_REFRESH_TOKEN: \${{ secrets.GOOGLE_OAUTH_REFRESH_TOKEN }}
+`;
+}
 //# sourceMappingURL=workflows.js.map

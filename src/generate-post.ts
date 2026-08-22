@@ -2,6 +2,7 @@ import { BLOG_CONFIG, blogBasePath, brandPersona, getBlogHooks, getBlogTopics } 
 import { ALLOWED_CATEGORIES, INTERNAL_LINKS } from './topics.js';
 import type { BlogContentRules, ExistingPost, GeneratedBlogPost, SeoTopic } from './types.js';
 import { clampText, env, slugify, wordCount } from './utils.js';
+import { hostAllowed, normalizeSources, verifySources } from './sources.js';
 
 const DEFAULT_RULES: Required<Omit<BlogContentRules, 'blockedPhrases' | 'extraRules' | 'maxPostsPerWeek'>> & {
   maxPostsPerWeek?: number;
@@ -13,6 +14,8 @@ const DEFAULT_RULES: Required<Omit<BlogContentRules, 'blockedPhrases' | 'extraRu
   clampDescriptionTo: 158,
   minQuestionH2s: 2,
   requireCitableBlockquote: true,
+  requireTwoDemandSignals: false,
+  requireSources: false,
   blockedPhrases: [],
   // Domain-neutral defaults. Anything industry-specific belongs in a site's own config, never here.
   tone: 'confident, clear, genuinely helpful',
@@ -43,6 +46,7 @@ function buildMessages(topic: SeoTopic, existing: readonly ExistingPost[]) {
   const ownerPages = getBlogTopics().ownerPages || [];
   const existingTitles = existing.map((p) => p.title);
   const linkTargets = relatedLinkTargets(existing);
+  const trusted = getBlogTopics().trustedSourceDomains || [];
 
   /**
    * The closing CTA. A brand with an AI voice agent routes readers to it; everything else gets a
@@ -94,6 +98,11 @@ function buildMessages(topic: SeoTopic, existing: readonly ExistingPost[]) {
     rules.blockedPhrases.length
       ? '- NEVER use any of these phrases (claims discipline): ' + JSON.stringify(rules.blockedPhrases) + '.'
       : '',
+    rules.requireSources
+      ? '- SOURCES: cite 2-4 real, authoritative external sources (primary documentation, government, academic, reputable industry bodies) that you are CERTAIN exist at the exact URL given' +
+        (trusted.length ? ' — ONLY from these domains: ' + JSON.stringify(trusted) : '') +
+        '. Never invent a URL; every source is verified live before publishing.'
+      : '',
   ].filter(Boolean).join('\n');
 
   const user = [
@@ -111,6 +120,7 @@ function buildMessages(topic: SeoTopic, existing: readonly ExistingPost[]) {
     '  "tags": array of 3-6 short lowercase topical tags (no brand names),',
     '  "heroImageAlt": string (8-16 words literally describing a photographic scene that fits the post, e.g. "sunlit craftsman bungalow with a wraparound porch on a quiet street"),',
     '  "faqs": array of EXACTLY 3 objects { "q": string (phrased as a real user search), "a": string (2-4 sentences, factual, useful) },',
+    ...(rules.requireSources ? ['  "sources": array of 2-4 objects { "title": string, "url": string (absolute https URL), "publisher": string },'] : []),
     '  "body": string (the Markdown body per the rules above)',
     '}',
   ].join('\n');
@@ -218,6 +228,12 @@ export function validateGeneratedPost(
     .toLowerCase();
   const blocked = rules.blockedPhrases.filter((p) => haystack.includes(p.toLowerCase()));
   if (blocked.length) errs.push('blocked claim phrases present: ' + blocked.join(', '));
+  if (rules.requireSources) {
+    const sources = post.sources || [];
+    if (sources.length < 2) errs.push(`need 2-4 verified sources (got ${sources.length})`);
+    const offList = sources.filter((s) => !hostAllowed(s.url)).map((s) => s.url);
+    if (offList.length) errs.push('sources outside trustedSourceDomains: ' + offList.join(', '));
+  }
   return errs;
 }
 
@@ -239,6 +255,7 @@ export function normalizeGeneratedPost(raw: Record<string, unknown>): GeneratedB
       ? raw.faqs.map((f) => ({ q: String((f as any).q || '').trim(), a: String((f as any).a || '').trim() }))
       : [],
     body: String(raw.body || '').trim(),
+    ...(raw.sources ? { sources: normalizeSources(raw.sources) } : {}),
   };
 }
 
@@ -253,6 +270,7 @@ export async function generateBlogPost(topic: SeoTopic, existing: ExistingPost[]
       rawText = await callLLM(messages);
       const post = normalizeGeneratedPost(parseModelJson(rawText));
       errs = validateGeneratedPost(post, { existingSlugs, topic });
+      if (errs.length === 0 && contentRules().requireSources) errs = await verifySources(post.sources || []);
       if (errs.length === 0) return post;
       messages.push({ role: 'assistant', content: JSON.stringify(post).slice(0, 500) });
       messages.push({ role: 'user', content: `That JSON failed validation: ${errs.join('; ')}. Return corrected STRICT JSON only.` });

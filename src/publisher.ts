@@ -8,6 +8,7 @@ import { generateCoverImage, gradientForOrdinal } from './images.js';
 import { pingIndexNow } from './indexing.js';
 import { toMarkdown } from './markdown.js';
 import { contentRules } from './generate-post.js';
+import { hasSecondDemandSignal } from './demand.js';
 import { describeTopic, pickTopic } from './topic-rotation.js';
 import type { GenerateRunOptions, GenerateRunResult } from './types.js';
 import { wordCount } from './utils.js';
@@ -28,7 +29,17 @@ export async function generateBlogRun(root: string, options: GenerateRunOptions)
     return { written: [], skipped: 'BLOG_ENGINE_DISABLED' };
   }
 
-  const { token, queries } = await getGscQueries();
+  const { token, queries: gscQueries } = await getGscQueries();
+  let queries = gscQueries;
+  if (contentRules().requireTwoDemandSignals && queries.length) {
+    // ASEO: two independent demand sources before a new URL. Check the top candidates only.
+    const kept: typeof queries = [];
+    for (const q of queries.slice(0, 15)) {
+      if (await hasSecondDemandSignal(q.query)) kept.push(q);
+      else console.log(`${logPrefix} demand gate: no second signal for "${q.query}" - skipped`);
+    }
+    queries = kept;
+  }
   console.log(`${logPrefix} GSC: ${queries.length} candidate queries (top: ${queries.slice(0, 3).map((q) => q.query).join(' | ') || 'none'})`);
 
   const blogDir = join(root, BLOG_CONFIG.paths.blogDir);

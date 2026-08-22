@@ -171,3 +171,10 @@ See [.env.example](../.env.example) for the complete annotated list:
   no data.
 - `afterIndexed({ urls, slugs })` → runs after IndexNow/GSC submission of live
   URLs; the syndication seam. Errors are logged and never block publish.
+
+## v0.5.0 hooks
+
+- `fetchDemandSignals(query)` → related real-world queries (PAA, site search…) — second demand signal.
+- `verifySource(url)` → boolean; default HEAD/GET with 8s timeout.
+- `probeCitations({ queries, siteHost })` → `CitationProbe[]`; providers that can't run must return `available:false` (never counted as "not cited").
+- Syndication adapters (`webhookAdapter`, `slackAdapter`, `linkedinAdapter`) read their credentials from env vars named in their options.

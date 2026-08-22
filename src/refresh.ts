@@ -7,6 +7,7 @@ import { contentRules, normalizeGeneratedPost, parseModelJson, relatedLinkTarget
 import { getGscPageQueries } from './gsc.js';
 import { toMarkdown } from './markdown.js';
 import { rankRescueCandidates } from './rank-rescue.js';
+import { auditBlogCorpus } from './audit.js';
 import { INTERNAL_LINKS } from './topics.js';
 import type { CoverImage, GeneratedBlogPost, RankRescueCandidate, RefreshRunOptions, RefreshRunResult, SeoTopic } from './types.js';
 import { env } from './utils.js';
@@ -169,6 +170,7 @@ export async function refreshBlogPost(
     ogImage: frontmatter.ogImage || frontmatter.image || '',
     source: 'ai-generated',
     ...(Number(frontmatter.imageWidth) ? { width: Number(frontmatter.imageWidth), height: Number(frontmatter.imageHeight) } : {}),
+    ...(frontmatter.imageSrcset ? { srcset: frontmatter.imageSrcset } : {}),
   };
   const today = new Date().toISOString().slice(0, 10);
   const renderArgs = { post, cover, gradient: frontmatter.gradient || '', dateISO: frontmatter.date || today, author: frontmatter.author || BLOG_CONFIG.identity.author?.name };
@@ -190,6 +192,16 @@ export async function refreshBlogRun(root: string, options: RefreshRunOptions): 
   const byslug = new Map(candidates.map((c) => [c.slug, c]));
   let slugs = options.slugs && options.slugs.length ? options.slugs : candidates.filter((c) => c.action === 'refresh').slice(0, options.max ?? 1).map((c) => c.slug);
   slugs = slugs.filter((s) => existsSync(join(root, BLOG_CONFIG.paths.blogDir, `${s}.md`)));
+  if (!slugs.length && options.backlog !== false) {
+    // No demand-led candidate: heal the long tail — the FIX post with the most issues, oldest first.
+    const fixes = auditBlogCorpus(root).filter((e) => e.verdict === 'FIX');
+    const dates = new Map(readExistingPosts(root).map((p) => [p.slug, p.date || '']));
+    fixes.sort((a, b) => b.issues.length - a.issues.length || (dates.get(a.slug) || '').localeCompare(dates.get(b.slug) || ''));
+    if (fixes.length) {
+      slugs = [fixes[0].slug];
+      console.log(`${logPrefix} refresh: no Search Console candidates - backlog pick ${fixes[0].slug} (${fixes[0].issues.length} audit issues)`);
+    }
+  }
   if (!slugs.length) {
     console.log(`${logPrefix} refresh: no candidates (${candidates.length} scored pages; pass --slugs to force).`);
     return { refreshed: [], candidates, skipped: 'NO_CANDIDATES' };
