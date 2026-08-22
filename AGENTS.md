@@ -121,6 +121,16 @@ var. All env vars are listed in [.env.example](.env.example).
   reject paths in `tests/generate-post.test.ts`.
 - New provider: prefer the hook seam over hard-coding another vendor SDK.
 
+## Adapter-facing seams
+
+Before adding a workaround to a site adapter, check whether the engine already has a seam:
+frontmatter shape (`paths.frontmatterAliases`, `hooks.parseFrontmatter`), topic choice
+(`topics.editorial[].slug/title` pins, `hooks.pickTopic`, `hooks.deriveTopic`), model + images
+(`hooks.generateText`, `hooks.generateHeroImage`), output shape (`hooks.renderMarkdown`), demand and
+evidence (`hooks.fetchGscQueries`, `fetchGscPageQueries`, `fetchDemandSignals`, `verifySource`),
+distribution (`hooks.afterIndexed`). A workaround that a second site would also need belongs in
+the engine.
+
 ## Upkeep cadence
 
 - Monthly: `npm outdated`, `npm audit`, re-run `npm run verify`; bump majors

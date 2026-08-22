@@ -30,6 +30,7 @@ pluggable seam you can point at your own stack.
 | Hero images | `src/images.ts` | AI generation (pluggable), Sharp logo watermarking, curated fallback, branded descriptive alt text |
 | OG cards | `src/images.ts` | Deterministic branded 1200×630 SVG→JPEG cards, no model call. Disable with `image.og.enabled: false` to let the hero serve as the OG image |
 | Markdown output | `src/markdown.ts` | Frontmatter with title/description/tags/dates/answer/FAQs/images. Override the whole shape with the `renderMarkdown` hook |
+| Frontmatter | `src/frontmatter.ts` | Key aliases (pubDate→date, cover→image, readingTime→readMins, …) so sites keeping their own shape still feed cadence, audit, refresh and schema |
 | Content reading | `src/content-reader.ts` | Parse generated posts back for blog index, RSS, sitemap, `llms.txt` |
 | JSON-LD | `src/schema.ts` | `BlogPosting` + `FAQPage` + `BreadcrumbList` graph builders with stable `@id`s |
 | RSS | `src/rss.ts` | RSS 2.0 with `atom:self`, `media:content`, `enclosure` (real byte lengths, correct MIME) |

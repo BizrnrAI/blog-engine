@@ -3,6 +3,38 @@
 All notable changes to `@bizrnr/blog-engine`. Consumers install from git, so
 the version in `package.json` is the contract marker.
 
+## 0.5.2 — 2026-08-22
+
+Adopter seams surfaced by the kristianpeter.com migration. All additive; defaults unchanged.
+
+### Added
+- **Frontmatter key aliases** (`src/frontmatter.ts`): `pubDate`→`date`, `publishDate`→`date`,
+  `updatedDate`/`modifiedDate`→`updated`, `cover`/`heroImage`→`image`, `coverAlt`/`heroAlt`→`imageAlt`,
+  `coverWidth`/`heroImageWidth`→`imageWidth` (and height), `readingTime "7 min"`→`readMins: 7`.
+  Normalization is additive and canonical-first, so existing adapters are unaffected. A site that
+  keeps its own shape now gets the cadence guard, corpus audit, scorecard, refresh cover/date and
+  schema without mirroring its corpus into a temp directory.
+  Extend with `paths.frontmatterAliases`; replace wholesale with `hooks.parseFrontmatter`
+  (return null to fall back). New exports: `DEFAULT_FRONTMATTER_ALIASES`, `normalizeFrontmatter`,
+  `resolveFrontmatterAliases`, `coerceFrontmatterValue`, `parsePostFile`;
+  `parseBlogFrontmatter(raw, { aliases?, normalize? })`.
+- **Topic pinning**: optional `slug`/`title` on `EditorialTopic` and `SeoTopic`. A pinned slug is used
+  verbatim (no `slugify` stop-word stripping), a pinned title as-is; both are stated in the prompt
+  and asserted by the validator. Pinned topics are matched EXACTLY for coverage instead of the
+  two-distinctive-words heuristic, which false-positives on question-style titles.
+- **`hooks.pickTopic({ existing, gscQueries, offset })`** (null = engine rotation) and
+  **`hooks.deriveTopic({ existing })`** (invoked only when every editorial topic is covered).
+  New exports: `resolveTopic` (async, hook-aware; `pickTopic` keeps its signature),
+  `allEditorialTopicsCovered`.
+
+### Fixed
+- `parseModelJson` no longer fails on a fenced block whose body contains its own `````` fences (the
+  lazy first-fence match truncated the object — observed as "attempt 1 unparseable" on live runs).
+  It now tries the widest fenced span, each fenced block, the raw text, the outermost `{...}` slice,
+  and a repair pass that escapes raw newlines/tabs inside string literals. Exported
+  `repairJsonStringNewlines`. Unparseable output now logs the tail as well as the head.
+- Refresh pins the slug through `normalizeGeneratedPost` instead of overwriting it afterwards.
+
 ## 0.5.1 — 2026-08-22
 
 - Refresh mode fills missing hero dimensions from the local image, so a

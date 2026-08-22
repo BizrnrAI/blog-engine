@@ -9,7 +9,7 @@ import { pingIndexNow } from './indexing.js';
 import { toMarkdown } from './markdown.js';
 import { contentRules } from './generate-post.js';
 import { hasSecondDemandSignal } from './demand.js';
-import { describeTopic, pickTopic } from './topic-rotation.js';
+import { describeTopic, resolveTopic } from './topic-rotation.js';
 import { wordCount } from './utils.js';
 export function countPostsSince(existing, days, now = new Date()) {
     const cutoff = now.getTime() - days * 864e5;
@@ -57,7 +57,7 @@ export async function generateBlogRun(root, options) {
     }
     const written = [];
     for (let i = 0; i < options.count; i++) {
-        const topic = pickTopic(existing, queries, i);
+        const topic = await resolveTopic(existing, queries, i);
         console.log(`${logPrefix} topic #${existing.length + i}: ${describeTopic(topic)}`);
         const post = await generateBlogPost(topic, existing);
         const ordinal = existing.length + i;

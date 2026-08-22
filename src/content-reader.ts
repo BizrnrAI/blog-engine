@@ -1,5 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { getBlogHooks } from './config.js';
+import { normalizeFrontmatter, resolveFrontmatterAliases } from './frontmatter.js';
 import type { ParsedBlogFaq, ParsedBlogPost, ReadGeneratedPostsOptions, SeedBlogPost } from './types.js';
 
 type Frontmatter = Record<string, string>;
@@ -8,7 +10,18 @@ function stripQuotes(value: string): string {
   return value.trim().replace(/^['"]|['"]$/g, '');
 }
 
-export function parseBlogFrontmatter(raw: string): {
+export interface ParseFrontmatterOptions {
+  /** Alias table to apply (default: engine defaults merged with paths.frontmatterAliases). */
+  aliases?: Readonly<Record<string, string>>;
+  /** Set false to get the file literal keys with no alias normalization. */
+  normalize?: boolean;
+}
+
+/**
+ * Parse frontmatter and normalize site-specific key aliases onto the engine canonical keys
+ * (see src/frontmatter.ts). Original keys are always preserved.
+ */
+export function parseBlogFrontmatter(raw: string, options: ParseFrontmatterOptions = {}): {
   frontmatter: Frontmatter;
   content: string;
   faqs: ParsedBlogFaq[];
@@ -72,12 +85,38 @@ export function parseBlogFrontmatter(raw: string): {
   }
 
   return {
-    frontmatter,
+    frontmatter: options.normalize === false ? frontmatter : normalizeFrontmatter(frontmatter, options.aliases || resolveFrontmatterAliases()),
     content,
     faqs: faqs.filter((faq) => faq.question && faq.answer),
     tags,
     sources: sources.filter((s) => s.title && s.url),
   };
+}
+
+/**
+ * Parse one post honouring hooks.parseFrontmatter when a site owns the format. Hook output is
+ * alias-normalized too, so a hook can return its native keys.
+ */
+export function parsePostFile(raw: string, slug: string) {
+  let hook;
+  try {
+    hook = getBlogHooks().parseFrontmatter;
+  } catch {
+    hook = undefined; // no runtime configured: engine parser only
+  }
+  if (hook) {
+    const result = hook({ raw, slug });
+    if (result) {
+      return {
+        frontmatter: normalizeFrontmatter(result.frontmatter),
+        content: result.content,
+        faqs: result.faqs || [],
+        tags: result.tags || [],
+        sources: result.sources || [],
+      };
+    }
+  }
+  return parseBlogFrontmatter(raw);
 }
 
 export function markdownToAnswerSections(content: string, fallbackAnswer: string) {
@@ -110,9 +149,9 @@ export function readGeneratedBlogPosts(options: ReadGeneratedPostsOptions = {}):
     .map((file) => {
       const slug = file.replace(/\.md$/, '');
       const raw = readFileSync(join(blogDir, file), 'utf8');
-      const { frontmatter, content, faqs, tags, sources } = parseBlogFrontmatter(raw);
+      const { frontmatter, content, faqs, tags, sources } = parsePostFile(raw, slug);
       const title = frontmatter.title || fallback?.title || slug.replace(/-/g, ' ');
-      const publishedAt = frontmatter.date || frontmatter.pubDate || new Date().toISOString().slice(0, 10);
+      const publishedAt = frontmatter.date || new Date().toISOString().slice(0, 10);
       const description = frontmatter.description || fallback?.description || title;
       const answer = frontmatter.answer || description;
 
@@ -124,10 +163,10 @@ export function readGeneratedBlogPosts(options: ReadGeneratedPostsOptions = {}):
         tags: tags.length ? tags : fallback?.tags || [frontmatter.category || 'Service Guides'],
         author: frontmatter.author || fallback?.author || '',
         publishedAt,
-        updatedAt: frontmatter.updated || frontmatter.updatedDate || publishedAt,
-        heroImage: frontmatter.image || frontmatter.heroImage || frontmatter.cover || fallback?.heroImage || '',
+        updatedAt: frontmatter.updated || publishedAt,
+        heroImage: frontmatter.image || fallback?.heroImage || '',
         heroImageAlt:
-          frontmatter.imageAlt || frontmatter.heroAlt || frontmatter.coverAlt || `${fallback?.heroImageAltPrefix || 'Blog'} guide: ${title}`,
+          frontmatter.imageAlt || `${fallback?.heroImageAltPrefix || 'Blog'} guide: ${title}`,
         heroImageWidth: Number(frontmatter.imageWidth) || undefined,
         heroImageHeight: Number(frontmatter.imageHeight) || undefined,
         heroImageSrcset: frontmatter.imageSrcset || undefined,
