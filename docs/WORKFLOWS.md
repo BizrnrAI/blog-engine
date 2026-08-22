@@ -90,3 +90,12 @@ pin `@v4`/`@v6`. Verified incident (Aug 2026): a site whose repo setting had
 generation succeeding and only PR creation dying — the branch pushes pile up
 silently. Gotcha #1 above is the fix; add a workflow-failure alert so a red cron
 is noticed within a day, not a quarter.
+
+7. **Bot merges don't trigger downstream workflows.** A PR that the generate
+   workflow auto-merges with `GITHUB_TOKEN` produces a push that GitHub will
+   *not* run the push-triggered indexing workflow for. The builder therefore
+   emits three triggers: `push` (human merges), a daily `schedule` sweep over
+   posts changed on main in the last 36h (catches bot merges), and
+   `workflow_dispatch` for manual backfill by slug. Verified incident: an
+   adopter's autonomous posts went unpinged for five weeks with the push trigger
+   alone. Alternative: merge with a PAT so the push counts as a user event.
