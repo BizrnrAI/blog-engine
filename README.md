@@ -42,6 +42,15 @@ pluggable seam you can point at your own stack.
 | Corpus audit | `src/audit.ts` | SHIP / FIX / BLOCK verdicts for every published post against the content contract |
 | Discovery | `src/discovery.ts` | Sitemap entries, `llms.txt` blog section, and `relatedPosts()` for the internal link graph |
 
+## Install
+
+```bash
+npm install github:BizrnrAI/blog-engine#<commit-or-tag>   # public repo, compiled dist committed
+```
+
+Pin a commit for reproducible builds; bump deliberately. No build step runs on
+install.
+
 ## Quickstart
 
 ```ts
