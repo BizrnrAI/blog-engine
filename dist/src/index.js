@@ -1,4 +1,4 @@
-export { BLOG_CONFIG, brandPersona, configureBlogEngine, getBlogConfig, getBlogHooks, getBlogRuntime, getBlogTopics } from './config.js';
+export { BLOG_CONFIG, blogBasePath, brandPersona, configureBlogEngine, getBlogConfig, getBlogHooks, getBlogRuntime, getBlogTopics } from './config.js';
 export { contentRules, generateBlogPost, normalizeGeneratedPost, parseModelJson, relatedLinkTargets, validateGeneratedPost } from './generate-post.js';
 export { generateCoverImage, applyWatermark, heroAltText, makeOgCard } from './images.js';
 export { countPostsSince, generateBlogRun } from './publisher.js';

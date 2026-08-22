@@ -1,4 +1,12 @@
-import { getBlogConfig } from './config.js';
+import { blogBasePath, getBlogConfig } from './config.js';
+
+function defaultBase(): string {
+  try {
+    return blogBasePath();
+  } catch {
+    return '/blog';
+  }
+}
 import type { ParsedBlogPost } from './types.js';
 
 /**
@@ -28,7 +36,7 @@ export interface SitemapEntry {
 /** One <url> entry per post with lastmod = updatedAt (honest dates only). */
 export function blogSitemapEntries(posts: readonly ParsedBlogPost[], options: DiscoveryOptions = {}): SitemapEntry[] {
   const siteUrl = resolveSiteUrl(options);
-  const base = options.blogBasePath || '/blog';
+  const base = options.blogBasePath || defaultBase();
   return posts.map((post) => ({
     loc: `${siteUrl}${base}/${post.slug}`,
     lastmod: post.updatedAt || post.publishedAt,
@@ -51,7 +59,7 @@ export interface LlmsTxtOptions extends DiscoveryOptions {
  */
 export function buildBlogLlmsTxt(posts: readonly ParsedBlogPost[], options: LlmsTxtOptions = {}): string {
   const siteUrl = resolveSiteUrl(options);
-  const base = options.blogBasePath || '/blog';
+  const base = options.blogBasePath || defaultBase();
   let feedPath = options.feedPath;
   if (!feedPath) {
     try {

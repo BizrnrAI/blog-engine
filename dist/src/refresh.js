@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { BLOG_CONFIG, brandPersona, getBlogHooks, getBlogTopics } from './config.js';
+import { BLOG_CONFIG, blogBasePath, brandPersona, getBlogHooks, getBlogTopics } from './config.js';
 import { parseBlogFrontmatter } from './content-reader.js';
 import { readExistingPosts } from './existing-posts.js';
 import { contentRules, normalizeGeneratedPost, parseModelJson, relatedLinkTargets, validateGeneratedPost } from './generate-post.js';
@@ -170,8 +170,9 @@ export async function refreshBlogRun(root, options) {
     const logPrefix = BLOG_CONFIG.logPrefix || '[blog-engine]';
     if (process.env.BLOG_ENGINE_DISABLED === '1')
         return { refreshed: [], candidates: [], skipped: 'BLOG_ENGINE_DISABLED' };
-    const rows = await getGscPageQueries('/blog/');
-    const candidates = rankRescueCandidates(rows);
+    const prefix = `${blogBasePath()}/`;
+    const rows = await getGscPageQueries(prefix);
+    const candidates = rankRescueCandidates(rows, { pathPrefix: prefix });
     const byslug = new Map(candidates.map((c) => [c.slug, c]));
     let slugs = options.slugs && options.slugs.length ? options.slugs : candidates.filter((c) => c.action === 'refresh').slice(0, options.max ?? 1).map((c) => c.slug);
     slugs = slugs.filter((s) => existsSync(join(root, BLOG_CONFIG.paths.blogDir, `${s}.md`)));

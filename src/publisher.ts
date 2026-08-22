@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { BLOG_CONFIG, getBlogHooks } from './config.js';
+import { BLOG_CONFIG, blogBasePath, getBlogHooks } from './config.js';
 import { readExistingPosts } from './existing-posts.js';
 import { generateBlogPost } from './generate-post.js';
 import { getGscQueries, pingGscSitemap } from './gsc.js';
@@ -77,7 +77,7 @@ export async function generateBlogRun(root: string, options: GenerateRunOptions)
   }
 
   if (!options.dryRun && !options.skipPing && written.length) {
-    await pingIndexNow(written.map((slug) => `${BLOG_CONFIG.identity.siteUrl}/blog/${slug}`));
+    await pingIndexNow(written.map((slug) => `${BLOG_CONFIG.identity.siteUrl}${blogBasePath()}/${slug}`));
     await pingGscSitemap(token);
   }
 

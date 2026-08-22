@@ -3,6 +3,12 @@
 All notable changes to `@bizrnr/blog-engine`. Consumers install from git, so
 the version in `package.json` is the contract marker.
 
+## 0.4.3 — 2026-08-22
+
+- `paths.blogBasePath` (default `/blog`): sites whose posts live under another
+  prefix (e.g. `/log/<slug>`) get correct URLs in pings, RSS, the link graph,
+  the audit, rank rescue/refresh, and schema/discovery defaults.
+
 ## 0.4.2 — 2026-08-22
 
 - Refresh prompt now carries the same owner-page guidance and existing-post

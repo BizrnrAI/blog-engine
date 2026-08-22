@@ -1,6 +1,6 @@
 import { existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { BLOG_CONFIG } from './config.js';
+import { BLOG_CONFIG, blogBasePath } from './config.js';
 import { mimeTypeFor, xmlEscape } from './utils.js';
 
 export interface RssPost {
@@ -39,7 +39,7 @@ export function buildBlogRss(posts: RssPost[], options: BuildRssOptions = {}): s
   const lastBuildDate = posts[0]?.date ?? new Date();
   const items = posts.slice(0, BLOG_CONFIG.rss.limit)
     .map((p) => {
-      const url = `${BLOG_CONFIG.identity.siteUrl}/blog/${p.id}`;
+      const url = `${BLOG_CONFIG.identity.siteUrl}${blogBasePath()}/${p.id}`;
       const imageUrl = p.ogImage || p.image;
       const mime = imageUrl ? mimeTypeFor(imageUrl) : '';
       const length = imageUrl ? enclosureLength(imageUrl, options) : 0;
@@ -63,7 +63,7 @@ export function buildBlogRss(posts: RssPost[], options: BuildRssOptions = {}): s
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/">
   <channel>
     <title>${xmlEscape(BLOG_CONFIG.rss.title)}</title>
-    <link>${BLOG_CONFIG.identity.siteUrl}/blog</link>
+    <link>${BLOG_CONFIG.identity.siteUrl}${blogBasePath() || '/'}</link>
     <description>${xmlEscape(BLOG_CONFIG.rss.description)}</description>
     <language>${(BLOG_CONFIG.identity.locale || 'en-US').toLowerCase()}</language>
     <lastBuildDate>${lastBuildDate.toUTCString()}</lastBuildDate>
