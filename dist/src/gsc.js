@@ -1,4 +1,4 @@
-import { BLOG_CONFIG, getBlogHooks } from './config.js';
+import { BLOG_CONFIG, getBlogHooks, getBlogTopics } from './config.js';
 import { env, norm } from './utils.js';
 const LOOKBACK_DAYS = 28;
 /**
@@ -16,9 +16,11 @@ function filterQueries(rows) {
     ]
         .filter((s) => Boolean(s))
         .map((s) => s.toLowerCase());
+    const exclude = getBlogTopics().excludeQuery;
     return rows
         .filter((q) => q.query.split(/\s+/).length >= 2)
         .filter((q) => !brandStopwords.some((b) => norm(q.query).includes(norm(b))))
+        .filter((q) => !(exclude && exclude(q.query)))
         .sort((a, b) => b.impressions - a.impressions);
 }
 export async function getGoogleAccessToken() {

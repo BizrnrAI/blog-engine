@@ -245,6 +245,11 @@ export interface BlogEngineTopics {
    * same query. One owner per query family is the core ASEO ownership rule.
    */
   ownerPages?: readonly string[];
+  /**
+   * Drop a Search Console query from topic selection (e.g. a query family another owned site
+   * already serves). Applied after the engine's own filters, to built-in and hook sources alike.
+   */
+  excludeQuery?: (query: string) => boolean;
 }
 
 export interface BlogContentRules {
