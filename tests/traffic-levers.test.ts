@@ -157,3 +157,14 @@ test('blogRefreshWorkflow emits a scheduled PR-safe refresh job', () => {
   const y = blogRefreshWorkflow();
   assert.ok(y.includes('schedule:') && y.includes('peter-evans/create-pull-request@v8') && y.includes('blog:refresh'));
 });
+
+test('refresh prompt carries owner pages and existing-post link targets (parity with generate)', async () => {
+  let prompt = '';
+  const rt = configureTestEngine({}, { generateText: async ({ messages }) => { prompt = messages.map((m) => m.content).join('\n'); return JSON.stringify(validPost()); } });
+  (rt.topics as { ownerPages?: string[] }).ownerPages = ['/services/drain-cleaning'];
+  const root = rootWithPost();
+  writeFileSync(join(root, 'src/content/blog/winter-pipe-care.md'), '---\ntitle: "Winter Pipe Care"\ndate: 2026-01-01\n---\nBody');
+  await refreshBlogRun(root, { slugs: ['drain-cleaning-cost-springfield'], dryRun: true });
+  assert.ok(prompt.includes('canonical OWNERS') && prompt.includes('/services/drain-cleaning'));
+  assert.ok(prompt.includes('/blog/winter-pipe-care'));
+});

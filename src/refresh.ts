@@ -1,9 +1,9 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { BLOG_CONFIG, brandPersona, getBlogHooks } from './config.js';
+import { BLOG_CONFIG, brandPersona, getBlogHooks, getBlogTopics } from './config.js';
 import { parseBlogFrontmatter } from './content-reader.js';
 import { readExistingPosts } from './existing-posts.js';
-import { contentRules, normalizeGeneratedPost, parseModelJson, validateGeneratedPost } from './generate-post.js';
+import { contentRules, normalizeGeneratedPost, parseModelJson, relatedLinkTargets, validateGeneratedPost } from './generate-post.js';
 import { getGscPageQueries } from './gsc.js';
 import { toMarkdown } from './markdown.js';
 import { rankRescueCandidates } from './rank-rescue.js';
@@ -44,9 +44,13 @@ export function buildRefreshMessages(args: {
   existingBody: string;
   queries: Array<{ query: string; impressions: number; position: number }>;
   otherTitles: string[];
+  /** Other existing posts offered as link targets (internal link graph). */
+  linkTargets?: Array<{ title: string; path: string }>;
 }) {
   const rules = contentRules();
   const identity = BLOG_CONFIG.identity;
+  const ownerPages = getBlogTopics().ownerPages || [];
+  const linkTargets = args.linkTargets || [];
   const queryLines = args.queries.length
     ? args.queries.map((q) => `  - "${q.query}" (${q.impressions} impressions, avg position ${q.position})`).join('\n')
     : '  - (no Search Console data; improve structure, clarity, and currency)';
@@ -73,6 +77,12 @@ export function buildRefreshMessages(args: {
       : '',
     '- Tables/lists over prose for comparisons. No FAQ or quick-answer section in the body.',
     '- Include 2-4 internal links chosen ONLY from: ' + JSON.stringify(INTERNAL_LINKS) + '.',
+    linkTargets.length
+      ? '- Internal link graph: where genuinely relevant, link 1-2 of these EXISTING posts by their exact path (descriptive anchor text): ' + JSON.stringify(linkTargets) + '.'
+      : '',
+    ownerPages.length
+      ? '- These pages are the canonical OWNERS of their commercial topics: ' + JSON.stringify(ownerPages) + '. Support them — link the most relevant one naturally — and keep this post a distinct, more specific answer that hands off to the owner for the decision.'
+      : '',
     rules.blockedPhrases.length ? '- NEVER use these phrases: ' + JSON.stringify(rules.blockedPhrases) + '.' : '',
   ].filter(Boolean).join('\n');
 
@@ -126,6 +136,7 @@ export async function refreshBlogPost(
     existingBody: content,
     queries: args.queries || [],
     otherTitles,
+    linkTargets: relatedLinkTargets(existing.filter((p) => p.slug !== slug)),
   });
 
   let errs: string[] = [];

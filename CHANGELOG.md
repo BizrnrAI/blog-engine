@@ -3,6 +3,13 @@
 All notable changes to `@bizrnr/blog-engine`. Consumers install from git, so
 the version in `package.json` is the contract marker.
 
+## 0.4.2 — 2026-08-22
+
+- Refresh prompt now carries the same owner-page guidance and existing-post
+  link targets as the generate prompt (refreshed posts join the link graph).
+- `topics.excludeQuery(query)` — drop a Search Console query family from topic
+  selection without writing a `fetchGscQueries` hook.
+
 ## 0.4.1 — 2026-08-22
 
 - Removed the `prepare` script. `dist/` is committed and CI enforces it is

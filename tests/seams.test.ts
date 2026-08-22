@@ -186,3 +186,11 @@ test('cross-promo is skipped when no backlink is configured', async () => {
   assert.doesNotMatch(out, /ERR /, 'no backlink must not break the run');
   assert.match(out, /\[editorial\]/, 'falls back to an editorial topic instead of cross-promo');
 });
+
+test('topics.excludeQuery drops matching Search Console queries from selection', async () => {
+  const { getGscQueries } = await import('../src/gsc.js');
+  const rt = configureTestEngine({}, { fetchGscQueries: async () => [{ query: 'otay ranch homes', impressions: 90 }, { query: 'la jolla condos', impressions: 40 }] });
+  (rt.topics as { excludeQuery?: (q: string) => boolean }).excludeQuery = (q) => /otay ranch/i.test(q);
+  const { queries } = await getGscQueries();
+  assert.deepEqual(queries.map((q) => q.query), ['la jolla condos']);
+});
