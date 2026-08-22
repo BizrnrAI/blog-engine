@@ -72,6 +72,16 @@ transparent scoping, disclosed authorship).
 - **Speakable** — pass `speakableSelectors` to the schema builders only for
   selectors your template really renders (machine/visible parity).
 
+## Evidence and demand (v0.5.0, opt-in)
+
+- **Two demand signals** — with `content.requireTwoDemandSignals`, a Search
+  Console query becomes a new post only if an independent source (autocomplete
+  by default, or `fetchDemandSignals`) corroborates it.
+- **Verified sources** — with `content.requireSources`, the model must cite 2–4
+  real sources; each is host-checked against `topics.trustedSourceDomains` and
+  fetched live before publication. A dead or off-list URL fails validation and
+  feeds the retry loop. Sources land in frontmatter and as schema `citation`.
+
 ## Claims discipline (non-negotiable)
 
 - Never fabricate prices, percentages, statistics, dates, interest rates,

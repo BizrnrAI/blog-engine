@@ -16,4 +16,10 @@ export declare function blogRefreshWorkflow(options?: BlogWorkflowOptions & {
     refreshCommand?: string;
     refreshCron?: string;
 }): string;
+/** Daily scorecard workflow: cadence, corpus, feed, sibling workflow health, Search Console, citations → webhook. */
+export declare function blogScorecardWorkflow(options?: BlogWorkflowOptions & {
+    scorecardCommand?: string;
+    scorecardCron?: string;
+    workflowsToWatch?: string[];
+}): string;
 //# sourceMappingURL=workflows.d.ts.map

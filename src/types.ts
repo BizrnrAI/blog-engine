@@ -40,6 +40,14 @@ export interface GeneratedBlogPost {
   heroImageAlt?: string;
   faqs: Array<{ q: string; a: string }>;
   body: string;
+  /** Verified external sources (opt-in via content.requireSources). */
+  sources?: BlogSource[];
+}
+
+export interface BlogSource {
+  title: string;
+  url: string;
+  publisher?: string;
 }
 
 export interface CoverImage {
@@ -50,6 +58,8 @@ export interface CoverImage {
   /** Intrinsic pixel dimensions of the hero when the engine wrote it (CLS-safe rendering). */
   width?: number;
   height?: number;
+  /** Responsive variants written alongside the hero, as an HTML srcset string. */
+  srcset?: string;
 }
 
 export interface GscQuery {
@@ -82,6 +92,8 @@ export interface RankRescueCandidate {
 }
 
 export interface RefreshRunOptions {
+  /** When Search Console yields no candidates, refresh the worst-audited FIX post instead (default true). */
+  backlog?: boolean;
   /** Explicit slugs to refresh; when empty, rank-rescue picks candidates from Search Console. */
   slugs?: string[];
   /** Max posts to refresh this run when picking automatically (default 1). */
@@ -192,6 +204,8 @@ export interface BlogEngineConfig {
     size: '1024x1024' | '1536x1024' | '1024x1536' | `${number}x${number}`;
     quality: string;
     format: 'webp' | 'jpg' | 'png';
+    /** Responsive widths to write next to the hero (e.g. [1024, 640]); emitted as imageSrcset. */
+    variants?: readonly number[];
     credit: string;
     promptMarket: string;
     promptStyle: string;
@@ -252,6 +266,8 @@ export interface BlogEngineTopics {
    * already serves). Applied after the engine's own filters, to built-in and hook sources alike.
    */
   excludeQuery?: (query: string) => boolean;
+  /** Allowed hosts for post sources when content.requireSources is on (suffix match, e.g. 'census.gov'). */
+  trustedSourceDomains?: readonly string[];
 }
 
 export interface BlogContentRules {
@@ -273,6 +289,16 @@ export interface BlogContentRules {
    * evidence supports more. Unset = no cap (existing behaviour).
    */
   maxPostsPerWeek?: number;
+  /**
+   * Require a second, independent demand signal (autocomplete or a fetchDemandSignals hook)
+   * before a Search-Console-led topic may become a new post. Default false.
+   */
+  requireTwoDemandSignals?: boolean;
+  /**
+   * Require 2–4 verified external sources per post (opt-in). Sources must resolve (HEAD/GET 2xx)
+   * and, when topics.trustedSourceDomains is set, come from those domains. Default false.
+   */
+  requireSources?: boolean;
   /**
    * Tone adjectives for the brand voice. Default: 'confident, clear, genuinely helpful'.
    * A local service business might use 'warm, local-insider, practical'.
@@ -313,6 +339,33 @@ export interface FetchGscPageQueriesArgs {
   days: number;
   /** Only pages whose path starts with this prefix matter (default '/blog/'). */
   pathPrefix: string;
+}
+
+export interface CitationProbe {
+  provider: string;
+  probeType: string;
+  available: boolean;
+  mentioned: boolean;
+  answerExcerpt?: string;
+  citedUrls: string[];
+  model?: string;
+  checkedAt: string;
+  errorCode?: string;
+}
+
+export interface ScorecardCheck {
+  name: string;
+  status: 'pass' | 'warn' | 'fail' | 'na';
+  detail: string;
+}
+
+export interface Scorecard {
+  generatedAt: string;
+  site: string;
+  checks: ScorecardCheck[];
+  summary: string;
+  failing: number;
+  warning: number;
 }
 
 export interface AfterIndexedArgs {
@@ -372,6 +425,12 @@ export interface BlogEngineHooks {
    * block or un-publish anything.
    */
   afterIndexed?: (args: AfterIndexedArgs) => Promise<void>;
+  /** Second demand source for a query: return related real-world queries/suggestions (e.g. PAA, site search). */
+  fetchDemandSignals?: (query: string) => Promise<string[]>;
+  /** Verify a source URL resolves; default is a HEAD/GET fetch with timeout. */
+  verifySource?: (url: string) => Promise<boolean>;
+  /** Grounded citation probes across AI providers; unavailable providers must return available:false. */
+  probeCitations?: (args: { queries: string[]; siteHost: string }) => Promise<CitationProbe[]>;
   /**
    * Submit/refresh the sitemap after publishing, with your own auth. Takes precedence over the
    * built-in OAuth ping.
@@ -417,6 +476,8 @@ export interface ParsedBlogPost {
   heroImageAlt: string;
   heroImageWidth?: number;
   heroImageHeight?: number;
+  heroImageSrcset?: string;
+  sources?: BlogSource[];
   ogImage?: string;
   readMins?: number;
   answer: string;

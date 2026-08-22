@@ -40,6 +40,11 @@ pluggable seam you can point at your own stack.
 | Refresh mode | `src/refresh.ts` | Re-optimize an existing post for the queries it already earns; slug/date/hero preserved, `updated` bumped honestly |
 | Rank rescue | `src/rank-rescue.ts` | ASEO scoring of Search Console page×query rows → refresh / authority / audit / title-experiment |
 | Corpus audit | `src/audit.ts` | SHIP / FIX / BLOCK verdicts for every published post against the content contract |
+| Demand gate | `src/demand.ts` | Second independent demand signal (autocomplete / hook) before a GSC topic becomes a post |
+| Sources | `src/sources.ts` | Opt-in verified external sources: allowlisted hosts, live-checked URLs, `citation` schema |
+| Fan-out | `src/fanout.ts` | Answer passages for the questions an owner page already earns — instead of thin new posts |
+| Scorecard | `src/scorecard.ts` | Daily pass/warn/fail: cadence, corpus, feed, sibling workflow health, Search Console, citations → webhook |
+| Syndication | `src/syndication.ts` | Webhook / Slack / LinkedIn adapters behind `afterIndexed`; never block publish |
 | Discovery | `src/discovery.ts` | Sitemap entries, `llms.txt` blog section, and `relatedPosts()` for the internal link graph |
 
 ## Install
@@ -204,8 +209,17 @@ Publishing is only half the engine. The other half compounds what already ranks:
   per page: no orphans, crawl paths between old and new.
 - **Corpus audit** — `runBlogAuditCli` prints SHIP / FIX / BLOCK with reasons for
   the whole corpus (`--json`, `--strict`); fix or quarantine before scaling.
-- **Distribution seam** — `hooks.afterIndexed` runs only after URLs are live and
-  submitted; wire LinkedIn / X / GBP / newsletter there. Never blocks publish.
+- **Distribution** — `createAfterIndexedHook([webhookAdapter(), slackAdapter(),
+  linkedinAdapter({ authorUrn })])` runs only after URLs are live and submitted;
+  failures are logged, publish is never blocked.
+- **Backlog healing** — when Search Console yields no candidate, refresh mode
+  picks the worst-audited FIX post, so the long tail converges week by week.
+- **Two-signal demand gate** (`content.requireTwoDemandSignals`), **verified
+  sources** (`content.requireSources` + `topics.trustedSourceDomains`),
+  **responsive hero variants** (`image.variants` → `imageSrcset`), **fan-out
+  into owner pages** (`runBlogFanoutCli --owner=/buy`), and the **daily
+  scorecard** (`runBlogScorecardCli`, `blogScorecardWorkflow()`) complete the
+  ASEO loop: demand → publish → link → refresh → measure → distribute.
 
 ## Develop
 

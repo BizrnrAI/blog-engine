@@ -139,6 +139,9 @@ export function blogPostingSchema(post: ParsedBlogPost, options: BlogSchemaOptio
     inLanguage: options.locale || configuredLocale(),
     ...(post.content ? { wordCount: post.content.trim().split(/\s+/).filter(Boolean).length } : {}),
     isPartOf: { '@id': `${siteUrl}${base}#blog` },
+    ...(post.sources?.length
+      ? { citation: post.sources.map((s) => ({ '@type': 'CreativeWork', name: s.title, url: s.url, ...(s.publisher ? { publisher: { '@type': 'Organization', name: s.publisher } } : {}) })) }
+      : {}),
     ...(images.length ? { image: images } : {}),
     ...(options.speakableSelectors?.length
       ? { speakable: { '@type': 'SpeakableSpecification', cssSelector: [...options.speakableSelectors] } }

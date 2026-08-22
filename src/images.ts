@@ -115,6 +115,31 @@ async function fetchRawHero(post: GeneratedBlogPost, topic: SeoTopic): Promise<B
   return base64 ? Buffer.from(base64, 'base64') : null;
 }
 
+/**
+ * Responsive variants (image.variants, e.g. [1024, 640]) written as <slug>-<w>.<format>; returns
+ * an HTML srcset string including the full-size hero, or '' when no variants are configured.
+ */
+export async function writeHeroVariants(
+  outDir: string,
+  slug: string,
+  format: BlogEngineConfig['image']['format'],
+  fullBuf: Buffer,
+  fullWidth: number | undefined,
+  publicPath: string,
+): Promise<string> {
+  const widths = (BLOG_CONFIG.image.variants || []).filter((w) => w > 0 && (!fullWidth || w < fullWidth)).sort((a, b) => a - b);
+  if (!widths.length) return '';
+  const entries: string[] = [];
+  const dir = publicPath.slice(0, publicPath.lastIndexOf('/'));
+  for (const w of widths) {
+    const buf = await encodeTo(format, sharp(fullBuf).resize({ width: w }));
+    writeFileSync(join(outDir, `${slug}-${w}.${format}`), buf);
+    entries.push(`${dir}/${slug}-${w}.${format} ${w}w`);
+  }
+  if (fullWidth) entries.push(`${publicPath} ${fullWidth}w`);
+  return entries.join(', ');
+}
+
 async function generateAiHero(root: string, post: GeneratedBlogPost, topic: SeoTopic): Promise<{ image: string; imageAlt: string } | null> {
   try {
     const raw = await fetchRawHero(post, topic);
@@ -129,10 +154,13 @@ async function generateAiHero(root: string, post: GeneratedBlogPost, topic: SeoT
     const finalBuf = format === 'webp' ? watermarked : await encodeTo(format, sharp(watermarked));
     writeFileSync(outFile, finalBuf);
     const dims = await sharp(finalBuf).metadata();
+    const publicPath = `/${BLOG_CONFIG.paths.heroDir.replace(/^public\//, '')}/${post.slug}.${format}`;
+    const srcset = await writeHeroVariants(outDir, post.slug, format, finalBuf, dims.width, publicPath);
     return {
-      image: `/${BLOG_CONFIG.paths.heroDir.replace(/^public\//, '')}/${post.slug}.${format}`,
+      image: publicPath,
       imageAlt: heroAltText(post),
       ...(dims.width && dims.height ? { width: dims.width, height: dims.height } : {}),
+      ...(srcset ? { srcset } : {}),
     };
   } catch (err) {
     console.warn('[blog-image] AI hero generation failed; using curated fallback:', err instanceof Error ? err.message : String(err));

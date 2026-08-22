@@ -231,3 +231,25 @@ blogPostGraph(post, { speakableSelectors: ['.speakable-answer'] }); // only if y
 ```
 
 Use `heroImageWidth`/`heroImageHeight` from parsed posts for explicit `<img width height>`.
+
+## 9. Measurement, distribution, and evidence (v0.5.0)
+
+```json
+{ "scripts": { "blog:scorecard": "tsx scripts/blog/scorecard.ts", "blog:fanout": "tsx scripts/blog/fanout.ts" } }
+```
+
+- **Scorecard** — `runBlogScorecardCli(runtime)` + `blogScorecardWorkflow({ workflowsToWatch: ['autoblog.yml','blog-indexing.yml','blog-refresh.yml'] })`.
+  Set the `SCORECARD_WEBHOOK_URL` secret (Slack incoming webhook or any JSON
+  endpoint) and a red cron, a stale cadence, a broken feed, or a BLOCK post
+  reaches you within a day. `--strict` makes the workflow itself go red.
+- **Syndication** — in the adapter: `hooks.afterIndexed = createAfterIndexedHook([
+  slackAdapter(), webhookAdapter({ urlEnv: 'ZAPIER_HOOK_URL' }), linkedinAdapter({ authorUrn: 'urn:li:organization:123' }) ])`.
+- **Demand gate** — `content.requireTwoDemandSignals: true` (default second
+  source: public autocomplete; override with `hooks.fetchDemandSignals`).
+- **Sources** — `content.requireSources: true` + `topics.trustedSourceDomains:
+  ['census.gov', …]`; render `post.sources` as a visible "Sources" list (schema
+  emits `citation` automatically; visible/machine parity).
+- **Responsive heroes** — `image.variants: [1024, 640]` → `imageSrcset`
+  frontmatter → `heroImageSrcset` for `<img srcset sizes>`.
+- **Fan-out** — `npm run blog:fanout -- --owner=/buy` writes
+  `src/content/fanout/buy.json`; render its passages on the owner page (+ `faqPageSchema`).

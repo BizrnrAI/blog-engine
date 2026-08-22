@@ -111,6 +111,25 @@ async function fetchRawHero(post, topic) {
     const base64 = typeof img === 'string' ? img : img?.base64;
     return base64 ? Buffer.from(base64, 'base64') : null;
 }
+/**
+ * Responsive variants (image.variants, e.g. [1024, 640]) written as <slug>-<w>.<format>; returns
+ * an HTML srcset string including the full-size hero, or '' when no variants are configured.
+ */
+export async function writeHeroVariants(outDir, slug, format, fullBuf, fullWidth, publicPath) {
+    const widths = (BLOG_CONFIG.image.variants || []).filter((w) => w > 0 && (!fullWidth || w < fullWidth)).sort((a, b) => a - b);
+    if (!widths.length)
+        return '';
+    const entries = [];
+    const dir = publicPath.slice(0, publicPath.lastIndexOf('/'));
+    for (const w of widths) {
+        const buf = await encodeTo(format, sharp(fullBuf).resize({ width: w }));
+        writeFileSync(join(outDir, `${slug}-${w}.${format}`), buf);
+        entries.push(`${dir}/${slug}-${w}.${format} ${w}w`);
+    }
+    if (fullWidth)
+        entries.push(`${publicPath} ${fullWidth}w`);
+    return entries.join(', ');
+}
 async function generateAiHero(root, post, topic) {
     try {
         const raw = await fetchRawHero(post, topic);
@@ -125,10 +144,13 @@ async function generateAiHero(root, post, topic) {
         const finalBuf = format === 'webp' ? watermarked : await encodeTo(format, sharp(watermarked));
         writeFileSync(outFile, finalBuf);
         const dims = await sharp(finalBuf).metadata();
+        const publicPath = `/${BLOG_CONFIG.paths.heroDir.replace(/^public\//, '')}/${post.slug}.${format}`;
+        const srcset = await writeHeroVariants(outDir, post.slug, format, finalBuf, dims.width, publicPath);
         return {
-            image: `/${BLOG_CONFIG.paths.heroDir.replace(/^public\//, '')}/${post.slug}.${format}`,
+            image: publicPath,
             imageAlt: heroAltText(post),
             ...(dims.width && dims.height ? { width: dims.width, height: dims.height } : {}),
+            ...(srcset ? { srcset } : {}),
         };
     }
     catch (err) {

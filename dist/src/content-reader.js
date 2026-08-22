@@ -5,16 +5,18 @@ function stripQuotes(value) {
 }
 export function parseBlogFrontmatter(raw) {
     if (!raw.startsWith('---'))
-        return { frontmatter: {}, content: raw.trim(), faqs: [], tags: [] };
+        return { frontmatter: {}, content: raw.trim(), faqs: [], tags: [], sources: [] };
     const end = raw.indexOf('\n---', 3);
     if (end === -1)
-        return { frontmatter: {}, content: raw.trim(), faqs: [], tags: [] };
+        return { frontmatter: {}, content: raw.trim(), faqs: [], tags: [], sources: [] };
     const yaml = raw.slice(3, end).trim();
     const content = raw.slice(end + 4).trim();
     const frontmatter = {};
     const faqs = [];
     const tags = [];
+    const sources = [];
     let currentFaq = null;
+    let currentSource = null;
     let currentList = null;
     for (const line of yaml.split('\n')) {
         if (line.startsWith('  - q:')) {
@@ -26,6 +28,19 @@ export function parseBlogFrontmatter(raw) {
             currentFaq.answer = stripQuotes(line.replace('    a:', ''));
             continue;
         }
+        if (currentList === 'sources' && /^\s+-\s+title:/.test(line)) {
+            currentSource = { title: stripQuotes(line.replace(/^\s+-\s+title:/, '')), url: '' };
+            sources.push(currentSource);
+            continue;
+        }
+        if (currentList === 'sources' && currentSource && /^\s+url:/.test(line)) {
+            currentSource.url = stripQuotes(line.replace(/^\s+url:/, ''));
+            continue;
+        }
+        if (currentList === 'sources' && currentSource && /^\s+publisher:/.test(line)) {
+            currentSource.publisher = stripQuotes(line.replace(/^\s+publisher:/, ''));
+            continue;
+        }
         if (currentList === 'tags' && /^\s+-\s/.test(line)) {
             const tag = stripQuotes(line.replace(/^\s+-\s*/, ''));
             if (tag)
@@ -34,7 +49,7 @@ export function parseBlogFrontmatter(raw) {
         }
         const match = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
         if (match) {
-            currentList = match[1] === 'tags' ? 'tags' : match[1] === 'faqs' ? 'faqs' : null;
+            currentList = match[1] === 'tags' ? 'tags' : match[1] === 'faqs' ? 'faqs' : match[1] === 'sources' ? 'sources' : null;
             const value = stripQuotes(match[2] || '');
             // Inline lists like `tags: [a, b]` are also accepted.
             if (match[1] === 'tags' && /^\[.*\]$/.test(match[2] || '')) {
@@ -50,6 +65,7 @@ export function parseBlogFrontmatter(raw) {
         content,
         faqs: faqs.filter((faq) => faq.question && faq.answer),
         tags,
+        sources: sources.filter((s) => s.title && s.url),
     };
 }
 export function markdownToAnswerSections(content, fallbackAnswer) {
@@ -79,7 +95,7 @@ export function readGeneratedBlogPosts(options = {}) {
         .map((file) => {
         const slug = file.replace(/\.md$/, '');
         const raw = readFileSync(join(blogDir, file), 'utf8');
-        const { frontmatter, content, faqs, tags } = parseBlogFrontmatter(raw);
+        const { frontmatter, content, faqs, tags, sources } = parseBlogFrontmatter(raw);
         const title = frontmatter.title || fallback?.title || slug.replace(/-/g, ' ');
         const publishedAt = frontmatter.date || new Date().toISOString().slice(0, 10);
         const description = frontmatter.description || fallback?.description || title;
@@ -97,6 +113,8 @@ export function readGeneratedBlogPosts(options = {}) {
             heroImageAlt: frontmatter.imageAlt || `${fallback?.heroImageAltPrefix || 'Blog'} guide: ${title}`,
             heroImageWidth: Number(frontmatter.imageWidth) || undefined,
             heroImageHeight: Number(frontmatter.imageHeight) || undefined,
+            heroImageSrcset: frontmatter.imageSrcset || undefined,
+            ...(sources.length ? { sources } : {}),
             ogImage: frontmatter.ogImage || undefined,
             readMins: Number(frontmatter.readMins) || undefined,
             answer,

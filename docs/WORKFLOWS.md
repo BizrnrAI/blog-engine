@@ -108,3 +108,10 @@ position 8–30, regenerates it under the content contract with its real queries
 and opens a PR labelled `blog, automation, seo`. Manual `workflow_dispatch`
 accepts explicit slugs. Refreshed posts keep their URL and publish date; only
 `updated` moves — so the post-merge indexing sweep resubmits them.
+
+## Scorecard workflow (v0.5.0)
+
+`blogScorecardWorkflow()` runs daily with `actions: read` so it can see sibling
+workflow runs; two consecutive failures of any watched workflow = FAIL, posted to
+`SCORECARD_WEBHOOK_URL`. This is the alert that turns a seven-week silent outage
+into a next-morning message.

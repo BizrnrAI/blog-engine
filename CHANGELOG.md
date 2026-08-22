@@ -3,6 +3,33 @@
 All notable changes to `@bizrnr/blog-engine`. Consumers install from git, so
 the version in `package.json` is the contract marker.
 
+## 0.5.0 — 2026-08-22
+
+Evidence, measurement, and distribution — the rest of the roadmap that the
+engine can own.
+
+### Added
+- **Two-signal demand gate** (`content.requireTwoDemandSignals`): GSC topics
+  need an independent corroborating signal (public autocomplete by default,
+  `hooks.fetchDemandSignals` to override).
+- **Verified sources** (`content.requireSources`, `topics.trustedSourceDomains`,
+  `hooks.verifySource`): 2–4 real sources per post, host-allowlisted and
+  fetched live before publish; `sources` frontmatter, `heroImageSrcset`,
+  schema `citation`.
+- **Responsive hero variants** (`image.variants` → `imageSrcset`), `writeHeroVariants`.
+- **Backlog healing** in refresh mode: no Search Console candidate → worst
+  FIX post (`RefreshRunOptions.backlog`, default on).
+- **Fan-out into owner pages**: `generateFanoutPassages`, `runBlogFanoutCli`.
+- **Scorecard**: `runScorecard` / `runBlogScorecardCli` / `blogScorecardWorkflow`
+  (cadence, corpus, feed, workflow health via GitHub API, Search Console,
+  citations; `SCORECARD_WEBHOOK_URL`; `--strict`). `hooks.probeCitations`
+  + `CitationProbe` type.
+- **Syndication**: `webhookAdapter`, `slackAdapter`, `linkedinAdapter`,
+  `createAfterIndexedHook`.
+
+### Compatibility
+- All opt-in/additive. `parseBlogFrontmatter` returns an extra `sources` array.
+
 ## 0.4.3 — 2026-08-22
 
 - `paths.blogBasePath` (default `/blog`): sites whose posts live under another

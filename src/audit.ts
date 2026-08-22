@@ -57,6 +57,7 @@ export function auditPost(
   if (post.faqs.length < 3) fix.push(`only ${post.faqs.length} FAQs (aim 3)`);
   if (post.tags.length < 2) fix.push('fewer than 2 tags');
   if (!post.author) fix.push('no author (E-E-A-T)');
+  if (rules.requireSources && !(post.sources && post.sources.length >= 2)) fix.push('fewer than 2 sources (requireSources)');
   if (!post.heroImage) fix.push('no hero image');
   else {
     if (!post.heroImageAlt) fix.push('no hero alt text');
