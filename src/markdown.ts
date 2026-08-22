@@ -3,7 +3,7 @@ import { yamlString } from './utils.js';
 
 export function toMarkdown(
   post: GeneratedBlogPost,
-  args: { gradient: string; cover: CoverImage; dateISO: string },
+  args: { gradient: string; cover: CoverImage; dateISO: string; author?: string },
 ): string {
   return [
     '---',
@@ -12,12 +12,14 @@ export function toMarkdown(
     `category: ${yamlString(post.category)}`,
     `date: ${args.dateISO}`,
     `updated: ${args.dateISO}`,
+    ...(args.author ? [`author: ${yamlString(args.author)}`] : []),
     `readMins: ${Math.max(3, Math.min(15, Number(post.readMins) || 7))}`,
     `answer: ${yamlString(post.answer)}`,
     ...(post.tags.length ? ['tags:', ...post.tags.map((t) => `  - ${yamlString(t)}`)] : []),
     `gradient: ${yamlString(args.gradient)}`,
     `image: ${yamlString(args.cover.image)}`,
     `imageAlt: ${yamlString(args.cover.imageAlt)}`,
+    ...(args.cover.width && args.cover.height ? [`imageWidth: ${args.cover.width}`, `imageHeight: ${args.cover.height}`] : []),
     `ogImage: ${yamlString(args.cover.ogImage)}`,
     'feature: false',
     'faqs:',

@@ -1,4 +1,4 @@
-import { BLOG_CONFIG, brandPersona, getBlogHooks } from './config.js';
+import { BLOG_CONFIG, brandPersona, getBlogHooks, getBlogTopics } from './config.js';
 import { ALLOWED_CATEGORIES, INTERNAL_LINKS } from './topics.js';
 import { clampText, env, slugify, wordCount } from './utils.js';
 const DEFAULT_RULES = {
@@ -23,6 +23,7 @@ function monthYear() {
 function buildMessages(topic, existingTitles) {
     const identity = BLOG_CONFIG.identity;
     const rules = contentRules();
+    const ownerPages = getBlogTopics().ownerPages || [];
     /**
      * The closing CTA. A brand with an AI voice agent routes readers to it; everything else gets a
      * plain invitation to the site's conversion path. Either can be replaced wholesale via
@@ -54,11 +55,14 @@ function buildMessages(topic, existingTitles) {
         '- Then 4-6 "## " H2 sections with substantive paragraphs (700-1100 words total). NO H1; the page adds the title.',
         `- At least ${rules.minQuestionH2s} of the H2 headings must be phrased as natural questions a reader would search (e.g. "How much does ... cost?"). Open each question H2 with a DIRECT 40-60 word answer paragraph before elaborating.`,
         rules.requireCitableBlockquote
-            ? `- Include exactly ONE Markdown blockquote ("> ") of 80-140 words: a self-contained, citable passage stating the post's key takeaway with clear scope and the timeframe "as of ${monthYear()}". It must make sense with zero surrounding context (no "as above", no dangling pronouns) — this is the passage an AI assistant should quote.`
+            ? `- Include exactly ONE Markdown blockquote ("> ") of 120-160 words: a self-contained, citable passage stating the post's key takeaway with concrete scope (who/where/what conditions), units where relevant, and the timeframe "as of ${monthYear()}". It must make sense with zero surrounding context (no "as above", no dangling pronouns) — this is the passage an AI assistant should quote verbatim.`
             : '',
         '- Where the content compares options, steps, or trade-offs, prefer a compact Markdown table or bulleted list over dense prose.',
         '- Do NOT include an FAQ section or a "Quick answer" section in the body; those render automatically from the JSON fields.',
         '- Include 2-4 natural internal links chosen ONLY from this list: ' + JSON.stringify(INTERNAL_LINKS) + '.',
+        ownerPages.length
+            ? '- These pages are the canonical OWNERS of their commercial topics: ' + JSON.stringify(ownerPages) + '. Support them — link the most relevant one naturally — and never write this post to compete with an owner for the same query; the post must answer a distinct, more specific question and hand off to the owner for the decision.'
+            : '',
         ctaInstruction,
         crossPromoInstruction,
         rules.blockedPhrases.length
@@ -177,8 +181,8 @@ export function validateGeneratedPost(post, args) {
     if (rules.requireCitableBlockquote) {
         const bq = blockquoteWordCount(post.body || '');
         if (bq < 50)
-            errs.push(`body needs one citable "> " blockquote of ~80-140 words (got ${bq} blockquote words)`);
-        else if (bq > 200)
+            errs.push(`body needs one citable "> " blockquote of ~120-160 words (got ${bq} blockquote words)`);
+        else if (bq > 220)
             errs.push(`citable blockquote too long (${bq} words; keep it a single quotable passage)`);
     }
     if (!INTERNAL_LINKS.some((l) => (post.body || '').includes(`(${l})`)))

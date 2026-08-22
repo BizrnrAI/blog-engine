@@ -4,6 +4,14 @@ function resolveSiteUrl(options) {
         return options.siteUrl.replace(/\/$/, '');
     return getBlogConfig().identity.siteUrl.replace(/\/$/, '');
 }
+function configuredAuthor() {
+    try {
+        return getBlogConfig().identity.author;
+    }
+    catch {
+        return undefined; // standalone use without a configured runtime
+    }
+}
 function absolute(siteUrl, path) {
     return path.startsWith('http') ? path : `${siteUrl}${path.startsWith('/') ? '' : '/'}${path}`;
 }
@@ -11,9 +19,14 @@ export function blogPostingSchema(post, options = {}) {
     const siteUrl = resolveSiteUrl(options);
     const base = options.blogBasePath || '/blog';
     const url = `${siteUrl}${base}/${post.slug}`;
-    const images = [post.ogImage, post.heroImage]
-        .filter((img) => Boolean(img))
-        .map((img) => absolute(siteUrl, img));
+    const images = [];
+    if (post.ogImage)
+        images.push(absolute(siteUrl, post.ogImage));
+    if (post.heroImage) {
+        images.push(post.heroImageWidth && post.heroImageHeight
+            ? { '@type': 'ImageObject', url: absolute(siteUrl, post.heroImage), width: post.heroImageWidth, height: post.heroImageHeight }
+            : absolute(siteUrl, post.heroImage));
+    }
     const node = {
         '@type': 'BlogPosting',
         '@id': `${url}#article`,
@@ -26,11 +39,15 @@ export function blogPostingSchema(post, options = {}) {
         articleSection: post.category,
         keywords: post.tags.join(', '),
         ...(images.length ? { image: images } : {}),
+        ...(options.speakableSelectors?.length
+            ? { speakable: { '@type': 'SpeakableSpecification', cssSelector: [...options.speakableSelectors] } }
+            : {}),
     };
-    if (options.author) {
-        node.author = options.author.id
-            ? { '@id': options.author.id }
-            : { '@type': 'Person', name: options.author.name, ...(options.author.url ? { url: options.author.url } : {}) };
+    const author = options.author || configuredAuthor();
+    if (author) {
+        node.author = author.id
+            ? { '@id': author.id }
+            : { '@type': 'Person', name: author.name, ...(author.url ? { url: author.url } : {}) };
     }
     if (options.publisher) {
         node.publisher = options.publisher.id

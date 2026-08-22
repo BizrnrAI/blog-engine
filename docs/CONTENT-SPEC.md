@@ -32,8 +32,9 @@ transparent scoping, disclosed authorship).
    40–60-word answer paragraph before elaborating. This mirrors how People
    Also Ask and AI answer engines chunk content: heading = query,
    first paragraph = extractable answer.
-4. **Exactly one citable blockquote** (`> `), 80–140 words (validator accepts
-   50–200), self-contained with explicit scope and the timeframe
+4. **Exactly one citable blockquote** (`> `), 120–160 words (validator accepts
+   50–220; the ASEO skill's guidance is ~134–167), self-contained with concrete
+   scope (who/where/conditions), units, and the timeframe
    "as of <month year>". No dangling pronouns, no "as above". This is the
    passage an AI assistant can quote verbatim with attribution — give it one
    obvious candidate.
@@ -48,6 +49,26 @@ transparent scoping, disclosed authorship).
    fields; duplicating them creates competing extractable blocks.
 9. Cross-promo posts (every `crossPromoEvery`-th) additionally include one
    natural contextual link to the configured BizRnR deep link.
+
+## Ownership, authorship, cadence (v0.3.0)
+
+- **Owner pages** — `topics.ownerPages` lists the canonical owners of the
+  site's commercial queries (`/buy`, `/pricing`, …). The prompt instructs the
+  post to *support* the most relevant owner with a natural link and never to
+  compete with it for the same query. Posts are dated support, not owners.
+- **Author** — `identity.author` (`{ name, url?, id? }`) is emitted as
+  `author:` frontmatter and becomes the default BlogPosting author entity
+  (`@id` reference when you give the stable Person id your site already
+  publishes). Accountable authorship is an E-E-A-T and AI-visibility signal.
+- **Cadence cap** — `content.maxPostsPerWeek` makes `generateBlogRun` skip with
+  `skipped: 'CADENCE_CAP'` when that many posts already carry a `date` in the
+  trailing 7 days. The ASEO default for search-led autonomous posts is 2 per
+  rolling week until reviewed evidence supports more; unset keeps today's
+  uncapped behaviour.
+- **Image dimensions** — AI heroes record `imageWidth`/`imageHeight` so pages
+  can render CLS-safe `<img>` tags and schema can emit an `ImageObject`.
+- **Speakable** — pass `speakableSelectors` to the schema builders only for
+  selectors your template really renders (machine/visible parity).
 
 ## Claims discipline (non-negotiable)
 

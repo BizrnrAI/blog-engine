@@ -20,6 +20,8 @@ export interface CrossPromoTopic {
 export interface ExistingPost {
     slug: string;
     title: string;
+    /** ISO publish date from frontmatter, when present (used by the cadence guard). */
+    date?: string;
 }
 export interface GeneratedBlogPost {
     title: string;
@@ -42,6 +44,9 @@ export interface CoverImage {
     imageAlt: string;
     ogImage: string;
     source: 'ai-generated' | 'curated-fallback' | 'watermarked-fallback';
+    /** Intrinsic pixel dimensions of the hero when the engine wrote it (CLS-safe rendering). */
+    width?: number;
+    height?: number;
 }
 export interface GscQuery {
     query: string;
@@ -88,6 +93,16 @@ export interface BlogEngineConfig {
             name: string;
             homeCtaPath: string;
             secondaryCtaPath?: string;
+        };
+        /**
+         * The accountable human author for E-E-A-T. Emitted into frontmatter (`author`) and used as
+         * the default BlogPosting author entity; `id` should be the stable Person @id your site
+         * already publishes (e.g. `https://example.com/#person`).
+         */
+        author?: {
+            name: string;
+            url?: string;
+            id?: string;
         };
         /**
          * A partner/parent site to cross-promote. Optional: with no backlink configured the engine
@@ -182,6 +197,12 @@ export interface BlogEngineTopics {
     crossPromo: readonly CrossPromoTopic[];
     categoryForQuery?: (query: string) => TopicCategory;
     gscAngleForQuery?: (query: string) => string;
+    /**
+     * Canonical owner pages for the site's commercial queries (e.g. '/buy', '/pricing'). Posts are
+     * instructed to SUPPORT these — link the most relevant one — and never compete with them for the
+     * same query. One owner per query family is the core ASEO ownership rule.
+     */
+    ownerPages?: readonly string[];
 }
 export interface BlogContentRules {
     /** Minimum body word count (default 450). */
@@ -196,6 +217,12 @@ export interface BlogContentRules {
     requireCitableBlockquote?: boolean;
     /** Case-insensitive phrases that block publication (claims discipline). */
     blockedPhrases?: readonly string[];
+    /**
+     * Cadence cap: skip the run when this many posts were already published in the trailing 7 days.
+     * The ASEO skill's default for search-led autonomous posts is 2 per rolling week until reviewed
+     * evidence supports more. Unset = no cap (existing behaviour).
+     */
+    maxPostsPerWeek?: number;
     /**
      * Tone adjectives for the brand voice. Default: 'confident, clear, genuinely helpful'.
      * A local service business might use 'warm, local-insider, practical'.
@@ -247,6 +274,8 @@ export interface RenderMarkdownArgs {
     cover: CoverImage;
     gradient: string;
     dateISO: string;
+    /** identity.author.name when configured. */
+    author?: string;
 }
 /**
  * Infrastructure seams. Provide these to run the engine on your own model
@@ -305,6 +334,8 @@ export interface ParsedBlogPost {
     updatedAt: string;
     heroImage: string;
     heroImageAlt: string;
+    heroImageWidth?: number;
+    heroImageHeight?: number;
     ogImage?: string;
     readMins?: number;
     answer: string;

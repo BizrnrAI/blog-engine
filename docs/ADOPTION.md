@@ -188,3 +188,23 @@ npm run blog:generate -- --count=1 --skip-ping # real run on a branch
 Verify: the Markdown file, the watermarked hero under `heroDir`, the OG card
 under `assetDir`, tags/description/answer/FAQs in frontmatter. Then open the
 PR and let the post-merge indexing workflow handle pings.
+
+## 7. v0.3.0 additions worth turning on
+
+```ts
+config.identity.author = { name: 'Jane Doe', id: 'https://acmeplumbing.com/#person' }; // E-E-A-T
+config.content.maxPostsPerWeek = 2;                 // ASEO cadence cap for search-led posts
+topics.ownerPages = ['/services/drain-cleaning'];   // posts support owners, never compete
+```
+
+Render-side helpers that keep sitemap, feed, and AI context in parity:
+
+```ts
+import { blogSitemapEntries, buildBlogLlmsTxt, blogPostGraph } from '@bizrnr/blog-engine';
+const posts = readGeneratedBlogPosts({ /* … */ });
+blogSitemapEntries(posts);                       // [{ loc, lastmod }] — lastmod = updated
+buildBlogLlmsTxt(posts, { feedPath: '/blog/feed.xml' }); // markdown block for llms.txt
+blogPostGraph(post, { speakableSelectors: ['.speakable-answer'] }); // only if you render that class
+```
+
+Use `heroImageWidth`/`heroImageHeight` from parsed posts for explicit `<img width height>`.

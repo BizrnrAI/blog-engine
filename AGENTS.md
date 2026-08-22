@@ -120,3 +120,13 @@ var. All env vars are listed in [.env.example](.env.example).
   it into the prompt and `validateGeneratedPost`, cover both accept and
   reject paths in `tests/generate-post.test.ts`.
 - New provider: prefer the hook seam over hard-coding another vendor SDK.
+
+## Upkeep cadence
+
+- Monthly: `npm outdated`, `npm audit`, re-run `npm run verify`; bump majors
+  only with the offline e2e smoke green (see docs/AUDIT-2026-08.md for the
+  procedure). Security advisories are patched immediately.
+- Quarterly: re-diff `docs/skills/aseo/SKILL.md` against its upstream, re-score
+  the engine against the ASEO gap matrix in the audit doc, and revisit
+  docs/ROADMAP.md. Check adopter cron health (a red cron for weeks is the
+  most expensive silent failure this system has).

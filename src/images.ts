@@ -1,8 +1,8 @@
-import { experimental_generateImage as generateImage } from 'ai';
+import { generateImage } from 'ai';
 import { createGateway } from '@ai-sdk/gateway';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import sharp from 'sharp';
+import sharp, { type Sharp } from 'sharp';
 import { BLOG_CONFIG, getBlogHooks } from './config.js';
 import { GRADIENTS, HERO_PHOTOS } from './topics.js';
 import type { BlogEngineConfig, CoverImage, GeneratedBlogPost, SeoTopic } from './types.js';
@@ -89,7 +89,7 @@ export function heroAltText(post: GeneratedBlogPost): string {
     : `${BLOG_CONFIG.identity.name} guide: ${post.title}`;
 }
 
-async function encodeTo(format: BlogEngineConfig['image']['format'], image: sharp.Sharp): Promise<Buffer> {
+async function encodeTo(format: BlogEngineConfig['image']['format'], image: Sharp): Promise<Buffer> {
   if (format === 'jpg') return image.jpeg({ quality: 88, mozjpeg: true }).toBuffer();
   if (format === 'png') return image.png().toBuffer();
   return image.webp({ quality: 86 }).toBuffer();
@@ -128,9 +128,11 @@ async function generateAiHero(root: string, post: GeneratedBlogPost, topic: SeoT
     // applyWatermark returns WebP; re-encode only when the configured format differs.
     const finalBuf = format === 'webp' ? watermarked : await encodeTo(format, sharp(watermarked));
     writeFileSync(outFile, finalBuf);
+    const dims = await sharp(finalBuf).metadata();
     return {
       image: `/${BLOG_CONFIG.paths.heroDir.replace(/^public\//, '')}/${post.slug}.${format}`,
       imageAlt: heroAltText(post),
+      ...(dims.width && dims.height ? { width: dims.width, height: dims.height } : {}),
     };
   } catch (err) {
     console.warn('[blog-image] AI hero generation failed; using curated fallback:', err instanceof Error ? err.message : String(err));

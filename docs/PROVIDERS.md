@@ -156,3 +156,10 @@ See [.env.example](../.env.example) for the complete annotated list:
 - Image: photorealistic models only — the prompt demands editorial-photo
   realism and forbids in-image text. `gpt-image-2`-class models are proven;
   budget ~1–2 minutes per image.
+
+## Dependency notes (v0.3.0)
+
+- `ai` v7 renamed `experimental_generateImage` → `generateImage`; the engine
+  uses the stable name. `@ai-sdk/gateway` v4 pairs with it.
+- `sharp` 0.35 ships libvips with the 2026 CVE fixes; stay on ≥0.35.
+- Node ≥ 20.9 (`engines` field). CI runs Node 22.
