@@ -9,7 +9,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { getGoogleAccessToken, pingGscSitemap } from './gsc.js';
 import { pingIndexNow } from './indexing.js';
-import type { BlogEngineRuntime } from './types.js';
+import type { BlogEngineRuntime, GenerateRunResult } from './types.js';
 
 function parseArg(name: string, argv = process.argv): string | undefined {
   const prefix = `--${name}=`;
@@ -59,7 +59,7 @@ export async function waitUntilBlogUrlsLive(urls: string[], timeoutMs = 10 * 60 
   }
 }
 
-export async function runBlogGenerateCli(runtime: BlogEngineRuntime, root = process.cwd()): Promise<void> {
+export async function runBlogGenerateCli(runtime: BlogEngineRuntime, root = process.cwd()): Promise<GenerateRunResult> {
   const dryRun = process.argv.includes('--dry-run') || process.env.DRY_RUN === '1';
   const count = Math.max(1, Number(parseArg('count') || '1') || 1);
   const skipPing = process.argv.includes('--skip-ping') || process.env.SKIP_PING === '1';
@@ -74,6 +74,7 @@ export async function runBlogGenerateCli(runtime: BlogEngineRuntime, root = proc
   if (!dryRun && result.written.length === 0 && !result.skipped) {
     process.exitCode = 1;
   }
+  return result;
 }
 
 export async function runBlogIndexPublishedCli(runtime: BlogEngineRuntime): Promise<void> {

@@ -58,6 +58,7 @@ export async function runBlogGenerateCli(runtime, root = process.cwd()) {
     if (!dryRun && result.written.length === 0 && !result.skipped) {
         process.exitCode = 1;
     }
+    return result;
 }
 export async function runBlogIndexPublishedCli(runtime) {
     configureBlogEngine(runtime);

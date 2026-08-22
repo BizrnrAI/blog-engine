@@ -112,7 +112,7 @@ export function readGeneratedBlogPosts(options: ReadGeneratedPostsOptions = {}):
       const raw = readFileSync(join(blogDir, file), 'utf8');
       const { frontmatter, content, faqs, tags, sources } = parseBlogFrontmatter(raw);
       const title = frontmatter.title || fallback?.title || slug.replace(/-/g, ' ');
-      const publishedAt = frontmatter.date || new Date().toISOString().slice(0, 10);
+      const publishedAt = frontmatter.date || frontmatter.pubDate || new Date().toISOString().slice(0, 10);
       const description = frontmatter.description || fallback?.description || title;
       const answer = frontmatter.answer || description;
 
@@ -124,10 +124,10 @@ export function readGeneratedBlogPosts(options: ReadGeneratedPostsOptions = {}):
         tags: tags.length ? tags : fallback?.tags || [frontmatter.category || 'Service Guides'],
         author: frontmatter.author || fallback?.author || '',
         publishedAt,
-        updatedAt: frontmatter.updated || publishedAt,
-        heroImage: frontmatter.image || fallback?.heroImage || '',
+        updatedAt: frontmatter.updated || frontmatter.updatedDate || publishedAt,
+        heroImage: frontmatter.image || frontmatter.heroImage || frontmatter.cover || fallback?.heroImage || '',
         heroImageAlt:
-          frontmatter.imageAlt || `${fallback?.heroImageAltPrefix || 'Blog'} guide: ${title}`,
+          frontmatter.imageAlt || frontmatter.heroAlt || frontmatter.coverAlt || `${fallback?.heroImageAltPrefix || 'Blog'} guide: ${title}`,
         heroImageWidth: Number(frontmatter.imageWidth) || undefined,
         heroImageHeight: Number(frontmatter.imageHeight) || undefined,
         heroImageSrcset: frontmatter.imageSrcset || undefined,

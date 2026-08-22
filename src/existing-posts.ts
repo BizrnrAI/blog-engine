@@ -11,7 +11,8 @@ export function readExistingPosts(root: string): ExistingPost[] {
     .map((f) => {
       const raw = readFileSync(join(blogDir, f), 'utf8');
       const title = (raw.match(/^title:\s*["']?(.+?)["']?\s*$/m) || [])[1] || '';
-      const date = (raw.match(/^date:\s*["']?(\d{4}-\d{2}-\d{2})/m) || [])[1];
+      // Engine frontmatter uses `date:`; sites with their own shape commonly use `pubDate:`.
+      const date = (raw.match(/^(?:date|pubDate):\s*["']?(\d{4}-\d{2}-\d{2})/m) || [])[1];
       return { slug: f.replace(/\.md$/, ''), title, ...(date ? { date } : {}) };
     });
 }

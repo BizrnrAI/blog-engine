@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import sharp from 'sharp';
 import { join } from 'node:path';
 import { BLOG_CONFIG, blogBasePath, brandPersona, getBlogHooks, getBlogTopics } from './config.js';
 import { parseBlogFrontmatter } from './content-reader.js';
@@ -172,6 +173,17 @@ export async function refreshBlogPost(
     ...(Number(frontmatter.imageWidth) ? { width: Number(frontmatter.imageWidth), height: Number(frontmatter.imageHeight) } : {}),
     ...(frontmatter.imageSrcset ? { srcset: frontmatter.imageSrcset } : {}),
   };
+  // A pre-contract post has no recorded dimensions; read them from the local hero so the refresh
+  // also closes the CLS gap instead of preserving it.
+  if (!cover.width && cover.image.startsWith('/')) {
+    const heroFile = join(root, 'public', cover.image);
+    if (existsSync(heroFile)) {
+      try {
+        const m = await sharp(heroFile).metadata();
+        if (m.width && m.height) { cover.width = m.width; cover.height = m.height; }
+      } catch { /* unreadable image: leave dims unset */ }
+    }
+  }
   const today = new Date().toISOString().slice(0, 10);
   const renderArgs = { post, cover, gradient: frontmatter.gradient || '', dateISO: frontmatter.date || today, author: frontmatter.author || BLOG_CONFIG.identity.author?.name };
   const render = getBlogHooks().renderMarkdown;
