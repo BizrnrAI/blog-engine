@@ -3,6 +3,13 @@
 All notable changes to `@bizrnr/blog-engine`. Consumers install from git, so
 the version in `package.json` is the contract marker.
 
+## 0.4.1 — 2026-08-22
+
+- Removed the `prepare` script. `dist/` is committed and CI enforces it is
+  current, so `npm install github:BizrnrAI/blog-engine#<sha>` no longer runs
+  a TypeScript build in the consumer's install (faster, no toolchain needed).
+  The repo is public — sites can depend on it directly instead of vendoring.
+
 ## 0.4.0 — 2026-08-22
 
 Growth-loop release: the engine now improves what already ranks, links the
