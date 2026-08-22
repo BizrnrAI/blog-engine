@@ -1,8 +1,16 @@
-import { getBlogConfig } from './config.js';
+import { blogBasePath, getBlogConfig } from './config.js';
+function defaultBase() {
+    try {
+        return blogBasePath();
+    }
+    catch {
+        return '/blog';
+    }
+}
 /** The Blog node for the hub page; post graphs point at it via isPartOf. */
 export function blogSchema(options) {
     const siteUrl = resolveSiteUrl(options);
-    const base = options.blogBasePath || '/blog';
+    const base = options.blogBasePath || defaultBase();
     return {
         '@type': 'Blog',
         '@id': `${siteUrl}${base}#blog`,
@@ -62,7 +70,7 @@ function absolute(siteUrl, path) {
 }
 export function blogPostingSchema(post, options = {}) {
     const siteUrl = resolveSiteUrl(options);
-    const base = options.blogBasePath || '/blog';
+    const base = options.blogBasePath || defaultBase();
     const url = `${siteUrl}${base}/${post.slug}`;
     const images = [];
     if (post.ogImage)
@@ -140,7 +148,7 @@ export function breadcrumbSchema(items, options = {}) {
  */
 export function blogPostGraph(post, options = {}) {
     const siteUrl = resolveSiteUrl(options);
-    const base = options.blogBasePath || '/blog';
+    const base = options.blogBasePath || defaultBase();
     const url = `${siteUrl}${base}/${post.slug}`;
     const graph = [
         blogPostingSchema(post, options),

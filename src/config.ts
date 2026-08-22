@@ -30,6 +30,13 @@ export function getBlogTopics(): BlogEngineTopics {
   return getBlogRuntime().topics;
 }
 
+/** Normalized post URL prefix, no trailing slash (default '/blog'). */
+export function blogBasePath(): string {
+  const raw = getBlogConfig().paths.blogBasePath || '/blog';
+  const cleaned = '/' + raw.replace(/^\/+|\/+$/g, '');
+  return cleaned === '/' ? '' : cleaned;
+}
+
 export function getBlogHooks(): BlogEngineHooks {
   return getBlogRuntime().hooks || {};
 }

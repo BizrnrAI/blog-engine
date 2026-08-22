@@ -1,4 +1,12 @@
-import { getBlogConfig } from './config.js';
+import { blogBasePath, getBlogConfig } from './config.js';
+function defaultBase() {
+    try {
+        return blogBasePath();
+    }
+    catch {
+        return '/blog';
+    }
+}
 function resolveSiteUrl(options) {
     if (options.siteUrl)
         return options.siteUrl.replace(/\/$/, '');
@@ -7,7 +15,7 @@ function resolveSiteUrl(options) {
 /** One <url> entry per post with lastmod = updatedAt (honest dates only). */
 export function blogSitemapEntries(posts, options = {}) {
     const siteUrl = resolveSiteUrl(options);
-    const base = options.blogBasePath || '/blog';
+    const base = options.blogBasePath || defaultBase();
     return posts.map((post) => ({
         loc: `${siteUrl}${base}/${post.slug}`,
         lastmod: post.updatedAt || post.publishedAt,
@@ -20,7 +28,7 @@ export function blogSitemapEntries(posts, options = {}) {
  */
 export function buildBlogLlmsTxt(posts, options = {}) {
     const siteUrl = resolveSiteUrl(options);
-    const base = options.blogBasePath || '/blog';
+    const base = options.blogBasePath || defaultBase();
     let feedPath = options.feedPath;
     if (!feedPath) {
         try {

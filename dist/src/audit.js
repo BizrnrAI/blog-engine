@@ -1,4 +1,4 @@
-import { BLOG_CONFIG, getBlogTopics } from './config.js';
+import { BLOG_CONFIG, blogBasePath, getBlogTopics } from './config.js';
 import { readGeneratedBlogPosts } from './content-reader.js';
 import { contentRules } from './generate-post.js';
 import { wordCount } from './utils.js';
@@ -14,7 +14,7 @@ function blockquoteWords(content) {
 }
 export function auditPost(post, context) {
     const rules = contentRules();
-    const internal = new Set([...getBlogTopics().internalLinks, ...[...context.allSlugs].map((s) => `/blog/${s}`)]);
+    const internal = new Set([...getBlogTopics().internalLinks, ...[...context.allSlugs].map((s) => `${blogBasePath()}/${s}`)]);
     const fix = [];
     const block = [];
     if (!post.title)

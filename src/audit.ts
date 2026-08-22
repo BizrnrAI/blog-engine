@@ -1,4 +1,4 @@
-import { BLOG_CONFIG, getBlogTopics } from './config.js';
+import { BLOG_CONFIG, blogBasePath, getBlogTopics } from './config.js';
 import { readGeneratedBlogPosts } from './content-reader.js';
 import { contentRules } from './generate-post.js';
 import type { CorpusAuditEntry, CorpusVerdict, ParsedBlogPost } from './types.js';
@@ -34,7 +34,7 @@ export function auditPost(
   context: { allSlugs: Set<string>; altCounts: Map<string, number>; now: Date; staleAfterDays: number },
 ): CorpusAuditEntry {
   const rules = contentRules();
-  const internal = new Set<string>([...getBlogTopics().internalLinks, ...[...context.allSlugs].map((s) => `/blog/${s}`)]);
+  const internal = new Set<string>([...getBlogTopics().internalLinks, ...[...context.allSlugs].map((s) => `${blogBasePath()}/${s}`)]);
   const fix: string[] = [];
   const block: string[] = [];
 

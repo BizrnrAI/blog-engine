@@ -1,4 +1,12 @@
-import { getBlogConfig } from './config.js';
+import { blogBasePath, getBlogConfig } from './config.js';
+
+function defaultBase(): string {
+  try {
+    return blogBasePath();
+  } catch {
+    return '/blog';
+  }
+}
 import type { ParsedBlogFaq, ParsedBlogPost } from './types.js';
 
 /**
@@ -30,7 +38,7 @@ export interface BlogSchemaOptions {
 /** The Blog node for the hub page; post graphs point at it via isPartOf. */
 export function blogSchema(options: BlogSchemaOptions & { name: string; description?: string } ): JsonLd {
   const siteUrl = resolveSiteUrl(options);
-  const base = options.blogBasePath || '/blog';
+  const base = options.blogBasePath || defaultBase();
   return {
     '@type': 'Blog',
     '@id': `${siteUrl}${base}#blog`,
@@ -105,7 +113,7 @@ function absolute(siteUrl: string, path: string): string {
 
 export function blogPostingSchema(post: ParsedBlogPost, options: BlogSchemaOptions = {}): JsonLd {
   const siteUrl = resolveSiteUrl(options);
-  const base = options.blogBasePath || '/blog';
+  const base = options.blogBasePath || defaultBase();
   const url = `${siteUrl}${base}/${post.slug}`;
   const images: unknown[] = [];
   if (post.ogImage) images.push(absolute(siteUrl, post.ogImage));
@@ -192,7 +200,7 @@ export function breadcrumbSchema(
  */
 export function blogPostGraph(post: ParsedBlogPost, options: BlogSchemaOptions = {}): JsonLd {
   const siteUrl = resolveSiteUrl(options);
-  const base = options.blogBasePath || '/blog';
+  const base = options.blogBasePath || defaultBase();
   const url = `${siteUrl}${base}/${post.slug}`;
   const graph: JsonLd[] = [
     blogPostingSchema(post, options),

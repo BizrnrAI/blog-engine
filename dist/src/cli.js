@@ -1,5 +1,5 @@
 import { writeFileSync } from 'node:fs';
-import { BLOG_CONFIG, configureBlogEngine, getBlogHooks } from './config.js';
+import { BLOG_CONFIG, blogBasePath, configureBlogEngine, getBlogHooks } from './config.js';
 import { generateBlogRun } from './publisher.js';
 import { refreshBlogRun } from './refresh.js';
 import { auditBlogCorpus, formatAuditReport } from './audit.js';
@@ -12,7 +12,7 @@ function parseArg(name, argv = process.argv) {
 export function cleanBlogSlugs(raw) {
     return Array.from(new Set((raw || '')
         .split(/[,\s]+/)
-        .map((slug) => slug.trim().replace(/^\/?blog\//, '').replace(/\/$/, ''))
+        .map((slug) => slug.trim().replace(/^\/?[a-z0-9-]+\//, '').replace(/\/$/, ''))
         .filter(Boolean)
         .filter((slug) => /^[a-z0-9-]+$/.test(slug))));
 }
@@ -68,7 +68,7 @@ export async function runBlogIndexPublishedCli(runtime) {
         console.log('[blog-indexing] No changed blog slugs found.');
         return;
     }
-    const urls = slugs.map((slug) => `${BLOG_CONFIG.identity.siteUrl}/blog/${slug}`);
+    const urls = slugs.map((slug) => `${BLOG_CONFIG.identity.siteUrl}${blogBasePath()}/${slug}`);
     if (dryRun) {
         console.log(`[blog-indexing] Dry run: would submit ${urls.length} live URL(s): ${urls.join(', ')}`);
         return;

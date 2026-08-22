@@ -1,4 +1,4 @@
-import { BLOG_CONFIG, getBlogHooks, getBlogTopics } from './config.js';
+import { BLOG_CONFIG, blogBasePath, getBlogHooks, getBlogTopics } from './config.js';
 import { env, norm } from './utils.js';
 const LOOKBACK_DAYS = 28;
 /**
@@ -91,7 +91,8 @@ export async function getGscQueries() {
  * Page × query rows for posts under pathPrefix (default '/blog/'), 28-day window. Used by rank
  * rescue and refresh mode. Returns [] (never throws) when Search Console is not configured.
  */
-export async function getGscPageQueries(pathPrefix = '/blog/') {
+export async function getGscPageQueries(pathPrefix) {
+    pathPrefix = pathPrefix || `${blogBasePath()}/`;
     const hook = getBlogHooks().fetchGscPageQueries;
     if (hook) {
         try {

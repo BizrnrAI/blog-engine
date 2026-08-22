@@ -159,6 +159,8 @@ export interface BlogEngineConfig {
         };
     };
     paths: {
+        /** URL path prefix for posts (default '/blog'); e.g. '/log' for a site whose posts live at /log/<slug>. */
+        blogBasePath?: string;
         blogDir: string;
         assetDir: string;
         heroDir: string;
