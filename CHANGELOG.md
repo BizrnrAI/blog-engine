@@ -3,6 +3,59 @@
 All notable changes to `@bizrnr/blog-engine`. Consumers install from git, so
 the version in `package.json` is the contract marker.
 
+## 0.6.0 — 2026-08-24
+
+Fleet-readiness release: the gaps that blocked whole classes of site from adopting the engine.
+
+### Added
+- **`hooks.persistPost({ post, cover, markdown, file, root, isRefresh })`** — store the finished
+  post anywhere (Postgres, a CMS, object storage). Return `true` to ALSO write the Markdown file
+  (dual-write during a migration); return `false`/void when the hook owns persistence. With no
+  hook, behaviour is unchanged. Generation and refresh both route through it.
+- **`paths.contentExtensions`** (default `['.md']`) — readers, the cadence guard, the corpus audit
+  and refresh accept any configured extension (e.g. `['.mdx', '.md']`); generation writes the first.
+  New exports `contentExtensions`, `isPostFile`, `slugFromFile`.
+
+### Added — traffic playbook
+- **Live probe in the scorecard**: fetches hub, feed, newest and oldest post plus
+  `robots.txt`; fails on non-200 and on `answer-pre-js` when the quick answer is
+  absent from the raw HTML (the only check that proves the citable passage is
+  extractable at all).
+- **Retrieval-crawler check**: `crawlerBlocked()` + `RETRIEVAL_CRAWLERS`
+  (OAI-SearchBot, ChatGPT-User, PerplexityBot, Claude-SearchBot, Claude-User,
+  Google-Extended). A robots block is a scorecard failure.
+- **`hooks.inspectUrl`** + fixed-cohort index coverage, so "not indexed" and
+  "not checked" are distinguishable.
+- **`blogHubSitemapEntry()`** — hub `lastmod` from the newest post.
+- **One publishable predicate**: `excludeBlocked()` plus an `exclude` option on
+  `blogSitemapEntries`, `buildBlogLlmsTxt`, `buildBlogRss` and `relatedPosts`,
+  fed by `blockedSlugs(auditBlogCorpus(root))`.
+- **Orphan detection** in the corpus audit (inbound internal links, applied once
+  the corpus has 3+ posts).
+- **`cannibalizationPairs()`** — one normalized query on 2+ URLs at ≥10
+  impressions — surfaced by the scorecard.
+- **`classifyQueryIntent()`** + `topics.intentForQuery` and opt-in
+  `topics.preferVerificationIntent`.
+- **`content.minDaysBetweenRefresh`** (default 45) — applied after both the
+  demand-led and backlog selection paths; an explicit `--slugs` overrides it.
+- Scorecard also reports striking-distance (position 11–20), review-queue age
+  (fails >48h), and warns when `maxPostsPerWeek` is unset.
+
+### Changed — content contract
+- Citable blockquote target 134–167 words; validator floor raised 50 → 90.
+- `answer` target 40–60 words (was 40–55).
+- Prompt now asks for plainly stated limitations and forbids repeating the same
+  distinctive keyword at both ends of the title.
+- `classifyAction` returns `leave-alone` for a top-8 position with healthy CTR
+  (was always `title-experiment`).
+- Search Console windows use `dataState: 'final'` and end 3 days back, so
+  period-over-period comparisons stop mixing partial days with final ones.
+
+### Fixed
+- **The Open Graph card no longer fails a run when the brand logo is missing or is an SVG.**
+  `makeOgCard` rasterizes whatever the logo is (PNG/JPEG/SVG at 288 DPI) and falls back to a
+  wordmark card when there is no readable logo — matching how watermarking already degrades.
+
 ## 0.5.2 — 2026-08-22
 
 Adopter seams surfaced by the kristianpeter.com migration. All additive; defaults unchanged.

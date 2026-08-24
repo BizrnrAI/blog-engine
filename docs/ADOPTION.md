@@ -232,6 +232,27 @@ blogPostGraph(post, { speakableSelectors: ['.speakable-answer'] }); // only if y
 
 Use `heroImageWidth`/`heroImageHeight` from parsed posts for explicit `<img width height>`.
 
+## 8.4 Sites that don't store posts as Markdown files (v0.6.0)
+
+A database- or CMS-backed site adopts the engine through `hooks.persistPost` — the engine still
+owns generation, validation, images and the content contract, and hands you the finished post:
+
+```ts
+hooks.persistPost = async ({ post, cover, markdown, file, isRefresh }) => {
+  await db.from('posts').upsert({ slug: post.slug, title: post.title, body: post.body, ... });
+  return false;   // false/void = the hook owns persistence; true = ALSO write the file (dual-write)
+};
+```
+
+Return `true` during a migration to write both places until the file corpus is retired. With no
+hook the engine writes the Markdown file exactly as it always has.
+
+An `.mdx` corpus (or any other extension) is a config line:
+
+```ts
+config.paths.contentExtensions = ['.mdx', '.md'];   // readers accept both; generation writes the first
+```
+
 ## 8.5 Keeping your own frontmatter shape, and owning topic choice (v0.5.2)
 
 **Frontmatter aliases.** A site whose posts use `pubDate/updatedDate/cover/coverAlt/readingTime`
@@ -280,3 +301,31 @@ exact instead of heuristic — question-style titles no longer look "already cov
   frontmatter → `heroImageSrcset` for `<img srcset sizes>`.
 - **Fan-out** — `npm run blog:fanout -- --owner=/buy` writes
   `src/content/fanout/buy.json`; render its passages on the owner page (+ `faqPageSchema`).
+
+## 10. Traffic practices the engine now enforces (v0.6.0)
+
+Turn these on per site:
+
+```ts
+topics.preferVerificationIntent = true;        // answer "is X legit / X vs Y" before head terms
+config.content.maxPostsPerWeek = 2;            // ASEO cadence policy for search-led posts
+config.content.minDaysBetweenRefresh = 45;     // default; let a change surface before rewriting
+hooks.inspectUrl = async ({ url }) => gsc.urlInspection(url);   // index coverage, not guesswork
+```
+
+Render side — one exclude list, one hub entry:
+
+```ts
+const audit = auditBlogCorpus(process.cwd());
+const exclude = blockedSlugs(audit);                 // BLOCK verdicts leave every public surface
+blogSitemapEntries(posts, { exclude });
+blogHubSitemapEntry(posts);                          // hub lastmod = newest post — without it the
+buildBlogLlmsTxt(posts, { exclude });                // hub is never refetched and new posts sit
+buildBlogRss(rssPosts, { root, exclude });           // undiscovered for days
+relatedPosts(post, posts, 3, exclude);
+```
+
+Scorecard additions (all automatic): live 200 probes for hub/feed/newest/oldest,
+`answer-pre-js` extractability, retrieval-crawler robots check, fixed-cohort index
+coverage, striking-distance (11–20) count, cannibalization, review-queue age, and a
+warning when no cadence cap is set.

@@ -174,10 +174,25 @@ export async function makeOgCard(root, post, dryRun = false) {
     const tspans = lines
         .map((ln, i) => `<tspan x="${pad}" y="${titleTop + i * lineH}">${xmlEscape(ln)}</tspan>`)
         .join('');
-    const logoBuf = readFileSync(join(root, BLOG_CONFIG.paths.brandLogo));
+    // The brand logo is optional: several sites ship only an SVG mark, or none at all. A missing or
+    // unreadable logo must degrade to a wordmark card, never kill the run.
     const logoW = 280;
     const logoH = Math.round((112 / 320) * logoW);
-    const logoUri = `data:image/png;base64,${logoBuf.toString('base64')}`;
+    let logoUri = '';
+    try {
+        const logoPath = join(root, BLOG_CONFIG.paths.brandLogo);
+        if (existsSync(logoPath)) {
+            // Rasterize whatever it is (PNG/JPEG/SVG) so the SVG card embeds a valid data URI.
+            const png = await sharp(readFileSync(logoPath), { density: 288 }).resize(logoW, null, { fit: 'inside' }).png().toBuffer();
+            logoUri = `data:image/png;base64,${png.toString('base64')}`;
+        }
+    }
+    catch (err) {
+        console.warn('[blog-og] brand logo unusable, falling back to a wordmark card:', err instanceof Error ? err.message : String(err));
+    }
+    const logoBlock = logoUri
+        ? `<image href="${logoUri}" x="${pad}" y="60" width="${logoW}" height="${logoH}"/>`
+        : `<text x="${pad}" y="${60 + logoH * 0.7}" font-family='${c.uiFont}' font-size="44" font-weight="700" fill="${c.colors.text}">${xmlEscape(BLOG_CONFIG.identity.name)}</text>`;
     // Credential fields are optional — a shop has no licence. Build the footer from what exists so a
     // minimal identity never renders "undefined" onto the card.
     const a = BLOG_CONFIG.identity.agent;
@@ -198,7 +213,7 @@ export async function makeOgCard(root, post, dryRun = false) {
   <rect width="${W}" height="${H}" fill="url(#bg)"/>
   <rect width="${W}" height="${H}" fill="url(#glow)"/>
   <rect x="20" y="20" width="${W - 40}" height="${H - 40}" rx="14" fill="none" stroke="${c.colors.gold}" stroke-opacity="0.28"/>
-  <image href="${logoUri}" x="${pad}" y="60" width="${logoW}" height="${logoH}"/>
+  ${logoBlock}
   <text x="${pad}" y="262" font-family='${c.uiFont}' font-size="22" letter-spacing="4" fill="${c.colors.gold2}" font-weight="600">${xmlEscape(post.category.toUpperCase())}</text>
   <text font-family='${c.titleFont}' font-size="${fontSize}" fill="${c.colors.text}" font-style="italic">${tspans}</text>
   <rect x="${pad}" y="${H - 92}" width="${W - 2 * pad}" height="1" fill="${c.colors.gold}" fill-opacity="0.4"/>

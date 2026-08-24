@@ -8,6 +8,7 @@ import { generateCoverImage, gradientForOrdinal } from './images.js';
 import { pingIndexNow } from './indexing.js';
 import { toMarkdown } from './markdown.js';
 import { contentRules } from './generate-post.js';
+import { contentExtensions } from './content-reader.js';
 import { hasSecondDemandSignal } from './demand.js';
 import { describeTopic, resolveTopic } from './topic-rotation.js';
 import type { GenerateRunOptions, GenerateRunResult } from './types.js';
@@ -75,13 +76,17 @@ export async function generateBlogRun(root: string, options: GenerateRunOptions)
     const md = renderMarkdown
       ? renderMarkdown({ post, cover, gradient, dateISO, author })
       : toMarkdown(post, { gradient, cover, dateISO, author });
-    const file = join(blogDir, `${post.slug}.md`);
+    const file = join(blogDir, `${post.slug}${contentExtensions()[0]}`);
 
     if (options.dryRun) {
       console.log(`\n-------- DRY RUN ${file} (${wordCount(post.body)} body words, image: ${cover.source}) --------\n${md}\n-------- END DRY RUN --------\n`);
     } else {
-      writeFileSync(file, md, 'utf8');
-      console.log(`${logPrefix} wrote ${file} (image: ${cover.source}, og: ${cover.ogImage})`);
+      // A site may own persistence entirely (database, CMS, object store). With no hook — or when
+      // the hook asks for a dual-write — the engine writes the file exactly as before.
+      const persist = getBlogHooks().persistPost;
+      const alsoWriteFile = persist ? (await persist({ post, cover, markdown: md, file, root, isRefresh: false })) === true : true;
+      if (alsoWriteFile) writeFileSync(file, md, 'utf8');
+      console.log(`${logPrefix} ${alsoWriteFile ? 'wrote' : 'persisted'} ${alsoWriteFile ? file : post.slug} (image: ${cover.source}, og: ${cover.ogImage})`);
       written.push(post.slug);
       existing.push({ slug: post.slug, title: post.title });
     }

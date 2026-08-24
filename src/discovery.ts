@@ -21,6 +21,8 @@ export interface DiscoveryOptions {
   siteUrl?: string;
   /** Path prefix for post URLs (default '/blog'). */
   blogBasePath?: string;
+  /** Slugs to omit from every public surface (e.g. corpus-audit BLOCK verdicts). */
+  exclude?: readonly string[];
 }
 
 function resolveSiteUrl(options: DiscoveryOptions): string {
@@ -31,13 +33,43 @@ function resolveSiteUrl(options: DiscoveryOptions): string {
 export interface SitemapEntry {
   loc: string;
   lastmod: string;
+  priority?: number;
+}
+
+/**
+ * Drop posts that must not appear in any public surface — BLOCK verdicts from the corpus audit,
+ * drafts, anything quarantined. One predicate shared by the sitemap, the feed, llms.txt and the
+ * related-post graph, so those surfaces cannot contradict each other.
+ */
+export function excludeBlocked<T extends { slug: string }>(posts: readonly T[], exclude?: readonly string[]): T[] {
+  if (!exclude || !exclude.length) return [...posts];
+  const blocked = new Set(exclude);
+  return posts.filter((p) => !blocked.has(p.slug));
+}
+
+/**
+ * The hub's own sitemap entry, with lastmod = the newest post's date.
+ *
+ * Without it a crawler has no signal that the index page changed, so newly linked posts can sit
+ * undiscovered for days even though the sitemap lists them — the single most expensive discovery
+ * defect in the playbook's field notes.
+ */
+export function blogHubSitemapEntry(posts: readonly ParsedBlogPost[], options: DiscoveryOptions = {}): SitemapEntry {
+  const siteUrl = resolveSiteUrl(options);
+  const base = options.blogBasePath || defaultBase();
+  const newest = posts
+    .map((p) => p.updatedAt || p.publishedAt)
+    .filter(Boolean)
+    .sort()
+    .pop();
+  return { loc: `${siteUrl}${base}`, lastmod: newest || new Date().toISOString().slice(0, 10) };
 }
 
 /** One <url> entry per post with lastmod = updatedAt (honest dates only). */
 export function blogSitemapEntries(posts: readonly ParsedBlogPost[], options: DiscoveryOptions = {}): SitemapEntry[] {
   const siteUrl = resolveSiteUrl(options);
   const base = options.blogBasePath || defaultBase();
-  return posts.map((post) => ({
+  return excludeBlocked(posts, options.exclude).map((post) => ({
     loc: `${siteUrl}${base}/${post.slug}`,
     lastmod: post.updatedAt || post.publishedAt,
   }));
@@ -72,7 +104,7 @@ export function buildBlogLlmsTxt(posts: readonly ParsedBlogPost[], options: Llms
     `## ${options.heading || 'Blog'}`,
     '',
     `- RSS feed: ${siteUrl}${feedPath}`,
-    ...posts.slice(0, options.limit ?? 50).map(
+    ...excludeBlocked(posts, options.exclude).slice(0, options.limit ?? 50).map(
       (post) => `- [${post.title}](${siteUrl}${base}/${post.slug}): ${post.description}`,
     ),
   ];
@@ -84,9 +116,9 @@ export function buildBlogLlmsTxt(posts: readonly ParsedBlogPost[], options: Llms
  * tiebreak. Rendering 3 related posts under every article is the cheapest internal-discovery
  * win a blog can ship (no orphans, crawl paths between old and new).
  */
-export function relatedPosts(post: ParsedBlogPost, posts: readonly ParsedBlogPost[], limit = 3): ParsedBlogPost[] {
+export function relatedPosts(post: ParsedBlogPost, posts: readonly ParsedBlogPost[], limit = 3, exclude?: readonly string[]): ParsedBlogPost[] {
   const tags = new Set(post.tags.map((t) => t.toLowerCase()));
-  return posts
+  return excludeBlocked(posts, exclude)
     .filter((p) => p.slug !== post.slug)
     .map((p) => {
       const overlap = p.tags.filter((t) => tags.has(t.toLowerCase())).length;

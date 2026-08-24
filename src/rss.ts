@@ -14,6 +14,8 @@ export interface RssPost {
 }
 
 export interface BuildRssOptions {
+  /** Post ids to omit (e.g. corpus-audit BLOCK verdicts), keeping the feed in step with the sitemap. */
+  exclude?: readonly string[];
   /**
    * Repository root containing the public/ directory. When provided, local
    * image enclosures get their real byte length from disk instead of 0
@@ -37,7 +39,8 @@ function enclosureLength(imagePath: string, options: BuildRssOptions): number {
 
 export function buildBlogRss(posts: RssPost[], options: BuildRssOptions = {}): string {
   const lastBuildDate = posts[0]?.date ?? new Date();
-  const items = posts.slice(0, BLOG_CONFIG.rss.limit)
+  const blocked = new Set(options.exclude || []);
+  const items = posts.filter((p) => !blocked.has(p.id)).slice(0, BLOG_CONFIG.rss.limit)
     .map((p) => {
       const url = `${BLOG_CONFIG.identity.siteUrl}${blogBasePath()}/${p.id}`;
       const imageUrl = p.ogImage || p.image;

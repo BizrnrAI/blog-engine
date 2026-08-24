@@ -32,9 +32,9 @@ transparent scoping, disclosed authorship).
    40–60-word answer paragraph before elaborating. This mirrors how People
    Also Ask and AI answer engines chunk content: heading = query,
    first paragraph = extractable answer.
-4. **Exactly one citable blockquote** (`> `), 120–160 words (validator accepts
-   50–220; the ASEO skill's guidance is ~134–167), self-contained with concrete
-   scope (who/where/conditions), units, and the timeframe
+4. **Exactly one citable blockquote** (`> `), 134–167 words (validator accepts
+   90–220), self-contained with concrete scope (who/where/conditions), units,
+   an explicit statement of what it does *not* cover, and the timeframe
    "as of <month year>". No dangling pronouns, no "as above". This is the
    passage an AI assistant can quote verbatim with attribution — give it one
    obvious candidate.

@@ -3,6 +3,12 @@ import { env, norm } from './utils.js';
 import type { GscPageQuery, GscQuery } from './types.js';
 
 const LOOKBACK_DAYS = 28;
+/**
+ * Search Console finalizes data on a lag. Ending a window at "today" mixes fresh partial days
+ * with final ones, so every period-over-period comparison silently understates the recent side.
+ * Anchor on the newest day that is actually final instead.
+ */
+const FINAL_DATA_LAG_DAYS = 3;
 
 /**
  * The engine's topic-candidate invariants, applied to EVERY source (built-in reader or a
@@ -68,7 +74,7 @@ export async function getGscQueries(): Promise<{ token: string | null; queries: 
   }
 
   const token = await getGoogleAccessToken();
-  const end = new Date();
+  const end = new Date(Date.now() - FINAL_DATA_LAG_DAYS * 864e5);
   const start = new Date(end.getTime() - LOOKBACK_DAYS * 864e5);
   const fmt = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -83,6 +89,7 @@ export async function getGscQueries(): Promise<{ token: string | null; queries: 
           endDate: fmt(end),
           dimensions: ['query'],
           rowLimit: 60,
+          dataState: 'final',
         }),
       },
     );
@@ -118,7 +125,7 @@ export async function getGscPageQueries(pathPrefix?: string): Promise<GscPageQue
   if (!process.env.GOOGLE_OAUTH_CLIENT_ID || !process.env.GOOGLE_OAUTH_CLIENT_SECRET || !process.env.GOOGLE_OAUTH_REFRESH_TOKEN) return [];
   try {
     const token = await getGoogleAccessToken();
-    const end = new Date();
+    const end = new Date(Date.now() - FINAL_DATA_LAG_DAYS * 864e5);
     const start = new Date(end.getTime() - LOOKBACK_DAYS * 864e5);
     const fmt = (d: Date) => d.toISOString().slice(0, 10);
     const r = await fetch(
@@ -131,6 +138,7 @@ export async function getGscPageQueries(pathPrefix?: string): Promise<GscPageQue
           endDate: fmt(end),
           dimensions: ['page', 'query'],
           rowLimit: 2500,
+          dataState: 'final',
           dimensionFilterGroups: [{ filters: [{ dimension: 'page', operator: 'contains', expression: pathPrefix }] }],
         }),
       },

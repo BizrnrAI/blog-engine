@@ -17,7 +17,8 @@ function enclosureLength(imagePath, options) {
 }
 export function buildBlogRss(posts, options = {}) {
     const lastBuildDate = posts[0]?.date ?? new Date();
-    const items = posts.slice(0, BLOG_CONFIG.rss.limit)
+    const blocked = new Set(options.exclude || []);
+    const items = posts.filter((p) => !blocked.has(p.id)).slice(0, BLOG_CONFIG.rss.limit)
         .map((p) => {
         const url = `${BLOG_CONFIG.identity.siteUrl}${blogBasePath()}/${p.id}`;
         const imageUrl = p.ogImage || p.image;
