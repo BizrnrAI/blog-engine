@@ -74,6 +74,55 @@ console.log(formatServiceReport(results));
 One site's failure never stops the others — every site returns a result, including
 `status: 'failed'` with the reason.
 
+## Deploying it
+
+The service is one scheduled process. Anywhere Node runs on a timer works — the point is that
+**no repository is involved in publishing**.
+
+### As a Vercel cron route
+
+`src/app/api/cron/blog/route.ts`:
+
+```ts
+import { formatServiceReport, runBlogService } from '@bizrnr/blog-engine';
+import { sites } from '@/blog/sites';
+
+export const maxDuration = 300;
+
+export async function GET(request: Request): Promise<Response> {
+  // Vercel sends this header on scheduled invocations; reject anything else.
+  if (request.headers.get('authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
+    return new Response('Unauthorized', { status: 401 });
+  }
+  const results = await runBlogService(sites, { refresh: true });
+  console.log(formatServiceReport(results));
+  return Response.json({ results }, { status: results.some((r) => r.status === 'failed') ? 500 : 200 });
+}
+```
+
+`vercel.json`:
+
+```json
+{ "crons": [{ "path": "/api/cron/blog", "schedule": "0 14 * * *" }] }
+```
+
+### As a plain script
+
+```bash
+npx tsx service/run.ts              # publish for every due site
+npx tsx service/run.ts --dry-run    # show what would happen
+npx tsx service/run.ts --only=acme-plumbing
+```
+
+A complete, runnable example — two sites, their briefs, and the runner — is in
+`examples/service/`. Copy it and replace the briefs.
+
+### Environment
+
+`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, one text-model key, and optionally
+`INDEXNOW_KEY` plus the `GOOGLE_OAUTH_*` trio. That is the complete list, in one place, for
+every site the service publishes. See [.env.example](../.env.example).
+
 **4. Render on the site.** Query the table with the anon key and revalidate:
 
 ```ts

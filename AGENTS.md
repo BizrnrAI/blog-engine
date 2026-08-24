@@ -1,149 +1,76 @@
-# AGENTS.md — working with the blog engine
+# AGENTS.md — working with the BizRnR Blog Engine
 
-You are an AI agent. This file is your entry point for reviewing, adopting,
-extending, or operating this repo. The repo is deliberately self-contained:
-you do not need access to any internal system, memory, or credential store to
-do correct work here.
+You are an AI agent. This file is your entry point. The repo is deliberately self-contained: you
+need no BizRnR-internal system, memory, or credential store to do correct work here.
 
-## Plug-and-play in four steps
+## Which job are you doing?
 
-1. `npm install github:BizrnrAI/blog-engine`
-2. Copy [examples/minimal/runtime.ts](examples/minimal/runtime.ts) — the
-   smallest complete adapter — and change the strings.
-3. `configureBlogEngine(myRuntime())`. It **validates the adapter immediately**
-   and throws one error listing every field that is wrong, so you find out at
-   config time rather than after a model call. Lint without configuring via
-   `validateBlogEngineRuntime(runtime)`.
-4. `await generateBlogRun(process.cwd(), { count: 1, dryRun: true, skipPing: true })`
-   to preview. A dry run writes nothing to disk.
+| Your task | Go to | Time |
+|---|---|---|
+| **Add a blog to a site** | [docs/ADOPTION.md](docs/ADOPTION.md) — write an ~80-line adapter | ~1 hour |
+| **Run many sites from one service** | [docs/SERVICE.md](docs/SERVICE.md) + `examples/service` | ~1 hour |
+| **The site doesn't match the defaults** | The seam table at the end of [docs/ADOPTION.md](docs/ADOPTION.md) — do not fork | minutes |
+| **Change what posts contain** | [docs/CONTENT-SPEC.md](docs/CONTENT-SPEC.md) — prompt and validator move together | |
+| **Use a different model / infra** | [docs/PROVIDERS.md](docs/PROVIDERS.md) — hooks, not vendor code | |
+| **Publishing is broken or stalled** | [docs/WORKFLOWS.md](docs/WORKFLOWS.md) — the gotchas that caused real outages | |
+| **Make a site get more traffic** | [docs/TRAFFIC.md](docs/TRAFFIC.md) — ranked by measured return | |
+| **Extend the engine itself** | This file, below | |
 
-The engine is **domain-agnostic**: it knows nothing about your industry. A
-bakery, a law firm, a SaaS product and a brokerage all drive the same core.
-The only required identity is `name`, `siteUrl`, `siteHost`, `agent.name`.
-
-## Orientation (read in this order)
-
-1. [README.md](README.md) — what the engine does, module map, canonical rules.
-2. [docs/ADOPTION.md](docs/ADOPTION.md) — wire the engine into a site.
-3. [docs/CONTENT-SPEC.md](docs/CONTENT-SPEC.md) — the post contract the
-   validator enforces; change prompts and validator together.
-4. [docs/PROVIDERS.md](docs/PROVIDERS.md) — model providers, env vars, and the
-   hooks for running on your own infrastructure.
-5. [docs/WORKFLOWS.md](docs/WORKFLOWS.md) — PR-safe publishing + post-merge
-   indexing.
-6. [docs/skills/aseo/SKILL.md](docs/skills/aseo/SKILL.md) — the full ASEO
-   operating skill (SEO + AEO + GEO) this engine implements the blog slice of.
-   Consult it before making any content-policy decision.
+**The single most useful decision:** if the site can read from a database at render time, use the
+Supabase store. Publishing becomes an upsert and every git/CI/token/rebuild failure mode
+disappears. If it's a static export, use the filesystem store. Both are first-class.
 
 ## Ground rules
 
-- **Verify before claiming done.** `npm run verify` (typecheck + tests +
-  build) must pass. Tests run offline — no API keys needed.
-- **Never weaken the safety rails** without explicit human sign-off: the
-  internal-link allowlist, claims discipline (no fabricated statistics/prices/
-  sources), blocked-phrase checks, the watermark invariant, honest dates, and
-  PR-based publishing are non-negotiable (see "Non-negotiable prohibitions" in
-  the ASEO skill).
-- **Models cannot count characters.** Enforce length limits by deterministic
-  clamping in code (`clampText`), never by rejecting a generation attempt on a
-  character count. Validation regexes must tolerate bold labels, preambles,
-  fences, and stray whitespace. A parse failure must consume a retry attempt
-  with structural feedback — never abort the retry loop.
-- **Prompt and validator move together.** If you change what the prompt asks
-  for, update `validateGeneratedPost` and its tests in the same change, and
-  vice versa.
-- **Backward compatibility.** Existing site adapters supply only
-  `{ config, topics, brandPersona }`. New runtime fields must be optional with
-  production-safe defaults.
-- **Keep the core domain-agnostic.** Never add an industry assumption to
-  `src/` — no vertical-specific categories, keyword regexes, CTA wording, or
-  vendor product copy. If a behaviour only makes sense for one kind of site, it
-  belongs in that site's adapter (or `content.extraRules` /
-  `content.ctaInstruction`), not in the engine. A default that names an
-  industry is a bug: it silently breaks every other adopter. The
-  `tests/seams.test.ts` agnosticism cases guard this.
-- **Fail fast, name the field.** A misconfigured adapter must be rejected by
-  `validateBlogEngineRuntime` with a message naming the offending config path —
-  never by an undefined read deep in the pipeline.
-- **dist/ is committed.** Consumers install from git. Run `npm run build` and
-  commit `dist/` with any `src/` change.
+- **Verify before claiming done.** `npm run verify` (typecheck + tests + build) must pass. Tests
+  run offline — no API keys, no network.
+- **`dist/` is committed.** Consumers install from git. Run `npm run build` and commit `dist/`
+  with any `src/` change; CI fails on drift.
+- **New fields are optional, with production-safe defaults.** Existing adapters pass only
+  `{ config, topics, brandPersona }` and must keep working untouched.
+- **Prompt and validator move together.** Change what the prompt asks for and you change
+  `validateGeneratedPost` and its tests in the same commit, and vice versa.
+- **Models cannot count.** Enforce lengths by deterministic clamping (`clampText`), never by
+  rejecting a generation on a character count. Parsing must tolerate fences, preambles and stray
+  whitespace; a parse failure consumes a retry attempt with feedback rather than aborting.
+- **Never weaken the safety rails** without explicit human sign-off: the internal-link allowlist,
+  claims discipline, blocked phrases, the watermark invariant, honest dates, and submitting only
+  after a URL is live.
+- **Check for a seam before writing a workaround.** Frontmatter shape, topic choice, model,
+  storage, output format, demand signals and distribution are all seams. A workaround a second
+  site would also need belongs in the engine.
 
-## Adopting the engine with your own infrastructure
+## Architecture in one pass
 
-You don't need OpenRouter or Vercel AI Gateway. Provide `hooks` when calling
-`configureBlogEngine`:
+```
+adapter (per site: identity, topics, persona)
+   │
+   ├─ topic-rotation + demand ──→ what to write about
+   ├─ generate-post ────────────→ the content contract, validated, retried
+   ├─ images ───────────────────→ hero + watermark + OG card + variants
+   ├─ store ────────────────────→ WHERE it lands (files | Supabase | yours)
+   ├─ indexing + gsc ───────────→ submitted only once live
+   └─ audit · scorecard · refresh → measured, then improved
+```
 
-- `generateText({ messages, text })` → return the model's raw text (strict
-  JSON expected). Point this at any LLM you can call.
-- `generateHeroImage({ prompt, post, topic })` → return a raw image `Buffer`
-  (the engine watermarks it with the site logo, encodes it, and writes it
-  locally) or `null` to use the adapter's curated fallback photos.
-- `fetchGscQueries({ property, siteUrl, days })` → return `GscQuery[]` from
-  your own Search Console auth (a service account, say) or any other demand
-  source. The engine still applies its own filters to whatever you return.
-- `submitSitemap({ sitemap, property })` → resubmit the sitemap with that same
-  auth. Takes precedence over the built-in OAuth ping and needs no token.
-- `renderMarkdown({ post, cover, gradient, dateISO })` → return the finished
-  file contents when your site owns a different frontmatter shape (different
-  field names, FAQs rendered into the body, extra fields).
-
-Every hook is optional and replaces exactly one dependency. The engine keeps
-ownership of the invariants either way — topic filtering, validation,
-watermarking, encoding, and the write itself are never delegated.
-
-Set `image.og.enabled: false` when the hero should double as the Open Graph
-card instead of generating a second asset per post.
-
-Alternatively keep the built-in providers and set
-`config.text.provider = 'openai-compatible'`, `config.text.url` to any
-`/chat/completions` endpoint, and `config.text.apiKeyEnv` to your key's env
-var. All env vars are listed in [.env.example](.env.example).
-
-## Operating checklist for autonomous publishing
-
-1. Generate on a branch with `--skip-ping` (or `skipPing: true`).
-2. Run the site's own build gates (typecheck, build, any ASEO gate) in-run.
-3. Open a PR; merge through repo rules — never push generated content to main.
-4. After merge, poll the production URL until it returns 200, then submit via
-   IndexNow and resubmit the GSC sitemap (`runBlogIndexPublishedCli` does
-   this; `--wait-live` handles the polling).
-5. GitHub Actions PR creation requires the repo setting
-   `default_workflow_permissions=write` and
-   `can_approve_pull_request_reviews=true` — a silent failure mode otherwise.
+`store.ts` is the important abstraction: it is the engine's only route to persisted posts and
+assets, so nothing else in the pipeline knows or cares whether a post is a file or a row.
 
 ## Extending
 
-- New output surface (e.g. a new schema type, feed, or card style): add a
-  module under `src/`, export it from `src/index.ts`, add tests, document it
-  in README's module table.
-- New content rule: add it to `BlogContentRules` (optional, defaulted), wire
-  it into the prompt and `validateGeneratedPost`, cover both accept and
-  reject paths in `tests/generate-post.test.ts`.
-- New provider: prefer the hook seam over hard-coding another vendor SDK.
+- **New output surface** (a schema type, a feed, a card style): add a module under `src/`, export
+  it from `src/index.ts`, add tests, add a row to the README module table.
+- **New content rule**: add it to `BlogContentRules` (optional, defaulted), wire it into the
+  prompt *and* `validateGeneratedPost`, and cover both the accept and reject paths in tests.
+- **New provider or storage**: implement the hook or the `BlogStore` interface. Do not add a
+  vendor SDK — `supabase-store.ts` is implemented with plain `fetch` for exactly this reason.
 
-## Adapter-facing seams
+## Upkeep
 
-Before adding a workaround to a site adapter, check whether the engine already has a seam:
-frontmatter shape (`paths.frontmatterAliases`, `hooks.parseFrontmatter`), topic choice
-(`topics.editorial[].slug/title` pins, `hooks.pickTopic`, `hooks.deriveTopic`), model + images
-(`hooks.generateText`, `hooks.generateHeroImage`), output shape (`hooks.renderMarkdown`), demand and
-evidence (`hooks.fetchGscQueries`, `fetchGscPageQueries`, `fetchDemandSignals`, `verifySource`),
-distribution (`hooks.afterIndexed`). A workaround that a second site would also need belongs in
-the engine.
-
-## Upkeep cadence
-
-- Monthly: `npm outdated`, `npm audit`, re-run `npm run verify`; bump majors
-  only with the offline e2e smoke green (see docs/AUDIT-2026-08.md for the
-  procedure). Security advisories are patched immediately.
-- Quarterly: re-diff `docs/skills/aseo/SKILL.md` against its upstream, re-score
-  the engine against the ASEO gap matrix in the audit doc, and revisit
-  docs/ROADMAP.md. Check adopter cron health (a red cron for weeks is the
-  most expensive silent failure this system has).
-
-## Growth loop (v0.4.0)
-
-Refresh mode (`src/refresh.ts`) reuses the generate contract; any change to
-`validateGeneratedPost` applies to refreshes too. Rank rescue scoring
-(`src/rank-rescue.ts`) mirrors the ASEO skill table exactly — change it only
-with the skill. The corpus audit (`src/audit.ts`) must stay pure/offline.
+- **Monthly**: `npm outdated`, `npm audit`, re-run `npm run verify`. Patch security advisories
+  immediately; adopt majors only with the full suite green.
+- **Quarterly**: re-diff `docs/skills/aseo/SKILL.md` against upstream, re-check adopter cron and
+  scorecard health, revisit `docs/ROADMAP.md`.
+- **The expensive failures are silent ones.** A red cron, a stalled review queue, or a
+  never-firing scheduled job cost weeks before anyone noticed. The scorecard exists to surface
+  exactly those; keep it running with `--strict`.

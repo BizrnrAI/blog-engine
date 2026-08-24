@@ -1,45 +1,34 @@
-# Adopting the blog engine on a website
+# Adopting the engine on a site
 
-This guide takes a site from zero to autonomous, quality-gated blog
-publishing. It assumes an Astro/Next-style repo with content at
-`src/content/blog` and static assets under `public/`, but every path is
-configurable.
+From nothing to an autonomous, quality-gated blog. Follow the steps in order; each one is
+verifiable before you move on.
 
-## 0. Install
+**Decide one thing first — where posts live:**
+
+- **Database (recommended).** Publishing is an upsert; no git, CI, tokens or rebuild involved.
+  Do steps 1–4, then [docs/SERVICE.md](SERVICE.md).
+- **Markdown files.** Publishing is a commit; CI builds and deploys. Right for static-export
+  sites. Do steps 1–6.
+
+Everything except step 5 is identical for both.
+
+---
+
+## 1. Install
 
 ```bash
-npm install github:BizrnrAI/blog-engine
-# or, in a monorepo / vendored setup, copy the repo and `npm install ./blog-engine`
+npm install github:BizrnrAI/blog-engine#v0
 ```
 
-The package ships compiled `dist/`, so no build step is required on install.
+Public repo, compiled `dist/` committed, so there is no build step on install. Pin `#v0.7.0` for
+reproducibility or track `#v0` for patches.
 
-## 0.5 Start from the minimal example
+The smallest complete adapter lives in `examples/minimal` — copy it if you'd rather start from
+working code than from this page.
 
-The fastest correct start is to copy
-[examples/minimal/runtime.ts](../examples/minimal/runtime.ts) and change the
-strings. It is a complete adapter for a business with **no** AI voice agent, no
-partner site, no professional licence and no service areas — i.e. most
-websites — and it is covered by the test suite, so it cannot drift out of date.
+## 2. Write the adapter
 
-`configureBlogEngine()` validates your adapter the moment you call it and
-throws a single error listing every problem, each naming the exact config path:
-
-```
-Blog engine configuration is not usable:
-  • topics.internalLinks must contain at least one path — posts are required to
-    link internally, so an empty list can never validate
-  • identity.siteHost must be a bare host, without https://
-
-See docs/ADOPTION.md for a minimal working adapter.
-```
-
-To lint an adapter in CI without configuring the engine, call
-`validateBlogEngineRuntime(runtime)` and assert it returns `[]`.
-
-## 1. Write the adapter
-
-Create `scripts/blog/adapter.ts` (or `.mjs`) exporting three things:
+One file, roughly 80 lines, exporting three things. This is the *entire* per-site surface.
 
 ```ts
 import type { BlogEngineConfig, BlogEngineTopics } from '@bizrnr/blog-engine';
@@ -49,283 +38,190 @@ export const config: BlogEngineConfig = {
     name: 'Acme Plumbing',
     siteUrl: 'https://acmeplumbing.com',
     siteHost: 'acmeplumbing.com',
-    agent: { name: 'Alex Acme', title: 'master plumber', titleCap: 'Master Plumber', license: 'LIC-123' },
-    areas: ['Springfield', 'Shelbyville'],
-    voice: { name: 'AVA', homeCtaPath: '/' },          // the site's voice agent
-    backlink: { url: 'https://bizrnr.com', deepLink: 'https://bizrnr.com/automation-officer' },
+    agent: { name: 'Alex Acme' },              // credentials (title/license) are optional
+    author: { name: 'Alex Acme', url: '/about',
+              id: 'https://acmeplumbing.com/#person' },   // E-E-A-T entity
+    locale: 'en-US',
+    ctaPath: '/contact',
   },
   paths: {
-    blogDir: 'src/content/blog',
-    assetDir: 'public/assets/blog',            // branded OG cards land here
-    heroDir: 'public/assets/blog/generated',   // watermarked AI heroes land here
-    brandLogo: 'public/logo.png',              // used on OG cards
-    watermarkLogo: 'public/logo.png',          // composited onto every AI hero
+    blogBasePath: '/blog',                     // '/log', '/insights' — whatever your URLs use
+    blogDir: 'src/content/blog',               // file store only
+    assetDir: 'public/assets/blog',            // branded OG cards
+    heroDir: 'public/assets/blog/generated',   // watermarked heroes
+    brandLogo: 'public/logo.png',              // OG card logo (SVG works; missing degrades)
+    watermarkLogo: 'public/logo.png',
   },
   gsc: { property: 'sc-domain:acmeplumbing.com', sitemap: 'https://acmeplumbing.com/sitemap.xml' },
-  indexNow: { key: '<indexnow-key>' },         // also host /<key>.txt publicly
-  text: {
-    provider: 'openrouter',                    // or 'openai-compatible'
-    url: 'https://openrouter.ai/api/v1/chat/completions',
-    model: 'deepseek/deepseek-v4-flash',
-    maxTokens: 4000,
-    temperature: 0.7,
-  },
-  image: { /* model, size, watermark, og colors — copy examples/sdbg/config.ts */ } as any,
-  rss: { title: 'Acme Insights', description: 'Answer-first plumbing guides.', path: '/blog/feed.xml', limit: 20 },
+  indexNow: { key: '<key>' },                  // also host /<key>.txt publicly
+  text: { provider: 'openrouter', url: 'https://openrouter.ai/api/v1/chat/completions',
+          model: 'deepseek/deepseek-v4-flash', maxTokens: 4000, temperature: 0.7 },
+  image: { /* copy from examples/sdbg/config.ts and change the colours */ } as never,
+  rss: { title: 'Acme Insights', description: 'Answer-first plumbing guides.',
+         path: '/blog/feed.xml', limit: 20 },
   content: {
-    // Optional overrides of the ASEO content contract:
-    blockedPhrases: ['guaranteed savings', 'lowest price in town'],
+    maxPostsPerWeek: 2,                        // ASEO cadence policy
+    blockedPhrases: ['guaranteed savings'],    // your claims discipline
   },
 };
 
 export const topics: BlogEngineTopics = {
   allowedCategories: ['Guides', 'Local', 'Maintenance'],
-  crossPromoEvery: 4,                          // every 4th post backlinks BizRnR
-  gradients: ['g1', 'g2', 'g3'],
+  crossPromoEvery: 4,
+  gradients: ['g1', 'g2'],
   heroPhotos: [{ url: '/assets/fallback-1.jpg', alt: 'Descriptive alt' }],
-  internalLinks: ['/', '/blog', '/services/drain-cleaning'],  // the ONLY paths posts may link
-  editorial: [{ keyword: 'winter pipe care springfield', category: 'Maintenance', angle: 'prevention checklist' }],
-  crossPromo: [{ keyword: 'AVA voice intake for plumbers', angle: 'never miss an emergency call' }],
+  internalLinks: ['/', '/blog', '/services/drain-cleaning'],   // the ONLY paths posts may link
+  ownerPages: ['/services/drain-cleaning'],                    // posts support these, never compete
+  editorial: [{ keyword: 'winter pipe care', category: 'Maintenance', angle: 'prevention' }],
+  crossPromo: [],
 };
 
 export const brandPersona = () =>
-  'You are the blog writer for Acme Plumbing… (brand-safe persona, tone, audience).';
+  'You are the blog writer for Acme Plumbing… (voice, audience, what you never claim).';
 ```
 
-Rules of thumb:
+Three rules that prevent most adoption problems:
 
-- `internalLinks` must contain only paths that really exist — the validator
-  rejects posts linking anywhere else.
-- Give `editorial` 20+ topics; the rotation skips anything already covered.
-- Every logo path must exist; the watermark invariant fails loudly otherwise.
+- `internalLinks` must contain only paths that really exist — the validator rejects anything else,
+  because models invent plausible 404s.
+- Give `editorial` 20+ topics. The rotation skips anything already covered.
+- Every logo path must exist, or the OG card falls back to a wordmark (it will not fail the run).
 
-Template-based Business Runner sites can skip all of this and derive the
-runtime from their existing `TemplateSiteProfile` via
-`buildTemplateBlogEngineRuntime(site)`.
+`configureBlogEngine()` validates all of this and throws one error listing every problem, each
+naming the config path. Run it once before wiring anything else.
 
-## 2. Wire the CLI scripts
+## 3. Choose your store
 
-`package.json`:
+**Database:**
+
+```ts
+import { createSupabaseStore } from '@bizrnr/blog-engine';
+hooks: { store: createSupabaseStore({ siteId: 'acme-plumbing', author: 'Alex Acme' }) }
+```
+
+Apply `sql/0001_blog_posts.sql` once per Supabase project. Then continue at
+[docs/SERVICE.md](SERVICE.md).
+
+**Files:** omit `hooks.store` entirely. The filesystem is the default.
+
+## 4. Wire the commands
 
 ```json
 {
   "scripts": {
-    "blog:generate": "tsx scripts/blog/generate.ts",
-    "blog:index": "tsx scripts/blog/index-published.ts"
+    "blog:generate":  "tsx scripts/blog/generate.ts",
+    "blog:index":     "tsx scripts/blog/index-published.ts",
+    "blog:refresh":   "tsx scripts/blog/refresh.ts",
+    "blog:audit":     "tsx scripts/blog/audit.ts",
+    "blog:scorecard": "tsx scripts/blog/scorecard.ts"
   }
 }
 ```
 
-`scripts/blog/generate.ts`:
+Each script is two lines — import the runner, pass the adapter:
 
 ```ts
 import { runBlogGenerateCli } from '@bizrnr/blog-engine';
-import { config, topics, brandPersona } from './adapter';
-await runBlogGenerateCli({ config, topics, brandPersona });
+import { config, topics, brandPersona, hooks } from './adapter';
+await runBlogGenerateCli({ config, topics, brandPersona, hooks });
 ```
 
-`scripts/blog/index-published.ts`:
+| Command | What it does | Useful flags |
+|---|---|---|
+| `blog:generate` | Write one new post | `--count=N` `--dry-run` `--skip-ping` |
+| `blog:index` | Submit live URLs to IndexNow + GSC | `--slugs=a,b` `--wait-live` |
+| `blog:refresh` | Re-optimize a post already ranking 8–30, or heal the audit backlog | `--slugs=a` `--max=N` `--dry-run` |
+| `blog:audit` | SHIP / FIX / BLOCK for the whole corpus | `--json` `--strict` |
+| `blog:scorecard` | Cadence, corpus, live probes, index coverage, crawler access | `--strict` `--workflows=a.yml,b.yml` |
+
+`BLOG_ENGINE_DISABLED=1` is the kill switch for every command.
+
+## 5. Publish
+
+**Database:** run the service on a schedule — see [docs/SERVICE.md](SERVICE.md). Nothing else to
+set up; there is no repository involvement in publishing.
+
+**Files:** stamp the GitHub Actions workflows and let CI open and merge the PR:
 
 ```ts
-import { runBlogIndexPublishedCli } from '@bizrnr/blog-engine';
-import { config, topics, brandPersona } from './adapter';
-await runBlogIndexPublishedCli({ config, topics, brandPersona });
-```
-
-CLI flags: `--count=N`, `--dry-run`, `--skip-ping` (generate);
-`--slugs=a,b`, `--wait-live`, `--dry-run` (index). Env equivalents:
-`DRY_RUN=1`, `SKIP_PING=1`, `BLOG_SLUGS`, `WAIT_FOR_LIVE=1`,
-`BLOG_ENGINE_DISABLED=1` (kill switch).
-
-## 3. Render the posts
-
-Read generated posts into your site's blog index, feed, and sitemap:
-
-```ts
-import { readGeneratedBlogPosts, mergeBlogPosts, buildBlogRss, blogPostGraph } from '@bizrnr/blog-engine';
-
-const generated = readGeneratedBlogPosts({ fallback: { description, author, heroImage, heroImageAltPrefix, tags } });
-const posts = mergeBlogPosts(seedPosts, generated);
-```
-
-Per post page, render:
-
-- The `answer` frontmatter as a visible quick-answer block near the top
-  (server-rendered — answer engines must see it before JavaScript).
-- FAQs as visible `<details>` (or open Q/A blocks) **and** emit
-  `blogPostGraph(post, { author: { id: `${siteUrl}/#person`, name }, publisher: { id: `${siteUrl}/#organization`, name } })`
-  as a single `<script type="application/ld+json">`.
-- `image` with `imageAlt`, explicit width/height, `ogImage` for social meta.
-
-For the feed route, `buildBlogRss(rssPosts, { root: process.cwd() })` gives
-real enclosure byte lengths. Add `<link rel="alternate" type="application/rss+xml">`
-to the layout and list the feed URL in `llms.txt`.
-
-## 4. Stamp the workflows
-
-```ts
-import { blogGenerateWorkflow, blogIndexingWorkflow } from '@bizrnr/blog-engine';
+import { blogGenerateWorkflow, blogIndexingWorkflow, blogRefreshWorkflow,
+         blogScorecardWorkflow } from '@bizrnr/blog-engine';
 writeFileSync('.github/workflows/blog-generate.yml', blogGenerateWorkflow());
 writeFileSync('.github/workflows/blog-indexing.yml', blogIndexingWorkflow());
+writeFileSync('.github/workflows/blog-refresh.yml',  blogRefreshWorkflow());
+writeFileSync('.github/workflows/blog-scorecard.yml', blogScorecardWorkflow());
 ```
 
-Then read [WORKFLOWS.md](WORKFLOWS.md) — especially the GitHub repo settings
-required for Actions to open PRs, and why pings only happen post-merge.
+Then read [docs/WORKFLOWS.md](WORKFLOWS.md) — especially the repository settings Actions needs to
+open a PR, and why a merge that nobody performs is a queue rather than a gate. Both have caused
+multi-week silent outages in production.
 
-## 5. Secrets
+## 6. Render the posts
 
-Copy [.env.example](../.env.example) and set what your provider choice needs.
-For CI, add the same names as repo secrets. `GOOGLE_OAUTH_*` are optional —
-without them the engine skips GSC demand queries and uses the editorial pool.
+**Database:** query the table with your anon key and revalidate; a new row appears on the next
+revalidation.
 
-## 6. First run
+**Files:**
+
+```ts
+import { readGeneratedBlogPosts, mergeBlogPosts } from '@bizrnr/blog-engine';
+const posts = mergeBlogPosts(seedPosts, readGeneratedBlogPosts({ fallback: { /* … */ } }));
+```
+
+Either way, the post page must render:
+
+- the quick `answer` as a visible block near the top — **server-rendered**, because an answer
+  engine that needs JavaScript sees nothing;
+- the FAQs as visible text *and* `blogPostGraph(post, { publisher, speakableSelectors })` in a
+  single `<script type="application/ld+json">`;
+- the hero with its `alt`, intrinsic `width`/`height`, and `srcset` when present;
+- three `relatedPosts(post, posts, 3, exclude)` links.
+
+And the surfaces around it, all sharing one exclude list so they cannot disagree:
+
+```ts
+const exclude = blockedSlugs(auditBlogCorpus(process.cwd()));   // or auditPosts(await store.listPosts())
+blogSitemapEntries(posts, { exclude });
+blogHubSitemapEntry(posts);                    // hub lastmod — without it new posts sit undiscovered
+buildBlogLlmsTxt(posts, { exclude });
+buildBlogRss(rssPosts, { root: process.cwd(), exclude });
+```
+
+## 7. Secrets
+
+Copy [.env.example](../.env.example). The minimum is one text-model key; everything else degrades
+gracefully — no Search Console means editorial topics only, no image key means curated fallback
+heroes. See [docs/PROVIDERS.md](PROVIDERS.md) to use your own model stack instead.
+
+## 8. First run
 
 ```bash
-DRY_RUN=1 npm run blog:generate -- --count=1   # inspect output, no writes, no image spend
-npm run blog:generate -- --count=1 --skip-ping # real run on a branch
+BLOG_ENGINE_DISABLED=1 npm run blog:generate    # proves wiring, no model call
+npm run blog:generate -- --count=1 --skip-ping  # a real post
+npm run blog:audit                               # inspect the corpus verdicts
 ```
 
-Verify: the Markdown file, the watermarked hero under `heroDir`, the OG card
-under `assetDir`, tags/description/answer/FAQs in frontmatter. Then open the
-PR and let the post-merge indexing workflow handle pings.
+Check the post: frontmatter or row complete, hero watermarked and dimensioned, OG card branded,
+internal links real, FAQs present. Then let the schedule take over.
 
-## 8. Growth loop (v0.4.0)
+---
 
-```json
-{ "scripts": { "blog:refresh": "tsx scripts/blog/refresh.ts", "blog:audit": "tsx scripts/blog/audit.ts" } }
-```
+## Fitting a site that doesn't match the defaults
 
-```ts
-// scripts/blog/refresh.ts — rank rescue picks a post at position 8–30 and refreshes it (PR flow)
-import { runBlogRefreshCli } from '@bizrnr/blog-engine';
-await runBlogRefreshCli({ config, topics, brandPersona });   // --slugs=a,b | --max=N | --dry-run
+Every one of these is a supported seam, not a fork:
 
-// scripts/blog/audit.ts — SHIP / FIX / BLOCK for every post
-import { runBlogAuditCli } from '@bizrnr/blog-engine';
-await runBlogAuditCli({ config, topics, brandPersona });     // --json | --strict | --stale-days=365
-```
+| Your situation | The seam |
+|---|---|
+| Posts live in a database or CMS | `hooks.store` (or `hooks.persistPost` for dual-write) |
+| Your own frontmatter keys (`pubDate`, `cover`, `readingTime`) | Handled automatically; extend with `paths.frontmatterAliases` or `hooks.parseFrontmatter` |
+| `.mdx`, or another extension | `paths.contentExtensions` |
+| A different frontmatter shape entirely | `hooks.renderMarkdown` |
+| Your own model, or a non-OpenAI API | `hooks.generateText` / `hooks.generateHeroImage` |
+| Service-account Search Console auth | `hooks.fetchGscQueries` / `fetchGscPageQueries` / `submitSitemap` |
+| A curated, priority-ordered topic catalog | `slug`/`title` pins on editorial topics, `hooks.pickTopic`, `hooks.deriveTopic` |
+| Posts under `/log` or `/insights` | `paths.blogBasePath` |
+| Announce new posts somewhere | `hooks.afterIndexed` + `createAfterIndexedHook([...adapters])` |
+| Index-coverage reporting | `hooks.inspectUrl` |
 
-Stamp the weekly refresh workflow with `blogRefreshWorkflow()` (needs the
-GOOGLE_OAUTH_* secrets or a `fetchGscPageQueries` hook; without Search Console
-data refresh still works for explicit `--slugs`). Render `relatedPosts(post,
-posts, 3)` under every article, emit `blogSchema({ name })` on the hub and
-`authorProfileSchema({...})` on the author page, and wire syndication in
-`hooks.afterIndexed`.
-
-## 7. v0.3.0 additions worth turning on
-
-```ts
-config.identity.author = { name: 'Jane Doe', id: 'https://acmeplumbing.com/#person' }; // E-E-A-T
-config.content.maxPostsPerWeek = 2;                 // ASEO cadence cap for search-led posts
-topics.ownerPages = ['/services/drain-cleaning'];   // posts support owners, never compete
-```
-
-Render-side helpers that keep sitemap, feed, and AI context in parity:
-
-```ts
-import { blogSitemapEntries, buildBlogLlmsTxt, blogPostGraph } from '@bizrnr/blog-engine';
-const posts = readGeneratedBlogPosts({ /* … */ });
-blogSitemapEntries(posts);                       // [{ loc, lastmod }] — lastmod = updated
-buildBlogLlmsTxt(posts, { feedPath: '/blog/feed.xml' }); // markdown block for llms.txt
-blogPostGraph(post, { speakableSelectors: ['.speakable-answer'] }); // only if you render that class
-```
-
-Use `heroImageWidth`/`heroImageHeight` from parsed posts for explicit `<img width height>`.
-
-## 8.4 Sites that don't store posts as Markdown files (v0.6.0)
-
-A database- or CMS-backed site adopts the engine through `hooks.persistPost` — the engine still
-owns generation, validation, images and the content contract, and hands you the finished post:
-
-```ts
-hooks.persistPost = async ({ post, cover, markdown, file, isRefresh }) => {
-  await db.from('posts').upsert({ slug: post.slug, title: post.title, body: post.body, ... });
-  return false;   // false/void = the hook owns persistence; true = ALSO write the file (dual-write)
-};
-```
-
-Return `true` during a migration to write both places until the file corpus is retired. With no
-hook the engine writes the Markdown file exactly as it always has.
-
-An `.mdx` corpus (or any other extension) is a config line:
-
-```ts
-config.paths.contentExtensions = ['.mdx', '.md'];   // readers accept both; generation writes the first
-```
-
-## 8.5 Keeping your own frontmatter shape, and owning topic choice (v0.5.2)
-
-**Frontmatter aliases.** A site whose posts use `pubDate/updatedDate/cover/coverAlt/readingTime`
-needs no translation layer: the readers normalize those onto the engine's canonical keys, so the
-cadence guard, corpus audit, scorecard, refresh and schema all see real dates and images. Original
-keys are preserved and a canonical key always wins over an alias. Two escape hatches:
-
-```ts
-config.paths.frontmatterAliases = { summary: 'description' };   // extend the default table
-hooks.parseFrontmatter = ({ raw, slug }) => myYamlParser(raw);  // or own the parse entirely (null = fall back)
-```
-
-**Topic pinning.** A curated, priority-ordered catalog can own its URLs and headlines:
-
-```ts
-topics.editorial = [
-  { keyword: 'when to automate', category: 'Guides', angle: 'judgement',
-    slug: 'when-not-to-automate', title: 'When Not to Automate' },   // pinned: exact URL + headline
-];
-hooks.pickTopic = ({ existing, gscQueries, offset }) => myCatalog.next(existing) ?? null; // null = engine rotation
-hooks.deriveTopic = ({ existing }) => askModelForFreshTopic(existing); // when the pool is exhausted
-```
-
-A pinned `slug` is written verbatim (no stop-word stripping), a pinned `title` is used as-is, the
-prompt states both, and the validator asserts them. Pinned topics also make coverage detection
-exact instead of heuristic — question-style titles no longer look "already covered".
-
-## 9. Measurement, distribution, and evidence (v0.5.0)
-
-```json
-{ "scripts": { "blog:scorecard": "tsx scripts/blog/scorecard.ts", "blog:fanout": "tsx scripts/blog/fanout.ts" } }
-```
-
-- **Scorecard** — `runBlogScorecardCli(runtime)` + `blogScorecardWorkflow({ workflowsToWatch: ['autoblog.yml','blog-indexing.yml','blog-refresh.yml'] })`.
-  Set the `SCORECARD_WEBHOOK_URL` secret (Slack incoming webhook or any JSON
-  endpoint) and a red cron, a stale cadence, a broken feed, or a BLOCK post
-  reaches you within a day. `--strict` makes the workflow itself go red.
-- **Syndication** — in the adapter: `hooks.afterIndexed = createAfterIndexedHook([
-  slackAdapter(), webhookAdapter({ urlEnv: 'ZAPIER_HOOK_URL' }), linkedinAdapter({ authorUrn: 'urn:li:organization:123' }) ])`.
-- **Demand gate** — `content.requireTwoDemandSignals: true` (default second
-  source: public autocomplete; override with `hooks.fetchDemandSignals`).
-- **Sources** — `content.requireSources: true` + `topics.trustedSourceDomains:
-  ['census.gov', …]`; render `post.sources` as a visible "Sources" list (schema
-  emits `citation` automatically; visible/machine parity).
-- **Responsive heroes** — `image.variants: [1024, 640]` → `imageSrcset`
-  frontmatter → `heroImageSrcset` for `<img srcset sizes>`.
-- **Fan-out** — `npm run blog:fanout -- --owner=/buy` writes
-  `src/content/fanout/buy.json`; render its passages on the owner page (+ `faqPageSchema`).
-
-## 10. Traffic practices the engine now enforces (v0.6.0)
-
-Turn these on per site:
-
-```ts
-topics.preferVerificationIntent = true;        // answer "is X legit / X vs Y" before head terms
-config.content.maxPostsPerWeek = 2;            // ASEO cadence policy for search-led posts
-config.content.minDaysBetweenRefresh = 45;     // default; let a change surface before rewriting
-hooks.inspectUrl = async ({ url }) => gsc.urlInspection(url);   // index coverage, not guesswork
-```
-
-Render side — one exclude list, one hub entry:
-
-```ts
-const audit = auditBlogCorpus(process.cwd());
-const exclude = blockedSlugs(audit);                 // BLOCK verdicts leave every public surface
-blogSitemapEntries(posts, { exclude });
-blogHubSitemapEntry(posts);                          // hub lastmod = newest post — without it the
-buildBlogLlmsTxt(posts, { exclude });                // hub is never refetched and new posts sit
-buildBlogRss(rssPosts, { root, exclude });           // undiscovered for days
-relatedPosts(post, posts, 3, exclude);
-```
-
-Scorecard additions (all automatic): live 200 probes for hub/feed/newest/oldest,
-`answer-pre-js` extractability, retrieval-crawler robots check, fixed-cohort index
-coverage, striking-distance (11–20) count, cannibalization, review-queue age, and a
-warning when no cadence cap is set.
+If you find yourself writing a workaround in a site adapter, check this table first — and if the
+seam genuinely doesn't exist, it belongs in the engine, not in your site.
