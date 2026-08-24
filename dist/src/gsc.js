@@ -2,6 +2,12 @@ import { BLOG_CONFIG, blogBasePath, getBlogHooks, getBlogTopics } from './config
 import { env, norm } from './utils.js';
 const LOOKBACK_DAYS = 28;
 /**
+ * Search Console finalizes data on a lag. Ending a window at "today" mixes fresh partial days
+ * with final ones, so every period-over-period comparison silently understates the recent side.
+ * Anchor on the newest day that is actually final instead.
+ */
+const FINAL_DATA_LAG_DAYS = 3;
+/**
  * The engine's topic-candidate invariants, applied to EVERY source (built-in reader or a
  * fetchGscQueries hook): drop single-word queries, drop anything containing a brand term (we
  * already own those), and rank by impressions.
@@ -61,7 +67,7 @@ export async function getGscQueries() {
         return { token: null, queries: [] };
     }
     const token = await getGoogleAccessToken();
-    const end = new Date();
+    const end = new Date(Date.now() - FINAL_DATA_LAG_DAYS * 864e5);
     const start = new Date(end.getTime() - LOOKBACK_DAYS * 864e5);
     const fmt = (d) => d.toISOString().slice(0, 10);
     try {
@@ -73,6 +79,7 @@ export async function getGscQueries() {
                 endDate: fmt(end),
                 dimensions: ['query'],
                 rowLimit: 60,
+                dataState: 'final',
             }),
         });
         const j = await r.json();
@@ -107,7 +114,7 @@ export async function getGscPageQueries(pathPrefix) {
         return [];
     try {
         const token = await getGoogleAccessToken();
-        const end = new Date();
+        const end = new Date(Date.now() - FINAL_DATA_LAG_DAYS * 864e5);
         const start = new Date(end.getTime() - LOOKBACK_DAYS * 864e5);
         const fmt = (d) => d.toISOString().slice(0, 10);
         const r = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(BLOG_CONFIG.gsc.property)}/searchAnalytics/query`, {
@@ -118,6 +125,7 @@ export async function getGscPageQueries(pathPrefix) {
                 endDate: fmt(end),
                 dimensions: ['page', 'query'],
                 rowLimit: 2500,
+                dataState: 'final',
                 dimensionFilterGroups: [{ filters: [{ dimension: 'page', operator: 'contains', expression: pathPrefix }] }],
             }),
         });

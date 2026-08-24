@@ -2,7 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import sharp from 'sharp';
 import { join } from 'node:path';
 import { BLOG_CONFIG, blogBasePath, brandPersona, getBlogHooks, getBlogTopics } from './config.js';
-import { parseBlogFrontmatter } from './content-reader.js';
+import { contentExtensions, parseBlogFrontmatter, readGeneratedBlogPosts } from './content-reader.js';
 import { readExistingPosts } from './existing-posts.js';
 import { contentRules, normalizeGeneratedPost, parseModelJson, relatedLinkTargets, validateGeneratedPost } from './generate-post.js';
 import { getGscPageQueries } from './gsc.js';
@@ -105,7 +105,8 @@ export function buildRefreshMessages(args) {
     ];
 }
 export async function refreshBlogPost(root, slug, args = {}) {
-    const file = join(root, BLOG_CONFIG.paths.blogDir, `${slug}.md`);
+    const dir = join(root, BLOG_CONFIG.paths.blogDir);
+    const file = contentExtensions().map((ext) => join(dir, `${slug}${ext}`)).find((f) => existsSync(f)) || join(dir, `${slug}${contentExtensions()[0]}`);
     if (!existsSync(file))
         throw new Error(`refresh: no such post ${file}`);
     const raw = readFileSync(file, 'utf8');
@@ -182,8 +183,12 @@ export async function refreshBlogPost(root, slug, args = {}) {
     let markdown = render ? render(renderArgs) : toMarkdown(post, renderArgs);
     // toMarkdown writes updated = dateISO; a refresh must carry today's date there.
     markdown = markdown.replace(/^updated: .*$/m, `updated: ${today}`);
-    if (!args.dryRun)
-        writeFileSync(file, markdown, 'utf8');
+    if (!args.dryRun) {
+        const persist = getBlogHooks().persistPost;
+        const alsoWriteFile = persist ? (await persist({ post, cover, markdown, file, root, isRefresh: true })) === true : true;
+        if (alsoWriteFile)
+            writeFileSync(file, markdown, 'utf8');
+    }
     return { post, markdown, file };
 }
 export async function refreshBlogRun(root, options) {
@@ -195,7 +200,7 @@ export async function refreshBlogRun(root, options) {
     const candidates = rankRescueCandidates(rows, { pathPrefix: prefix });
     const byslug = new Map(candidates.map((c) => [c.slug, c]));
     let slugs = options.slugs && options.slugs.length ? options.slugs : candidates.filter((c) => c.action === 'refresh').slice(0, options.max ?? 1).map((c) => c.slug);
-    slugs = slugs.filter((s) => existsSync(join(root, BLOG_CONFIG.paths.blogDir, `${s}.md`)));
+    slugs = slugs.filter((s) => contentExtensions().some((ext) => existsSync(join(root, BLOG_CONFIG.paths.blogDir, `${s}${ext}`))));
     if (!slugs.length && options.backlog !== false) {
         // No demand-led candidate: heal the long tail — the FIX post with the most issues, oldest first.
         const fixes = auditBlogCorpus(root).filter((e) => e.verdict === 'FIX');
@@ -205,6 +210,18 @@ export async function refreshBlogRun(root, options) {
             slugs = [fixes[0].slug];
             console.log(`${logPrefix} refresh: no Search Console candidates - backlog pick ${fixes[0].slug} (${fixes[0].issues.length} audit issues)`);
         }
+    }
+    // A change needs 2-45 days to surface across search and answer engines. Rewriting a post
+    // before then destroys the evidence for whether the last rewrite worked.
+    const cooldown = contentRules().minDaysBetweenRefresh ?? 45;
+    if (cooldown > 0 && !(options.slugs && options.slugs.length)) {
+        const recent = new Map(readGeneratedBlogPosts({ root, blogDir: BLOG_CONFIG.paths.blogDir, fallback: { description: '', author: '', heroImage: '', heroImageAltPrefix: '' } })
+            .map((p) => [p.slug, Date.parse(p.updatedAt || p.publishedAt)]));
+        const cutoff = Date.now() - cooldown * 864e5;
+        const held = slugs.filter((s) => { const t = recent.get(s); return t !== undefined && !Number.isNaN(t) && t > cutoff; });
+        if (held.length)
+            console.log(`${logPrefix} refresh: ${held.join(', ')} refreshed within ${cooldown}d - holding for the evidence window`);
+        slugs = slugs.filter((s) => !held.includes(s));
     }
     if (!slugs.length) {
         console.log(`${logPrefix} refresh: no candidates (${candidates.length} scored pages; pass --slugs to force).`);

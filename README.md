@@ -170,7 +170,7 @@ Every generated post ships:
 - An answer-first lede and a 40–55-word direct `answer` field (quick-answer block).
 - 4–6 H2 sections, at least 2 phrased as real search questions, each question
   H2 opening with a 40–60-word direct answer.
-- Exactly one self-contained citable blockquote (120–160 words, scoped
+- Exactly one self-contained citable blockquote (134–167 words, scoped
   "as of <month year>") — the passage an AI assistant should quote.
 - Exactly 3 FAQs (rendered on-page and as `FAQPage` JSON-LD).
 - 2–4 internal links drawn only from the adapter's allowlist; validated, no
@@ -192,7 +192,12 @@ Full spec and rationale: [docs/CONTENT-SPEC.md](docs/CONTENT-SPEC.md).
 - Every image ships descriptive, non-identical alt text.
 - Blog CTAs route to the site's voice agent, never to forms.
 - `llms.txt` and the HTML layout expose the RSS feed; the feed includes
-  `media:content` and `enclosure` with real byte lengths.
+  `media:content` and `enclosure` with real byte lengths. (`llms.txt` is a
+  context/UX surface with **zero ranking weight** — Google Search ignores it.
+  Ship it for the assistants that read it, never as an SEO tactic.)
+- Sitemap, feed, `llms.txt` and the related-post graph all take the same
+  `exclude` list, so a quarantined post cannot leak into one surface while
+  being absent from another.
 - Generated Markdown lives under `src/content/blog`; assets stay local.
 - Frontmatter dates are honest — never backdated, never fake-freshened.
 
@@ -221,6 +226,37 @@ Publishing is only half the engine. The other half compounds what already ranks:
   into owner pages** (`runBlogFanoutCli --owner=/buy`), and the **daily
   scorecard** (`runBlogScorecardCli`, `blogScorecardWorkflow()`) complete the
   ASEO loop: demand → publish → link → refresh → measure → distribute.
+
+## What actually moves traffic
+
+Ranked by measured return, not by how satisfying it is to build:
+
+1. **Get indexed, then get cited.** Indexing — not ranking — is usually the
+   binding constraint. The scorecard probes live URLs and (with
+   `hooks.inspectUrl`) reports coverage over a **fixed** post cohort, so
+   "not indexed" and "not checked" never look the same.
+2. **The citable passage must survive without JavaScript.** `answer-pre-js`
+   fetches the newest post and asserts the quick answer is in the raw HTML.
+   A build gate proves a page compiles; only this proves it can be quoted.
+3. **Refresh what is already on page two.** Rank rescue targets positions
+   8–30 and reports the 11–20 cohort separately. A healthy top-3 result is
+   classified `leave-alone` — not every ranking is a problem to solve.
+4. **Answer verification questions, not head commercial terms.** Opt into
+   `topics.preferVerificationIntent`. On the reference property the head
+   commercial term earned 338 impressions and 0 clicks at position 24.8,
+   while long-tail verification questions produced both clicks and every
+   observed AI citation.
+5. **Never let two of your own URLs fight.** The scorecard flags any query
+   earning ≥10 impressions on 2+ pages; the fix is consolidation, not a
+   third page.
+6. **Let a change breathe.** `content.minDaysBetweenRefresh` (45d) stops the
+   weekly loop rewriting a post before its last edit could surface anywhere.
+7. **Keep retrieval crawlers allowed.** A robots rule blocking
+   `PerplexityBot` or `OAI-SearchBot` is a total citation loss for that
+   provider and is otherwise invisible; the scorecard fails on it.
+8. **Structured data is hygiene, not a ranking lever.** Emit it correctly and
+   move on — measured `searchAppearance` return on a comparable property was
+   zero rows over 90 days.
 
 ## Develop
 

@@ -88,7 +88,22 @@ export interface GscPageQuery {
   position: number;
 }
 
-export type RankRescueAction = 'refresh' | 'authority' | 'audit' | 'title-experiment';
+export type RankRescueAction = 'refresh' | 'authority' | 'audit' | 'title-experiment' | 'leave-alone';
+
+/** Search intent of a query, used to bias topic choice and citation probes. */
+export type QueryIntent = 'verification' | 'commercial' | 'informational';
+
+export interface CannibalizationPair {
+  query: string;
+  pages: Array<{ page: string; impressions: number; position: number }>;
+}
+
+export interface UrlInspection {
+  /** Search Console coverage state, verbatim (e.g. 'Submitted and indexed'). */
+  coverageState: string;
+  lastCrawlTime?: string;
+  referringUrls?: string[];
+}
 
 export interface RankRescueCandidate {
   page: string;
@@ -192,6 +207,11 @@ export interface BlogEngineConfig {
      */
     frontmatterAliases?: Readonly<Record<string, string>>;
     blogDir: string;
+    /**
+     * File extensions the readers treat as posts (default ['.md']). Add '.mdx' for an MDX corpus.
+     * Generated posts are still written with the FIRST extension in the list.
+     */
+    contentExtensions?: readonly string[];
     assetDir: string;
     heroDir: string;
     brandLogo: string;
@@ -287,6 +307,18 @@ export interface BlogEngineTopics {
   excludeQuery?: (query: string) => boolean;
   /** Allowed hosts for post sources when content.requireSources is on (suffix match, e.g. 'census.gov'). */
   trustedSourceDomains?: readonly string[];
+  /**
+   * Classify a query's intent. Default heuristic marks question/verification wording
+   * ("is X legit", "does X work", "X vs Y", "X reviews") as 'verification'.
+   */
+  intentForQuery?: (query: string) => QueryIntent;
+  /**
+   * Rank verification-intent queries ahead of commercial ones when choosing a topic.
+   * Default FALSE (topic order unchanged). Measured basis: on the reference property every
+   * AI citation came from a verification-intent query family and none from a commercial one,
+   * while the head commercial term earned 338 impressions and 0 clicks at position 24.8.
+   */
+  preferVerificationIntent?: boolean;
 }
 
 export interface BlogContentRules {
@@ -302,6 +334,11 @@ export interface BlogContentRules {
   requireCitableBlockquote?: boolean;
   /** Case-insensitive phrases that block publication (claims discipline). */
   blockedPhrases?: readonly string[];
+  /**
+   * Minimum days between refreshes of the same post (default 45). A change needs 2-45 days to
+   * surface across engines, so rewriting sooner destroys the evidence for whether it worked.
+   */
+  minDaysBetweenRefresh?: number;
   /**
    * Cadence cap: skip the run when this many posts were already published in the trailing 7 days.
    * The ASEO skill's default for search-led autonomous posts is 2 per rolling week until reviewed
@@ -431,6 +468,18 @@ export interface DeriveTopicArgs {
   existing: ExistingPost[];
 }
 
+export interface PersistPostArgs {
+  post: GeneratedBlogPost;
+  cover: CoverImage;
+  /** The rendered file body (engine frontmatter, or whatever renderMarkdown produced). */
+  markdown: string;
+  /** Absolute path the engine would have written to. */
+  file: string;
+  root: string;
+  /** True for a refresh of an existing post, false for a new one. */
+  isRefresh: boolean;
+}
+
 export interface RenderMarkdownArgs {
   post: GeneratedBlogPost;
   cover: CoverImage;
@@ -476,6 +525,12 @@ export interface BlogEngineHooks {
   /** Grounded citation probes across AI providers; unavailable providers must return available:false. */
   probeCitations?: (args: { queries: string[]; siteHost: string }) => Promise<CitationProbe[]>;
   /**
+   * Inspect a URL's index state with your own Search Console auth (URL Inspection API).
+   * Indexing — not ranking — is usually the binding constraint; without this the scorecard
+   * cannot tell "not indexed" from "not checked".
+   */
+  inspectUrl?: (args: { url: string }) => Promise<UrlInspection | null>;
+  /**
    * Submit/refresh the sitemap after publishing, with your own auth. Takes precedence over the
    * built-in OAuth ping.
    */
@@ -487,6 +542,13 @@ export interface BlogEngineHooks {
    * hook only decides what the file looks like.
    */
   renderMarkdown?: (args: RenderMarkdownArgs) => string;
+  /**
+   * Store the finished post somewhere other than the filesystem — a database row, a CMS API, an
+   * object store. Return true when the engine should ALSO write the Markdown file (dual-write
+   * during a migration); return false/void when the hook owns persistence entirely.
+   * Default behaviour with no hook is unchanged: write the file.
+   */
+  persistPost?: (args: PersistPostArgs) => boolean | void | Promise<boolean | void>;
   /**
    * Own the frontmatter parse entirely (a real YAML parser, a different file format, extra
    * fields). Return null to fall back to the engine parser + alias normalization. Keys returned

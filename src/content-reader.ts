@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { getBlogHooks } from './config.js';
+import { getBlogConfig, getBlogHooks } from './config.js';
 import { normalizeFrontmatter, resolveFrontmatterAliases } from './frontmatter.js';
 import type { ParsedBlogFaq, ParsedBlogPost, ReadGeneratedPostsOptions, SeedBlogPost } from './types.js';
 
@@ -97,6 +97,26 @@ export function parseBlogFrontmatter(raw: string, options: ParseFrontmatterOptio
  * Parse one post honouring hooks.parseFrontmatter when a site owns the format. Hook output is
  * alias-normalized too, so a hook can return its native keys.
  */
+/** Post file extensions for this site (default ['.md']); the first is what the engine writes. */
+export function contentExtensions(): readonly string[] {
+  try {
+    const configured = getBlogConfig().paths.contentExtensions;
+    return configured && configured.length ? configured : ['.md'];
+  } catch {
+    return ['.md'];
+  }
+}
+
+export function isPostFile(file: string, extensions: readonly string[] = contentExtensions()): boolean {
+  return !file.startsWith('_') && extensions.some((ext) => file.endsWith(ext));
+}
+
+/** Strip whichever known extension a post file carries. */
+export function slugFromFile(file: string, extensions: readonly string[] = contentExtensions()): string {
+  const ext = extensions.find((e) => file.endsWith(e));
+  return ext ? file.slice(0, -ext.length) : file.replace(/\.[^.]+$/, '');
+}
+
 export function parsePostFile(raw: string, slug: string) {
   let hook;
   try {
@@ -142,12 +162,13 @@ export function readGeneratedBlogPosts(options: ReadGeneratedPostsOptions = {}):
   const root = options.root || process.cwd();
   const blogDir = join(root, options.blogDir || 'src/content/blog');
   const fallback = options.fallback;
+  const extensions = contentExtensions();
   if (!existsSync(blogDir)) return [];
 
   return readdirSync(blogDir)
-    .filter((file) => file.endsWith('.md') && !file.startsWith('_'))
+    .filter((file) => isPostFile(file, extensions))
     .map((file) => {
-      const slug = file.replace(/\.md$/, '');
+      const slug = slugFromFile(file, extensions);
       const raw = readFileSync(join(blogDir, file), 'utf8');
       const { frontmatter, content, faqs, tags, sources } = parsePostFile(raw, slug);
       const title = frontmatter.title || fallback?.title || slug.replace(/-/g, ' ');

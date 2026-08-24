@@ -31,7 +31,7 @@ function blockquoteWords(content: string): number {
 
 export function auditPost(
   post: ParsedBlogPost,
-  context: { allSlugs: Set<string>; altCounts: Map<string, number>; now: Date; staleAfterDays: number },
+  context: { allSlugs: Set<string>; altCounts: Map<string, number>; now: Date; staleAfterDays: number; inboundCounts?: Map<string, number> },
 ): CorpusAuditEntry {
   const rules = contentRules();
   const internal = new Set<string>([...getBlogTopics().internalLinks, ...[...context.allSlugs].map((s) => `${blogBasePath()}/${s}`)]);
@@ -65,6 +65,12 @@ export function auditPost(
     if (/^https?:\/\//.test(post.heroImage) && !post.heroImage.startsWith(BLOG_CONFIG.identity.siteUrl)) fix.push('hero is hotlinked (not local)');
     if (!post.heroImageWidth || !post.heroImageHeight) fix.push('no image dimensions (CLS)');
   }
+  // Internal links are the only backlinks you fully control, and a post nothing links to is
+  // discoverable only through the sitemap. Meaningless below a handful of posts, where there is
+  // no link graph to speak of yet.
+  if (context.inboundCounts && context.inboundCounts.size >= 3 && (context.inboundCounts.get(post.slug) || 0) === 0) {
+    fix.push('orphan: no other post links to it');
+  }
   const links = [...post.content.matchAll(/\]\((\/[^)]*)\)/g)].map((m) => m[1].split('#')[0].split('?')[0]);
   const bad = links.filter((p) => p !== '/' && !internal.has(p));
   if (bad.length) fix.push('links to unknown internal paths: ' + [...new Set(bad)].join(', '));
@@ -88,13 +94,29 @@ export function auditBlogCorpus(root: string, options: AuditOptions = {}): Corpu
   });
   const altCounts = new Map<string, number>();
   for (const p of posts) altCounts.set(p.heroImageAlt, (altCounts.get(p.heroImageAlt) || 0) + 1);
+  const base = blogBasePath();
+  const inboundCounts = new Map<string, number>(posts.map((p) => [p.slug, 0]));
+  for (const post of posts) {
+    for (const m of post.content.matchAll(/\]\((\/[^)]*)\)/g)) {
+      const path = m[1].split('#')[0].split('?')[0];
+      if (!path.startsWith(`${base}/`)) continue;
+      const target = path.slice(base.length + 1);
+      if (target && target !== post.slug && inboundCounts.has(target)) inboundCounts.set(target, (inboundCounts.get(target) || 0) + 1);
+    }
+  }
   const context = {
     allSlugs: new Set(posts.map((p) => p.slug)),
+    inboundCounts,
     altCounts,
     now: options.now || new Date(),
     staleAfterDays: options.staleAfterDays ?? 365,
   };
   return posts.map((p) => auditPost(p, context)).sort((a, b) => (a.verdict === b.verdict ? a.slug.localeCompare(b.slug) : a.verdict === 'BLOCK' ? -1 : b.verdict === 'BLOCK' ? 1 : a.verdict === 'FIX' ? -1 : 1));
+}
+
+/** Slugs the audit says must not appear in public surfaces — feed the discovery/RSS `exclude`. */
+export function blockedSlugs(entries: readonly CorpusAuditEntry[]): string[] {
+  return entries.filter((e) => e.verdict === 'BLOCK').map((e) => e.slug);
 }
 
 export function formatAuditReport(entries: readonly CorpusAuditEntry[]): string {

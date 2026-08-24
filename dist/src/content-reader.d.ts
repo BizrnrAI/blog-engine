@@ -25,6 +25,11 @@ export declare function parseBlogFrontmatter(raw: string, options?: ParseFrontma
  * Parse one post honouring hooks.parseFrontmatter when a site owns the format. Hook output is
  * alias-normalized too, so a hook can return its native keys.
  */
+/** Post file extensions for this site (default ['.md']); the first is what the engine writes. */
+export declare function contentExtensions(): readonly string[];
+export declare function isPostFile(file: string, extensions?: readonly string[]): boolean;
+/** Strip whichever known extension a post file carries. */
+export declare function slugFromFile(file: string, extensions?: readonly string[]): string;
 export declare function parsePostFile(raw: string, slug: string): {
     frontmatter: Frontmatter;
     content: string;

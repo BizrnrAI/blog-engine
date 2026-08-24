@@ -1,4 +1,4 @@
-import type { GscPageQuery, RankRescueAction, RankRescueCandidate } from './types.js';
+import type { CannibalizationPair, GscPageQuery, QueryIntent, RankRescueAction, RankRescueCandidate } from './types.js';
 /**
  * Rank rescue — the ASEO skill's scoring for "which existing page deserves work next":
  *
@@ -19,6 +19,14 @@ export interface RankRescueOptions {
 }
 export declare function positionMultiplier(position: number, ctr: number): number;
 export declare function classifyAction(position: number, ctr: number): RankRescueAction;
+/** Default intent heuristic; override with topics.intentForQuery. */
+export declare function classifyQueryIntent(query: string): QueryIntent;
+/**
+ * Queries where two or more of the site's own URLs both earn real impressions — the site
+ * competing with itself. Threshold: >= minImpressions on >= 2 pages for one normalized query.
+ * The fix is consolidation or differentiation, never a third page.
+ */
+export declare function cannibalizationPairs(rows: readonly GscPageQuery[], minImpressions?: number): CannibalizationPair[];
 export declare function slugFromPage(page: string, pathPrefix?: string): string | null;
 export declare function rankRescueCandidates(rows: readonly GscPageQuery[], options?: RankRescueOptions): RankRescueCandidate[];
 //# sourceMappingURL=rank-rescue.d.ts.map

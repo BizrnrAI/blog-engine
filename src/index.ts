@@ -3,19 +3,19 @@ export { contentRules, generateBlogPost, normalizeGeneratedPost, parseModelJson,
 export { generateCoverImage, applyWatermark, heroAltText, makeOgCard, writeHeroVariants } from './images.js';
 export { countPostsSince, generateBlogRun } from './publisher.js';
 export { buildRefreshMessages, refreshBlogPost, refreshBlogRun } from './refresh.js';
-export { classifyAction, positionMultiplier, rankRescueCandidates, slugFromPage, type RankRescueOptions } from './rank-rescue.js';
-export { auditBlogCorpus, auditPost, formatAuditReport, type AuditOptions } from './audit.js';
+export { cannibalizationPairs, classifyAction, classifyQueryIntent, positionMultiplier, rankRescueCandidates, slugFromPage, type RankRescueOptions } from './rank-rescue.js';
+export { auditBlogCorpus, auditPost, blockedSlugs, formatAuditReport, type AuditOptions } from './audit.js';
 export { corroborates, duckDuckGoSuggestions, hasSecondDemandSignal } from './demand.js';
 export { hostAllowed, normalizeSources, verifySources } from './sources.js';
 export { generateFanoutPassages, questionLikeQueries, validateFanout, type FanoutPassage, type FanoutResult } from './fanout.js';
-export { formatScorecard, postScorecard, runScorecard, type ScorecardOptions } from './scorecard.js';
+export { RETRIEVAL_CRAWLERS, crawlerBlocked, formatScorecard, postScorecard, runScorecard, type ScorecardOptions } from './scorecard.js';
 export { createAfterIndexedHook, linkedinAdapter, slackAdapter, webhookAdapter, type SyndicationAdapter, type SyndicationItem } from './syndication.js';
 export { buildBlogRss, type BuildRssOptions, type RssPost } from './rss.js';
 export { authorProfileSchema, blogPostGraph, blogPostingSchema, blogSchema, breadcrumbSchema, faqPageSchema, type BlogSchemaOptions } from './schema.js';
-export { blogSitemapEntries, buildBlogLlmsTxt, relatedPosts, type DiscoveryOptions, type LlmsTxtOptions, type SitemapEntry } from './discovery.js';
+export { blogHubSitemapEntry, blogSitemapEntries, buildBlogLlmsTxt, excludeBlocked, relatedPosts, type DiscoveryOptions, type LlmsTxtOptions, type SitemapEntry } from './discovery.js';
 export { allEditorialTopicsCovered, pickTopic, resolveTopic } from './topic-rotation.js';
 export { readExistingPosts } from './existing-posts.js';
-export { parseBlogFrontmatter, parsePostFile, markdownToAnswerSections, readGeneratedBlogPosts, mergeBlogPosts, type ParseFrontmatterOptions } from './content-reader.js';
+export { contentExtensions, isPostFile, markdownToAnswerSections, mergeBlogPosts, parseBlogFrontmatter, parsePostFile, readGeneratedBlogPosts, slugFromFile, type ParseFrontmatterOptions } from './content-reader.js';
 export { DEFAULT_FRONTMATTER_ALIASES, coerceFrontmatterValue, normalizeFrontmatter, resolveFrontmatterAliases } from './frontmatter.js';
 export { buildTemplateBlogEngineRuntime } from './template-runtime.js';
 export { assertBlogEngineRuntime, validateBlogEngineRuntime, BlogEngineConfigError } from './validate-runtime.js';
@@ -53,7 +53,11 @@ export type {
   DeriveTopicArgs,
   ParseFrontmatterArgs,
   ParsedFrontmatterResult,
+  CannibalizationPair,
+  PersistPostArgs,
   PickTopicArgs,
+  QueryIntent,
+  UrlInspection,
   BlogSource,
   CitationProbe,
   Scorecard,

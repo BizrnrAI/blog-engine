@@ -8,6 +8,8 @@ export interface RssPost {
     ogImage?: string;
 }
 export interface BuildRssOptions {
+    /** Post ids to omit (e.g. corpus-audit BLOCK verdicts), keeping the feed in step with the sitemap. */
+    exclude?: readonly string[];
     /**
      * Repository root containing the public/ directory. When provided, local
      * image enclosures get their real byte length from disk instead of 0

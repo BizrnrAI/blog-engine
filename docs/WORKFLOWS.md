@@ -115,3 +115,16 @@ accepts explicit slugs. Refreshed posts keep their URL and publish date; only
 workflow runs; two consecutive failures of any watched workflow = FAIL, posted to
 `SCORECARD_WEBHOOK_URL`. This is the alert that turns a seven-week silent outage
 into a next-morning message.
+
+## The review queue (v0.6.0)
+
+The engine's rule is that generated content is **verified** before it publishes —
+not that a human clicks merge. Those are different things, and conflating them is
+expensive: on the reference property seven autonomously generated posts sat as open
+pull requests for 8–16 days, six of them green the entire time. A gate nobody walks
+through is a queue, not a gate.
+
+So: keep the gates *in front of* the push (typecheck, build, ASEO/audit), and let
+auto-merge-on-green carry the PR. The scorecard's `review-queue` check now **fails**
+when a blog PR has been open longer than `--max-pr-age-hours` (default 48), so a
+stalled queue is visible the next morning instead of at the next audit.

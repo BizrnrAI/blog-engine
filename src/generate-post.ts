@@ -16,6 +16,7 @@ const DEFAULT_RULES: Required<Omit<BlogContentRules, 'blockedPhrases' | 'extraRu
   requireCitableBlockquote: true,
   requireTwoDemandSignals: false,
   requireSources: false,
+  minDaysBetweenRefresh: 45,
   blockedPhrases: [],
   // Domain-neutral defaults. Anything industry-specific belongs in a site's own config, never here.
   tone: 'confident, clear, genuinely helpful',
@@ -82,9 +83,11 @@ function buildMessages(topic: SeoTopic, existing: readonly ExistingPost[]) {
     '- Then 4-6 "## " H2 sections with substantive paragraphs (700-1100 words total). NO H1; the page adds the title.',
     `- At least ${rules.minQuestionH2s} of the H2 headings must be phrased as natural questions a reader would search (e.g. "How much does ... cost?"). Open each question H2 with a DIRECT 40-60 word answer paragraph before elaborating.`,
     rules.requireCitableBlockquote
-      ? `- Include exactly ONE Markdown blockquote ("> ") of 120-160 words: a self-contained, citable passage stating the post's key takeaway with concrete scope (who/where/what conditions), units where relevant, and the timeframe "as of ${monthYear()}". It must make sense with zero surrounding context (no "as above", no dangling pronouns) — this is the passage an AI assistant should quote verbatim.`
+      ? `- Include exactly ONE Markdown blockquote ("> ") of 134-167 words: a self-contained, citable passage stating the post's key takeaway with concrete scope (who/where/what conditions), units where relevant, the timeframe "as of ${monthYear()}", and a plain statement of what it does NOT cover. It must make sense with zero surrounding context (no "as above", no dangling pronouns) — this is the passage an AI assistant should quote verbatim.`
       : '',
     '- Where the content compares options, steps, or trade-offs, prefer a compact Markdown table or bulleted list over dense prose.',
+    '- State limitations plainly where they are material ("this does not cover X", "figures vary by Y"). A stated boundary is a trust signal, not a weakness, and assistants quote hedged claims more readily than absolute ones.',
+    '- Do NOT repeat the same distinctive keyword at both the start and the end of the title; if the topic has a synonym pair, use one in the title and the other in the first H2.',
     '- Do NOT include an FAQ section or a "Quick answer" section in the body; those render automatically from the JSON fields.',
     '- Include 2-4 natural internal links chosen ONLY from this list: ' + JSON.stringify(INTERNAL_LINKS) + '.',
     linkTargets.length
@@ -123,7 +126,7 @@ function buildMessages(topic: SeoTopic, existing: readonly ExistingPost[]) {
     '  "slug": string (kebab-case, <= 70 chars),',
     '  "description": string (meta description, aim 120-158 chars, active voice, states the concrete benefit of reading),',
     `  "category": ${JSON.stringify(topic.category)},`,
-    '  "answer": string (a DIRECT 40-55 word answer to the core question, subject-verb-object, AEO-friendly),',
+    '  "answer": string (a DIRECT 40-60 word answer to the core question, subject-verb-object, AEO-friendly),',
     '  "readMins": integer 5-9,',
     '  "tags": array of 3-6 short lowercase topical tags (no brand names),',
     '  "heroImageAlt": string (8-16 words literally describing a photographic scene that fits the post, e.g. "sunlit craftsman bungalow with a wraparound porch on a quiet street"),',
@@ -280,7 +283,7 @@ export function validateGeneratedPost(
   if (qH2 < rules.minQuestionH2s) errs.push(`body needs >= ${rules.minQuestionH2s} question-phrased H2s ending in "?" (got ${qH2})`);
   if (rules.requireCitableBlockquote) {
     const bq = blockquoteWordCount(post.body || '');
-    if (bq < 50) errs.push(`body needs one citable "> " blockquote of ~120-160 words (got ${bq} blockquote words)`);
+    if (bq < 90) errs.push(`body needs one citable "> " blockquote of ~134-167 words (got ${bq} blockquote words)`);
     else if (bq > 220) errs.push(`citable blockquote too long (${bq} words; keep it a single quotable passage)`);
   }
   if (!INTERNAL_LINKS.some((l) => (post.body || '').includes(`(${l})`))) errs.push('body needs >= 1 internal link from the allowed list');

@@ -1,6 +1,7 @@
 import { BLOG_CONFIG, getBlogHooks, getBlogTopics } from './config.js';
 import { ALLOWED_CATEGORIES, CROSS_PROMO_TOPICS, EDITORIAL_TOPICS, } from './topics.js';
 import { norm, slugify } from './utils.js';
+import { classifyQueryIntent } from './rank-rescue.js';
 /**
  * Map a search query to one of the site's categories.
  *
@@ -62,7 +63,13 @@ export function pickTopic(existing, gscQueries, offset) {
         }
     }
     if (idx % 2 === 0) {
-        const hit = gscQueries.find((q) => !isCovered({ keyword: q.query }, existing));
+        // Optional: answer verification-intent questions before commercial ones. Impressions alone
+        // are a poor ranking signal for topic choice — head commercial terms routinely earn many
+        // impressions and no clicks, while long-tail verification questions convert and get cited.
+        const ordered = topics.preferVerificationIntent
+            ? [...gscQueries].sort((a, b) => Number(classifyQueryIntent(b.query) === 'verification') - Number(classifyQueryIntent(a.query) === 'verification'))
+            : gscQueries;
+        const hit = ordered.find((q) => !isCovered({ keyword: q.query }, existing));
         if (hit) {
             return {
                 type: 'gsc',
