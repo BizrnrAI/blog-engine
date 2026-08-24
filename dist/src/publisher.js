@@ -1,7 +1,8 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { BLOG_CONFIG, blogBasePath, getBlogHooks } from './config.js';
-import { readExistingPosts } from './existing-posts.js';
+import { listExistingPosts } from './store.js';
+import { getStore } from './store.js';
 import { generateBlogPost } from './generate-post.js';
 import { getGscQueries, pingGscSitemap } from './gsc.js';
 import { generateCoverImage, gradientForOrdinal } from './images.js';
@@ -41,11 +42,12 @@ export async function generateBlogRun(root, options) {
     }
     console.log(`${logPrefix} GSC: ${queries.length} candidate queries (top: ${queries.slice(0, 3).map((q) => q.query).join(' | ') || 'none'})`);
     const blogDir = join(root, BLOG_CONFIG.paths.blogDir);
-    // A dry run must not touch the filesystem — it previously created the content directory before
-    // deciding it wasn't going to write anything, which litters a repo just for previewing a post.
-    if (!options.dryRun)
+    // Only a filesystem store needs a content directory. A dry run must not touch the filesystem
+    // either — it previously created the directory before deciding it wasn't going to write
+    // anything, which litters a repo just for previewing a post.
+    if (!options.dryRun && getStore(root).root)
         ensureDir(blogDir);
-    const existing = readExistingPosts(root);
+    const existing = await listExistingPosts(root);
     console.log(`${logPrefix} existing posts: ${existing.length}`);
     // Cadence guard (ASEO: cap search-led autonomous posts until reviewed evidence supports more).
     const maxPerWeek = contentRules().maxPostsPerWeek;
@@ -77,13 +79,21 @@ export async function generateBlogRun(root, options) {
             console.log(`\n-------- DRY RUN ${file} (${wordCount(post.body)} body words, image: ${cover.source}) --------\n${md}\n-------- END DRY RUN --------\n`);
         }
         else {
-            // A site may own persistence entirely (database, CMS, object store). With no hook — or when
-            // the hook asks for a dual-write — the engine writes the file exactly as before.
+            // Persistence order: an explicit persistPost hook wins, then the configured store
+            // (filesystem by default). Both paths log the same way so a run reads identically
+            // whether the post landed as a file or a row.
             const persist = getBlogHooks().persistPost;
-            const alsoWriteFile = persist ? (await persist({ post, cover, markdown: md, file, root, isRefresh: false })) === true : true;
-            if (alsoWriteFile)
-                writeFileSync(file, md, 'utf8');
-            console.log(`${logPrefix} ${alsoWriteFile ? 'wrote' : 'persisted'} ${alsoWriteFile ? file : post.slug} (image: ${cover.source}, og: ${cover.ogImage})`);
+            let target;
+            if (persist) {
+                const alsoWriteFile = (await persist({ post, cover, markdown: md, file, root, isRefresh: false })) === true;
+                if (alsoWriteFile)
+                    writeFileSync(file, md, 'utf8');
+                target = alsoWriteFile ? file : post.slug;
+            }
+            else {
+                target = await getStore(root).putPost({ post, cover, markdown: md, dateISO, isRefresh: false });
+            }
+            console.log(`${logPrefix} published ${target} (image: ${cover.source}, og: ${cover.ogImage})`);
             written.push(post.slug);
             existing.push({ slug: post.slug, title: post.title });
         }

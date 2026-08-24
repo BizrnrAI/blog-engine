@@ -86,12 +86,8 @@ export function auditPost(
   return { slug: post.slug, verdict, issues: [...block, ...fix] };
 }
 
-export function auditBlogCorpus(root: string, options: AuditOptions = {}): CorpusAuditEntry[] {
-  const posts = readGeneratedBlogPosts({
-    root,
-    blogDir: options.blogDir || BLOG_CONFIG.paths.blogDir,
-    fallback: { description: '', author: '', heroImage: '', heroImageAltPrefix: BLOG_CONFIG.identity.name },
-  });
+/** Audit posts from ANY source — a filesystem read, a database query, a test fixture. */
+export function auditPosts(posts: readonly ParsedBlogPost[], options: AuditOptions = {}): CorpusAuditEntry[] {
   const altCounts = new Map<string, number>();
   for (const p of posts) altCounts.set(p.heroImageAlt, (altCounts.get(p.heroImageAlt) || 0) + 1);
   const base = blogBasePath();
@@ -117,6 +113,18 @@ export function auditBlogCorpus(root: string, options: AuditOptions = {}): Corpu
 /** Slugs the audit says must not appear in public surfaces — feed the discovery/RSS `exclude`. */
 export function blockedSlugs(entries: readonly CorpusAuditEntry[]): string[] {
   return entries.filter((e) => e.verdict === 'BLOCK').map((e) => e.slug);
+}
+
+/** Audit the filesystem corpus at `root` (the default store). */
+export function auditBlogCorpus(root: string, options: AuditOptions = {}): CorpusAuditEntry[] {
+  return auditPosts(
+    readGeneratedBlogPosts({
+      root,
+      blogDir: options.blogDir || BLOG_CONFIG.paths.blogDir,
+      fallback: { description: '', author: '', heroImage: '', heroImageAltPrefix: BLOG_CONFIG.identity.name },
+    }),
+    options,
+  );
 }
 
 export function formatAuditReport(entries: readonly CorpusAuditEntry[]): string {

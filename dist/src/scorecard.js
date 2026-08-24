@@ -1,7 +1,6 @@
 import { BLOG_CONFIG, blogBasePath, getBlogHooks } from './config.js';
-import { auditBlogCorpus } from './audit.js';
-import { readGeneratedBlogPosts } from './content-reader.js';
-import { readExistingPosts } from './existing-posts.js';
+import { auditPosts } from './audit.js';
+import { getStore } from './store.js';
 import { getGscPageQueries } from './gsc.js';
 import { cannibalizationPairs } from './rank-rescue.js';
 /**
@@ -169,9 +168,12 @@ export async function runScorecard(root, options = {}) {
     if (!BLOG_CONFIG.content?.maxPostsPerWeek) {
         checks.push({ name: 'cadence-policy', status: 'warn', detail: 'content.maxPostsPerWeek is unset — ASEO policy caps search-led posts at 2 per rolling 7 days until reviewed evidence supports more' });
     }
-    // 1. cadence
-    const posts = readExistingPosts(root).filter((p) => p.date);
-    const latest = posts.map((p) => Date.parse(p.date)).filter((t) => !Number.isNaN(t)).sort((a, b) => b - a)[0];
+    // 1. cadence — read through the store so a database-backed site is measured the same way.
+    const storedPosts = await getStore(root).listPosts();
+    const latest = storedPosts
+        .map((p) => Date.parse(p.updatedAt || p.publishedAt))
+        .filter((t) => !Number.isNaN(t))
+        .sort((a, b) => b - a)[0];
     const cadence = options.expectedCadenceDays ?? 7;
     if (!latest)
         checks.push({ name: 'cadence', status: 'warn', detail: 'no dated posts found' });
@@ -185,7 +187,7 @@ export async function runScorecard(root, options = {}) {
     }
     // 2. corpus audit
     try {
-        const audit = auditBlogCorpus(root, { now });
+        const audit = auditPosts(storedPosts, { now });
         const block = audit.filter((e) => e.verdict === 'BLOCK').length;
         const fix = audit.filter((e) => e.verdict === 'FIX').length;
         checks.push({ name: 'corpus', status: block ? 'fail' : fix ? 'warn' : 'pass', detail: `${audit.length} posts — SHIP ${audit.length - block - fix} · FIX ${fix} · BLOCK ${block}` });
@@ -211,11 +213,7 @@ export async function runScorecard(root, options = {}) {
     if (options.repo)
         checks.push(await checkOpenPrAge(options.repo, options.maxPrAgeHours ?? 48));
     // 5. live probe + retrieval access
-    const parsed = readGeneratedBlogPosts({
-        root,
-        blogDir: BLOG_CONFIG.paths.blogDir,
-        fallback: { description: '', author: '', heroImage: '', heroImageAltPrefix: BLOG_CONFIG.identity.name },
-    });
+    const parsed = storedPosts;
     if (options.liveProbe !== false) {
         checks.push(...(await liveProbeChecks(parsed, BLOG_CONFIG.identity.siteUrl, blogBasePath())));
         const robots = await fetchText(`${BLOG_CONFIG.identity.siteUrl}/robots.txt`);

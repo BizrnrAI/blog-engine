@@ -81,12 +81,14 @@ test('sources: normalize, allowlist, verify via hook, validator + frontmatter + 
 });
 
 // ---- image variants ----
-test('writeHeroVariants writes resized files and returns a srcset', async () => {
+test('writeHeroVariants writes resized files through the store and returns a srcset', async () => {
   configureTestEngine({ image: { ...configureTestEngine().config.image, variants: [640, 1024, 4000] } });
-  const dir = mkdtempSync(join(tmpdir(), 'blog-engine-variants-'));
+  const root = mkdtempSync(join(tmpdir(), 'blog-engine-variants-'));
   const full = await sharp({ create: { width: 1536, height: 1024, channels: 3, background: { r: 10, g: 20, b: 30 } } }).webp().toBuffer();
-  const srcset = await writeHeroVariants(dir, 'my-post', 'webp', full, 1536, '/assets/blog/generated/my-post.webp');
+  const srcset = await writeHeroVariants(root, 'my-post', 'webp', full, 1536, '/assets/blog/generated/my-post.webp');
   assert.equal(srcset, '/assets/blog/generated/my-post-640.webp 640w, /assets/blog/generated/my-post-1024.webp 1024w, /assets/blog/generated/my-post.webp 1536w');
+  // The filesystem store maps the public key back under public/.
+  const dir = join(root, 'public/assets/blog/generated');
   assert.ok(existsSync(join(dir, 'my-post-640.webp')) && existsSync(join(dir, 'my-post-1024.webp')));
   assert.ok(!existsSync(join(dir, 'my-post-4000.webp')), 'never upscale');
   assert.equal((await sharp(join(dir, 'my-post-640.webp')).metadata()).width, 640);

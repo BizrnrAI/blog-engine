@@ -468,6 +468,82 @@ export interface DeriveTopicArgs {
   existing: ExistingPost[];
 }
 
+export interface PutPostArgs {
+  post: GeneratedBlogPost;
+  cover: CoverImage;
+  /** The rendered file body — kept verbatim so a remote store can export back to files losslessly. */
+  markdown: string;
+  /** Publish date for a new post; for a refresh only the updated date moves. */
+  dateISO: string;
+  isRefresh: boolean;
+}
+
+/**
+ * Where posts and their assets live. The filesystem store is the default and reproduces the
+ * engine's original behaviour exactly; a Supabase store turns publishing into an upsert with no
+ * git, CI, or rebuild in the path. Everything in the pipeline reads and writes through this.
+ */
+export interface BlogStore {
+  /** Human-readable name, used in logs. */
+  name: string;
+  /** Repository root, when the store is filesystem-backed. */
+  root?: string;
+  /** Every post the site has published, newest first is not required. */
+  listPosts: () => Promise<ParsedBlogPost[]>;
+  /** Persist a post; returns an identifier for logging (a path, or table:site/slug). */
+  putPost: (args: PutPostArgs) => Promise<string>;
+  /** Store a hero/OG asset and return the URL the post should reference. */
+  putAsset?: (key: string, data: Buffer, contentType: string) => Promise<string>;
+}
+
+/** One site the blog service publishes for. */
+export interface ServiceSite {
+  /** Stable id (use the registry's site_key). */
+  id: string;
+  /** Build this site's runtime. Async so config can come from a registry query. */
+  runtime: () => BlogEngineRuntime | Promise<BlogEngineRuntime>;
+  /** Filesystem root; only meaningful for filesystem-backed sites. */
+  root?: string;
+  /** Posts per run (default 1). */
+  count?: number;
+  /** UTC weekdays this site publishes on (0=Sun). Omit for every run. */
+  days?: readonly number[];
+  /** Set false to pause a site without deleting its entry. */
+  enabled?: boolean;
+}
+
+export interface ServiceRunResult {
+  site: string;
+  status: 'published' | 'nothing-to-do' | 'skipped' | 'failed';
+  detail?: string;
+  published: string[];
+  refreshed: string[];
+  ms?: number;
+}
+
+export interface SupabaseStoreOptions {
+  /** Project URL; defaults to SUPABASE_URL. */
+  url?: string;
+  /** Service-role key; defaults to SUPABASE_SERVICE_ROLE_KEY. Never ship this to a browser. */
+  serviceKey?: string;
+  /** Tenant key — one row-space per site. */
+  siteId: string;
+  /** Table name (default 'blog_posts'). */
+  table?: string;
+  /** Storage bucket for heroes/OG cards (default 'blog-assets'). */
+  bucket?: string;
+  /** Postgres schema (default 'public'). */
+  schema?: string;
+  /** CDN origin serving the bucket, if you front it. */
+  publicBaseUrl?: string;
+  /** Author recorded on written rows. */
+  author?: string;
+  /** Write posts as 'draft' instead of 'published' (human release step). */
+  publishStatus?: 'draft' | 'published';
+  /** Include drafts when listing (default false). */
+  includeDrafts?: boolean;
+}
+
 export interface PersistPostArgs {
   post: GeneratedBlogPost;
   cover: CoverImage;
@@ -549,6 +625,11 @@ export interface BlogEngineHooks {
    * Default behaviour with no hook is unchanged: write the file.
    */
   persistPost?: (args: PersistPostArgs) => boolean | void | Promise<boolean | void>;
+  /**
+   * Replace the filesystem with another content store (e.g. createSupabaseStore(...)).
+   * With no store the engine reads and writes Markdown files exactly as before.
+   */
+  store?: BlogStore;
   /**
    * Own the frontmatter parse entirely (a real YAML parser, a different file format, extra
    * fields). Return null to fall back to the engine parser + alias normalization. Keys returned
