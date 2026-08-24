@@ -3,6 +3,32 @@
 All notable changes to `@bizrnr/blog-engine`. Consumers install from git, so
 the version in `package.json` is the contract marker.
 
+## 0.7.1 — 2026-08-24
+
+Documentation restructured so an agent lands on a decision, not a history.
+
+### Changed
+- **README** now opens with "Start here": where posts should live (database vs files), how much
+  a site has to write, and how to run many sites. Version numbers removed from headings — they
+  belong in this file.
+- **docs/ADOPTION.md rewritten** as a linear 8-step guide with two clearly marked tracks. It had
+  drifted into sections ordered 0, 0.5, 1–6, 8, 7, 8.4, 8.5, 9, 10 with release numbers in the
+  headings, which is unusable for a newcomer. Ends with a "your site doesn't match the defaults"
+  seam table so the answer to an odd requirement is never a fork.
+- **AGENTS.md** leads with a task → document table and states the single most useful decision
+  (use the store if the site can read a database at render time).
+- Traffic guidance extracted from the README into **docs/TRAFFIC.md**, ranked by measured return.
+- **docs/SERVICE.md** gained a deployment section: Vercel cron route, plain script, and the
+  complete environment list.
+
+### Added
+- **`examples/service/`** — a runnable two-site service: site briefs, runtime construction,
+  and the runner. Copy it and replace the briefs.
+- **`npm run verify:docs`** (in `npm run verify`) — asserts every module named in the README
+  exists, every internal documentation link resolves, and every symbol the docs tell you to
+  import is really exported. Documentation drift is now a CI failure.
+- Supabase and scheduling variables in `.env.example`.
+
 ## 0.7.0 — 2026-08-24
 
 Publishing without GitHub: content becomes data.
