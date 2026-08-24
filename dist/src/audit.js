@@ -86,12 +86,8 @@ export function auditPost(post, context) {
     const verdict = block.length ? 'BLOCK' : fix.length ? 'FIX' : 'SHIP';
     return { slug: post.slug, verdict, issues: [...block, ...fix] };
 }
-export function auditBlogCorpus(root, options = {}) {
-    const posts = readGeneratedBlogPosts({
-        root,
-        blogDir: options.blogDir || BLOG_CONFIG.paths.blogDir,
-        fallback: { description: '', author: '', heroImage: '', heroImageAltPrefix: BLOG_CONFIG.identity.name },
-    });
+/** Audit posts from ANY source — a filesystem read, a database query, a test fixture. */
+export function auditPosts(posts, options = {}) {
     const altCounts = new Map();
     for (const p of posts)
         altCounts.set(p.heroImageAlt, (altCounts.get(p.heroImageAlt) || 0) + 1);
@@ -119,6 +115,14 @@ export function auditBlogCorpus(root, options = {}) {
 /** Slugs the audit says must not appear in public surfaces — feed the discovery/RSS `exclude`. */
 export function blockedSlugs(entries) {
     return entries.filter((e) => e.verdict === 'BLOCK').map((e) => e.slug);
+}
+/** Audit the filesystem corpus at `root` (the default store). */
+export function auditBlogCorpus(root, options = {}) {
+    return auditPosts(readGeneratedBlogPosts({
+        root,
+        blogDir: options.blogDir || BLOG_CONFIG.paths.blogDir,
+        fallback: { description: '', author: '', heroImage: '', heroImageAltPrefix: BLOG_CONFIG.identity.name },
+    }), options);
 }
 export function formatAuditReport(entries) {
     const counts = { SHIP: 0, FIX: 0, BLOCK: 0 };

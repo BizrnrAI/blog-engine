@@ -28,6 +28,15 @@ export function blogBasePath() {
     const cleaned = '/' + raw.replace(/^\/+|\/+$/g, '');
     return cleaned === '/' ? '' : cleaned;
 }
+/** True when this site persists posts somewhere other than the filesystem. */
+export function hasRemoteStore() {
+    try {
+        return Boolean(getBlogRuntime().hooks?.store);
+    }
+    catch {
+        return false;
+    }
+}
 export function getBlogHooks() {
     return getBlogRuntime().hooks || {};
 }

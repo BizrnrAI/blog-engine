@@ -2,13 +2,13 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import sharp from 'sharp';
 import { join } from 'node:path';
 import { BLOG_CONFIG, blogBasePath, brandPersona, getBlogHooks, getBlogTopics } from './config.js';
-import { contentExtensions, parseBlogFrontmatter, readGeneratedBlogPosts } from './content-reader.js';
-import { readExistingPosts } from './existing-posts.js';
+import { contentExtensions, parseBlogFrontmatter } from './content-reader.js';
+import { getStore, listExistingPosts } from './store.js';
 import { contentRules, normalizeGeneratedPost, parseModelJson, relatedLinkTargets, validateGeneratedPost } from './generate-post.js';
 import { getGscPageQueries } from './gsc.js';
 import { toMarkdown } from './markdown.js';
 import { rankRescueCandidates } from './rank-rescue.js';
-import { auditBlogCorpus } from './audit.js';
+import { auditPosts } from './audit.js';
 import { INTERNAL_LINKS } from './topics.js';
 import { env } from './utils.js';
 /**
@@ -105,22 +105,27 @@ export function buildRefreshMessages(args) {
     ];
 }
 export async function refreshBlogPost(root, slug, args = {}) {
+    const store = getStore(root);
+    const posts = await store.listPosts();
+    const stored = posts.find((p) => p.slug === slug);
+    if (!stored)
+        throw new Error(`refresh: no such post ${slug} in store "${store.name}"`);
+    // A filesystem store keeps extras the parsed shape does not carry (gradient, feature flags),
+    // so read the raw frontmatter too and let it fill in around the stored post.
     const dir = join(root, BLOG_CONFIG.paths.blogDir);
     const file = contentExtensions().map((ext) => join(dir, `${slug}${ext}`)).find((f) => existsSync(f)) || join(dir, `${slug}${contentExtensions()[0]}`);
-    if (!existsSync(file))
-        throw new Error(`refresh: no such post ${file}`);
-    const raw = readFileSync(file, 'utf8');
-    const { frontmatter, content } = parseBlogFrontmatter(raw);
-    const existing = readExistingPosts(root);
+    const frontmatter = store.root && existsSync(file) ? parseBlogFrontmatter(readFileSync(file, 'utf8')).frontmatter : {};
+    const content = stored.content;
+    const existing = await listExistingPosts(root);
     const otherTitles = existing.filter((p) => p.slug !== slug).map((p) => p.title);
     const otherSlugs = existing.filter((p) => p.slug !== slug).map((p) => p.slug);
     // The slug is the one invariant of a refresh — pin it so normalizeGeneratedPost keeps it
     // verbatim and the validator asserts it. The title stays free: a refresh may sharpen it.
-    const topic = { type: 'editorial', keyword: frontmatter.title || slug, category: frontmatter.category || '', angle: 'refresh', mustBacklink: false, slug };
+    const topic = { type: 'editorial', keyword: stored.title || slug, category: stored.category || '', angle: 'refresh', mustBacklink: false, slug };
     const messages = buildRefreshMessages({
-        title: frontmatter.title || slug,
+        title: stored.title || slug,
         slug,
-        category: frontmatter.category || '',
+        category: stored.category || '',
         existingBody: content,
         queries: args.queries || [],
         otherTitles,
@@ -155,16 +160,16 @@ export async function refreshBlogPost(root, slug, args = {}) {
     // Preserve the visual + date identity of the post; only `updated` moves.
     post.heroImageAlt = undefined;
     const cover = {
-        image: frontmatter.image || '',
-        imageAlt: frontmatter.imageAlt || `${BLOG_CONFIG.identity.name} guide: ${post.title}`,
-        ogImage: frontmatter.ogImage || frontmatter.image || '',
+        image: stored.heroImage || '',
+        imageAlt: stored.heroImageAlt || `${BLOG_CONFIG.identity.name} guide: ${post.title}`,
+        ogImage: stored.ogImage || stored.heroImage || '',
         source: 'ai-generated',
-        ...(Number(frontmatter.imageWidth) ? { width: Number(frontmatter.imageWidth), height: Number(frontmatter.imageHeight) } : {}),
-        ...(frontmatter.imageSrcset ? { srcset: frontmatter.imageSrcset } : {}),
+        ...(stored.heroImageWidth ? { width: stored.heroImageWidth, height: stored.heroImageHeight } : {}),
+        ...(stored.heroImageSrcset ? { srcset: stored.heroImageSrcset } : {}),
     };
     // A pre-contract post has no recorded dimensions; read them from the local hero so the refresh
     // also closes the CLS gap instead of preserving it.
-    if (!cover.width && cover.image.startsWith('/')) {
+    if (!cover.width && store.root && cover.image.startsWith('/')) {
         const heroFile = join(root, 'public', cover.image);
         if (existsSync(heroFile)) {
             try {
@@ -178,16 +183,21 @@ export async function refreshBlogPost(root, slug, args = {}) {
         }
     }
     const today = new Date().toISOString().slice(0, 10);
-    const renderArgs = { post, cover, gradient: frontmatter.gradient || '', dateISO: frontmatter.date || today, author: frontmatter.author || BLOG_CONFIG.identity.author?.name };
+    const renderArgs = { post, cover, gradient: frontmatter.gradient || '', dateISO: stored.publishedAt || today, author: stored.author || BLOG_CONFIG.identity.author?.name };
     const render = getBlogHooks().renderMarkdown;
     let markdown = render ? render(renderArgs) : toMarkdown(post, renderArgs);
     // toMarkdown writes updated = dateISO; a refresh must carry today's date there.
     markdown = markdown.replace(/^updated: .*$/m, `updated: ${today}`);
     if (!args.dryRun) {
         const persist = getBlogHooks().persistPost;
-        const alsoWriteFile = persist ? (await persist({ post, cover, markdown, file, root, isRefresh: true })) === true : true;
-        if (alsoWriteFile)
-            writeFileSync(file, markdown, 'utf8');
+        if (persist) {
+            const alsoWriteFile = (await persist({ post, cover, markdown, file, root, isRefresh: true })) === true;
+            if (alsoWriteFile)
+                writeFileSync(file, markdown, 'utf8');
+        }
+        else {
+            await store.putPost({ post, cover, markdown, dateISO: today, isRefresh: true });
+        }
     }
     return { post, markdown, file };
 }
@@ -200,11 +210,14 @@ export async function refreshBlogRun(root, options) {
     const candidates = rankRescueCandidates(rows, { pathPrefix: prefix });
     const byslug = new Map(candidates.map((c) => [c.slug, c]));
     let slugs = options.slugs && options.slugs.length ? options.slugs : candidates.filter((c) => c.action === 'refresh').slice(0, options.max ?? 1).map((c) => c.slug);
-    slugs = slugs.filter((s) => contentExtensions().some((ext) => existsSync(join(root, BLOG_CONFIG.paths.blogDir, `${s}${ext}`))));
+    {
+        const known = new Set((await getStore(root).listPosts()).map((p) => p.slug));
+        slugs = slugs.filter((s) => known.has(s));
+    }
     if (!slugs.length && options.backlog !== false) {
         // No demand-led candidate: heal the long tail — the FIX post with the most issues, oldest first.
-        const fixes = auditBlogCorpus(root).filter((e) => e.verdict === 'FIX');
-        const dates = new Map(readExistingPosts(root).map((p) => [p.slug, p.date || '']));
+        const fixes = auditPosts(await getStore(root).listPosts()).filter((e) => e.verdict === 'FIX');
+        const dates = new Map((await listExistingPosts(root)).map((p) => [p.slug, p.date || '']));
         fixes.sort((a, b) => b.issues.length - a.issues.length || (dates.get(a.slug) || '').localeCompare(dates.get(b.slug) || ''));
         if (fixes.length) {
             slugs = [fixes[0].slug];
@@ -215,8 +228,7 @@ export async function refreshBlogRun(root, options) {
     // before then destroys the evidence for whether the last rewrite worked.
     const cooldown = contentRules().minDaysBetweenRefresh ?? 45;
     if (cooldown > 0 && !(options.slugs && options.slugs.length)) {
-        const recent = new Map(readGeneratedBlogPosts({ root, blogDir: BLOG_CONFIG.paths.blogDir, fallback: { description: '', author: '', heroImage: '', heroImageAltPrefix: '' } })
-            .map((p) => [p.slug, Date.parse(p.updatedAt || p.publishedAt)]));
+        const recent = new Map((await getStore(root).listPosts()).map((p) => [p.slug, Date.parse(p.updatedAt || p.publishedAt)]));
         const cutoff = Date.now() - cooldown * 864e5;
         const held = slugs.filter((s) => { const t = recent.get(s); return t !== undefined && !Number.isNaN(t) && t > cutoff; });
         if (held.length)

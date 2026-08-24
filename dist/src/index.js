@@ -1,10 +1,13 @@
-export { BLOG_CONFIG, blogBasePath, brandPersona, configureBlogEngine, getBlogConfig, getBlogHooks, getBlogRuntime, getBlogTopics } from './config.js';
+export { BLOG_CONFIG, blogBasePath, brandPersona, configureBlogEngine, getBlogConfig, getBlogHooks, getBlogRuntime, getBlogTopics, hasRemoteStore } from './config.js';
+export { createFileStore, getStore, listExistingPosts } from './store.js';
+export { createSupabaseStore } from './supabase-store.js';
+export { formatServiceReport, runBlogService } from './service.js';
 export { contentRules, generateBlogPost, normalizeGeneratedPost, parseModelJson, relatedLinkTargets, repairJsonStringNewlines, validateGeneratedPost } from './generate-post.js';
 export { generateCoverImage, applyWatermark, heroAltText, makeOgCard, writeHeroVariants } from './images.js';
 export { countPostsSince, generateBlogRun } from './publisher.js';
 export { buildRefreshMessages, refreshBlogPost, refreshBlogRun } from './refresh.js';
 export { cannibalizationPairs, classifyAction, classifyQueryIntent, positionMultiplier, rankRescueCandidates, slugFromPage } from './rank-rescue.js';
-export { auditBlogCorpus, auditPost, blockedSlugs, formatAuditReport } from './audit.js';
+export { auditBlogCorpus, auditPost, auditPosts, blockedSlugs, formatAuditReport } from './audit.js';
 export { corroborates, duckDuckGoSuggestions, hasSecondDemandSignal } from './demand.js';
 export { hostAllowed, normalizeSources, verifySources } from './sources.js';
 export { generateFanoutPassages, questionLikeQueries, validateFanout } from './fanout.js';

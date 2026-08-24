@@ -30,6 +30,9 @@ pluggable seam you can point at your own stack.
 | Hero images | `src/images.ts` | AI generation (pluggable), Sharp logo watermarking, curated fallback, branded descriptive alt text |
 | OG cards | `src/images.ts` | Deterministic branded 1200×630 SVG→JPEG cards, no model call. Disable with `image.og.enabled: false` to let the hero serve as the OG image |
 | Markdown output | `src/markdown.ts` | Frontmatter with title/description/tags/dates/answer/FAQs/images. Override the whole shape with the `renderMarkdown` hook |
+| Content store | `src/store.ts` | The engine's only route to posts and assets — filesystem by default, swappable in one line |
+| Supabase store | `src/supabase-store.ts` | Posts as rows, assets in Storage, via plain `fetch` (no SDK dependency) |
+| Blog service | `src/service.ts` | One process publishes for many sites; per-site isolation and schedules |
 | Frontmatter | `src/frontmatter.ts` | Key aliases (pubDate→date, cover→image, readingTime→readMins, …) so sites keeping their own shape still feed cadence, audit, refresh and schema |
 | Content reading | `src/content-reader.ts` | Parse generated posts back for blog index, RSS, sitemap, `llms.txt` |
 | JSON-LD | `src/schema.ts` | `BlogPosting` + `FAQPage` + `BreadcrumbList` graph builders with stable `@id`s |
@@ -56,6 +59,22 @@ npm install github:BizrnrAI/blog-engine#<commit-or-tag>   # public repo, compile
 
 Pin a commit for reproducible builds; bump deliberately. No build step runs on
 install.
+
+## Two ways to run it
+
+**Filesystem (default).** Posts are Markdown in the repo, published by CI. Unchanged, and right
+for static-export sites.
+
+**Service + store (lowest friction).** Posts are rows in Supabase, assets are objects in Storage,
+and one service publishes for every site — no git, no CI, no tokens, no rebuild in the publishing
+path. One line switches a site over:
+
+```ts
+hooks: { store: createSupabaseStore({ siteId: 'my-site' }) }
+```
+
+See [docs/SERVICE.md](docs/SERVICE.md). Both models run the same content contract, the same
+validators and the same scorecard.
 
 ## Quickstart
 

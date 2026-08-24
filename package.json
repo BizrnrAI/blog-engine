@@ -1,6 +1,6 @@
 {
   "name": "@bizrnr/blog-engine",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Canonical BizRnR autonomous blog engine for RSS, image generation, watermarking, and PR-based publishing.",
   "type": "module",
   "main": "./dist/src/index.js",
@@ -16,7 +16,8 @@
     "README.md",
     "AGENTS.md",
     "docs",
-    "examples"
+    "examples",
+    "sql"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",

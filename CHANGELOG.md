@@ -3,6 +3,38 @@
 All notable changes to `@bizrnr/blog-engine`. Consumers install from git, so
 the version in `package.json` is the contract marker.
 
+## 0.7.0 — 2026-08-24
+
+Publishing without GitHub: content becomes data.
+
+### Added
+- **`BlogStore` seam** (`src/store.ts`) — the engine's single route to persisted posts and
+  assets. Cadence counting, topic dedup, refresh, the corpus audit, discovery and the scorecard
+  all read through `listPosts()`; publishing goes through `putPost()` / `putAsset()`.
+  `createFileStore()` is the default and reproduces previous behaviour exactly.
+- **`createSupabaseStore()`** (`src/supabase-store.ts`) — posts as rows, assets in Storage,
+  implemented with plain `fetch` against PostgREST and the Storage REST API. **No new
+  dependency.** Upserts on `(site_id, slug)`; a refresh never moves `published_at`.
+- **`sql/0001_blog_posts.sql`** — canonical schema for every site: one table partitioned by
+  `site_id`, RLS limiting anonymous reads to published rows, indexes for the engine's hot paths,
+  and a public `blog-assets` bucket.
+- **`runBlogService(sites, options)`** (`src/service.ts`) — one process publishes for many
+  sites, with per-site schedules (`days`), `enabled` pausing, `only` filtering, and failure
+  isolation: one site's exception never stops the fleet. `formatServiceReport()` for logs.
+- `auditPosts(posts)` — audit any source, not just the filesystem. `hasRemoteStore()`.
+- `docs/SERVICE.md`.
+
+### Changed
+- `writeHeroVariants(root, ...)` takes the repo root and writes through the store (was an output
+  directory). Hero, variants and the OG card all route through `putAsset`, so a remote store
+  returns CDN URLs and nothing lands in `public/`.
+- A store-backed run no longer creates the content directory on disk.
+- The scorecard's cadence and corpus checks read the store.
+
+### Compatibility
+- Fully backward compatible: with no `hooks.store` the engine reads and writes Markdown exactly
+  as before. `persistPost` still takes precedence over the store when both are set.
+
 ## 0.6.0 — 2026-08-24
 
 Fleet-readiness release: the gaps that blocked whole classes of site from adopting the engine.

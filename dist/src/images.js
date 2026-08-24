@@ -1,9 +1,11 @@
 import { generateImage } from 'ai';
 import { createGateway } from '@ai-sdk/gateway';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import sharp from 'sharp';
 import { BLOG_CONFIG, getBlogHooks } from './config.js';
+import { getStore } from './store.js';
+import { mimeTypeFor } from './utils.js';
 import { GRADIENTS, HERO_PHOTOS } from './topics.js';
 import { xmlEscape } from './utils.js';
 function ensureDir(path) {
@@ -115,7 +117,7 @@ async function fetchRawHero(post, topic) {
  * Responsive variants (image.variants, e.g. [1024, 640]) written as <slug>-<w>.<format>; returns
  * an HTML srcset string including the full-size hero, or '' when no variants are configured.
  */
-export async function writeHeroVariants(outDir, slug, format, fullBuf, fullWidth, publicPath) {
+export async function writeHeroVariants(root, slug, format, fullBuf, fullWidth, publicPath) {
     const widths = (BLOG_CONFIG.image.variants || []).filter((w) => w > 0 && (!fullWidth || w < fullWidth)).sort((a, b) => a - b);
     if (!widths.length)
         return '';
@@ -123,12 +125,22 @@ export async function writeHeroVariants(outDir, slug, format, fullBuf, fullWidth
     const dir = publicPath.slice(0, publicPath.lastIndexOf('/'));
     for (const w of widths) {
         const buf = await encodeTo(format, sharp(fullBuf).resize({ width: w }));
-        writeFileSync(join(outDir, `${slug}-${w}.${format}`), buf);
-        entries.push(`${dir}/${slug}-${w}.${format} ${w}w`);
+        const url = await storeAsset(root, `${dir}/${slug}-${w}.${format}`, buf, mimeTypeFor(format));
+        entries.push(`${url} ${w}w`);
     }
     if (fullWidth)
         entries.push(`${publicPath} ${fullWidth}w`);
     return entries.join(', ');
+}
+/**
+ * Persist an image through the configured store: the filesystem store writes it under public/
+ * and returns the same path as always; a remote store uploads it and returns a CDN URL.
+ */
+async function storeAsset(root, key, data, contentType) {
+    const store = getStore(root);
+    if (!store.putAsset)
+        throw new Error(`store "${store.name}" cannot store assets`);
+    return store.putAsset(key, data, contentType);
 }
 async function generateAiHero(root, post, topic) {
     try {
@@ -142,10 +154,10 @@ async function generateAiHero(root, post, topic) {
         const outFile = join(outDir, `${post.slug}.${format}`);
         // applyWatermark returns WebP; re-encode only when the configured format differs.
         const finalBuf = format === 'webp' ? watermarked : await encodeTo(format, sharp(watermarked));
-        writeFileSync(outFile, finalBuf);
         const dims = await sharp(finalBuf).metadata();
-        const publicPath = `/${BLOG_CONFIG.paths.heroDir.replace(/^public\//, '')}/${post.slug}.${format}`;
-        const srcset = await writeHeroVariants(outDir, post.slug, format, finalBuf, dims.width, publicPath);
+        const key = `/${BLOG_CONFIG.paths.heroDir.replace(/^public\//, '')}/${post.slug}.${format}`;
+        const publicPath = await storeAsset(root, key, finalBuf, mimeTypeFor(format));
+        const srcset = await writeHeroVariants(root, post.slug, format, finalBuf, dims.width, key);
         return {
             image: publicPath,
             imageAlt: heroAltText(post),
@@ -220,11 +232,8 @@ export async function makeOgCard(root, post, dryRun = false) {
   <text x="${pad}" y="${H - 56}" font-family='${c.uiFont}' font-size="20" fill="${c.colors.dim}">${xmlEscape(footer)}</text>
   <text x="${W - pad}" y="${H - 56}" text-anchor="end" font-family='${c.uiFont}' font-size="20" fill="${c.colors.gold2}" font-weight="600">${xmlEscape(BLOG_CONFIG.identity.siteHost)}</text>
 </svg>`;
-    const outDir = join(root, BLOG_CONFIG.paths.assetDir);
-    ensureDir(outDir);
-    const outFile = join(outDir, `${post.slug}.jpg`);
-    await sharp(Buffer.from(svg)).jpeg({ quality: 86, mozjpeg: true }).toFile(outFile);
-    return rel;
+    const card = await sharp(Buffer.from(svg)).jpeg({ quality: 86, mozjpeg: true }).toBuffer();
+    return storeAsset(root, rel, card, 'image/jpeg');
 }
 export async function generateCoverImage(root, post, topic, ordinal, dryRun = false) {
     // The branded SVG card is on by default. When a site turns it off, the hero doubles as the OG

@@ -37,6 +37,15 @@ export function blogBasePath(): string {
   return cleaned === '/' ? '' : cleaned;
 }
 
+/** True when this site persists posts somewhere other than the filesystem. */
+export function hasRemoteStore(): boolean {
+  try {
+    return Boolean(getBlogRuntime().hooks?.store);
+  } catch {
+    return false;
+  }
+}
+
 export function getBlogHooks(): BlogEngineHooks {
   return getBlogRuntime().hooks || {};
 }
