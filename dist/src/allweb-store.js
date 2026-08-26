@@ -10,30 +10,64 @@ export function createAllWebStore(options) {
     const apiUrl = required(options.apiUrl || process.env.ALLWEB_SITE_AGENT_URL, 'apiUrl (or ALLWEB_SITE_AGENT_URL)');
     const token = required(options.token || process.env.ALLWEB_SITE_TOKEN, 'token (or ALLWEB_SITE_TOKEN)');
     const siteId = required(options.siteId, 'siteId');
+    const timeoutMs = boundedInteger(options.timeoutMs, 100, 60_000, 8_000, 'timeoutMs');
+    const pageSize = boundedInteger(options.pageSize, 1, 250, 200, 'pageSize');
     async function call(body) {
-        const response = await fetch(apiUrl, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ site_id: siteId, ...body }),
-        });
-        const result = await response.json().catch(() => ({}));
-        if (!response.ok) {
-            const error = new Error(`AllWeb ${String(body.action)} ${response.status}: ${String(result.error || 'request_failed')}`);
-            Object.assign(error, { status: response.status, code: result.error });
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                // Tenant selection is deliberately absent. AllWeb derives site_id from
+                // the scoped token and rejects attempts to address another website.
+                body: JSON.stringify(body),
+                signal: controller.signal,
+            });
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok || result.ok !== true) {
+                const error = new Error(`AllWeb ${String(body.action)} ${response.status}: ${String(result.error || 'request_failed')}`);
+                Object.assign(error, { status: response.status, code: result.error });
+                throw error;
+            }
+            return result;
+        }
+        catch (error) {
+            if (error?.name === 'AbortError')
+                throw new Error(`AllWeb ${String(body.action)} timed out after ${timeoutMs}ms`);
             throw error;
         }
-        return result;
+        finally {
+            clearTimeout(timer);
+        }
     }
     return {
         name: `allweb:${siteId}`,
         async listPosts() {
-            const result = await call({
-                action: 'blog_list',
-                ...(options.includeDrafts ? {} : { status: 'published' }),
-                limit: 1000,
-                include_content: true,
-            });
-            return (result.posts || []).map((row) => rowToPost(row));
+            const posts = [];
+            let offset = 0;
+            while (true) {
+                const result = await call({
+                    action: 'blog_list',
+                    ...(options.includeDrafts ? {} : { status: 'published' }),
+                    limit: pageSize, offset, include_content: true,
+                });
+                const rows = Array.isArray(result.posts) ? result.posts : [];
+                for (const row of rows) {
+                    if (String(row.site_id || '') !== siteId)
+                        throw new Error(`AllWeb tenant violation: received site_id ${String(row.site_id || '<missing>')}`);
+                    posts.push(rowToPost(row));
+                }
+                const pagination = result.pagination && typeof result.pagination === 'object' ? result.pagination : null;
+                const hasMore = pagination ? pagination.has_more === true : rows.length === pageSize;
+                if (!hasMore || rows.length === 0)
+                    break;
+                const next = Number(pagination?.next_offset ?? offset + rows.length);
+                if (!Number.isInteger(next) || next <= offset)
+                    throw new Error('AllWeb blog_list returned invalid pagination');
+                offset = next;
+            }
+            return posts;
         },
         async putPost({ post, cover, markdown, dateISO, isRefresh }) {
             let expectedRevision;
@@ -87,6 +121,13 @@ export function createAllWebStore(options) {
 function required(value, name) {
     if (!value)
         throw new Error(`AllWeb store: missing ${name}`);
+    return value;
+}
+function boundedInteger(value, min, max, fallback, name) {
+    if (value == null)
+        return fallback;
+    if (!Number.isInteger(value) || value < min || value > max)
+        throw new Error(`AllWeb store: invalid ${name}`);
     return value;
 }
 //# sourceMappingURL=allweb-store.js.map

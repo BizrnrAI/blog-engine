@@ -557,6 +557,46 @@ export interface AllWebStoreOptions {
   publishStatus?: 'draft' | 'published';
   /** Include non-published posts during corpus operations. */
   includeDrafts?: boolean;
+  /** Abort an unresponsive gateway request after this many milliseconds (default 8000). */
+  timeoutMs?: number;
+  /** Page size used while reading a corpus (default 200, max 250). */
+  pageSize?: number;
+}
+
+/** A tenant-verified row returned by the AllWeb rendering client. */
+export interface AllWebBlogPost extends ParsedBlogPost {
+  /** Immutable AllWeb site UUID supplied by the gateway row. */
+  siteId: string;
+  status: string;
+  revision: number;
+}
+
+export interface AllWebBlogReaderOptions {
+  /** Site-agent Edge Function URL; defaults to ALLWEB_SITE_AGENT_URL. */
+  apiUrl?: string;
+  /** Exact site-scoped token; defaults to ALLWEB_SITE_TOKEN. */
+  token?: string;
+  /** Immutable AllWeb site UUID from website.manifest.json. */
+  siteId: string;
+  /** Abort an unresponsive gateway request after this many milliseconds (default 5000). */
+  timeoutMs?: number;
+  /** In-process read cache lifetime (default 30000ms; set 0 to disable). */
+  cacheTtlMs?: number;
+  /** Page size used while reading the corpus (default 200, max 250). */
+  pageSize?: number;
+  /** Return []/null and report errors instead of throwing (default true for public rendering). */
+  failClosed?: boolean;
+  /** Optional structured error reporter; defaults to console.error. */
+  onError?: (operation: string, error: Error) => void;
+}
+
+export interface AllWebBlogReader {
+  /** Every published post, following AllWeb pagination until the corpus is complete. */
+  listPublishedPosts: (options?: { includeContent?: boolean; force?: boolean }) => Promise<AllWebBlogPost[]>;
+  /** One published post by slug. Draft/review/archived rows are returned as null. */
+  getPublishedPost: (slug: string, options?: { force?: boolean }) => Promise<AllWebBlogPost | null>;
+  /** Drop all in-process list and slug caches. */
+  invalidate: () => void;
 }
 
 export interface PersistPostArgs {

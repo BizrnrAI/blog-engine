@@ -68,6 +68,25 @@ hooks: {
 The adapter reads `ALLWEB_SITE_TOKEN`; AllWeb binds that token to exactly one
 immutable website tenant.
 
+Website rendering uses the matching read-only surface rather than copied fetch
+logic:
+
+```ts
+import { createAllWebBlogReader } from '@bizrnr/blog-engine';
+
+const blog = createAllWebBlogReader({
+  siteId: websiteManifest.site_id,
+  apiUrl: websiteManifest.allweb.api_url,
+});
+
+const posts = await blog.listPublishedPosts({ includeContent: false });
+const post = await blog.getPublishedPost('canonical-slug');
+```
+
+The reader follows pagination, verifies every returned tenant UUID, rejects
+non-published rows, bounds network waits, and uses a short invalidatable cache.
+It exposes no mutation method.
+
 ## What you get in every post
 
 - An answer-first lede and a 40–60-word quick answer, server-rendered for answer engines
@@ -87,6 +106,7 @@ immutable website tenant.
 |---|---|---|
 | **Content store** | `store.ts` | The engine's only route to posts and assets. Filesystem by default, swappable in one line |
 | **Supabase store** | `supabase-store.ts` | Posts as rows, assets in Storage, via plain `fetch` — no SDK dependency |
+| **AllWeb reader/store** | `allweb-reader.ts` / `allweb-store.ts` | Tenant-bound rendering plus optimistic publishing through the site-agent gateway |
 | **Blog service** | `service.ts` | One process publishes for many sites; per-site schedules and failure isolation |
 | Post generation | `generate-post.ts` | The content contract, strict-JSON prompting, tolerant parsing, 3-attempt validate-and-retry |
 | Topic selection | `topic-rotation.ts`, `demand.ts` | Search Console demand → editorial pool → cross-promo, with a two-signal demand gate |
