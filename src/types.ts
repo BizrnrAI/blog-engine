@@ -544,6 +544,21 @@ export interface SupabaseStoreOptions {
   includeDrafts?: boolean;
 }
 
+export interface AllWebStoreOptions {
+  /** Site-agent Edge Function URL; defaults to ALLWEB_SITE_AGENT_URL. */
+  apiUrl?: string;
+  /** Exact site-scoped token; defaults to ALLWEB_SITE_TOKEN. Never use a Supabase service role. */
+  token?: string;
+  /** Immutable AllWeb site UUID from website.manifest.json. */
+  siteId: string;
+  /** Author recorded on written rows. */
+  author?: string;
+  /** Write posts as drafts instead of publishing immediately. */
+  publishStatus?: 'draft' | 'published';
+  /** Include non-published posts during corpus operations. */
+  includeDrafts?: boolean;
+}
+
 export interface PersistPostArgs {
   post: GeneratedBlogPost;
   cover: CoverImage;

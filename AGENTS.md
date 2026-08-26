@@ -20,6 +20,9 @@ need no BizRnR-internal system, memory, or credential store to do correct work h
 Supabase store. Publishing becomes an upsert and every git/CI/token/rebuild failure mode
 disappears. If it's a static export, use the filesystem store. Both are first-class.
 
+For an AllWeb-managed repository, use `createAllWebStore` with its exact site
+client. Never place a Supabase service-role key in an individual website repo.
+
 ## Ground rules
 
 - **Verify before claiming done.** `npm run verify` (typecheck + tests + build) must pass. Tests
