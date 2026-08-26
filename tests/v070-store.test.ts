@@ -10,6 +10,7 @@ import { runScorecard } from '../src/scorecard.js';
 import { formatServiceReport, runBlogService } from '../src/service.js';
 import { createFileStore, getStore } from '../src/store.js';
 import { createSupabaseStore } from '../src/supabase-store.js';
+import { createAllWebStore } from '../src/allweb-store.js';
 import type { BlogEngineRuntime, BlogStore, ParsedBlogPost, PutPostArgs, ServiceSite } from '../src/types.js';
 import { configureTestEngine, testConfig, validPost } from './helpers.js';
 
@@ -224,6 +225,52 @@ test('createSupabaseStore fails fast on missing credentials', () => {
   } finally {
     if (url) process.env.SUPABASE_URL = url;
     if (key) process.env.SUPABASE_SERVICE_ROLE_KEY = key;
+  }
+});
+
+test('createAllWebStore uses only the site-agent gateway and preserves optimistic revisions', async () => {
+  const calls: Record<string, any>[] = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async (_url: string | URL, init: RequestInit = {}) => {
+    const body = JSON.parse(String(init.body));
+    calls.push({ headers: init.headers, body });
+    if (body.action === 'blog_list') return Response.json({ ok: true, posts: [{
+      slug: 'existing', title: 'Existing', description: 'stored', category: 'Guides', tags: [],
+      author: 'Alex', published_at: '2026-08-01', updated_at: '2026-08-01', answer: 'Answer',
+      content: '## Heading\nBody', faqs: [], sources: [], status: 'published',
+    }] });
+    if (body.action === 'blog_get') return Response.json({ ok: true, post: { slug: body.slug, revision: 7 } });
+    if (body.action === 'blog_asset_upload') return Response.json({ ok: true, asset: { public_url: 'https://cdn.example/x.webp' } });
+    return Response.json({ ok: true, post: { slug: body.slug, revision: 8 } });
+  }) as typeof fetch;
+
+  try {
+    const store = createAllWebStore({
+      apiUrl: 'https://allweb.example/functions/v1/site-agent', token: 'awt_scoped',
+      siteId: '6b053b68-51a0-4cfd-98e3-835e584f995e', author: 'Alex',
+    });
+    assert.equal(store.name, 'allweb:6b053b68-51a0-4cfd-98e3-835e584f995e');
+    assert.equal((await store.listPosts())[0].slug, 'existing');
+    await store.putPost({
+      post: validPost(), cover: { image: '/h.webp', imageAlt: 'a', ogImage: '/o.jpg', source: 'ai-generated' },
+      markdown: '---\nx\n---', dateISO: '2026-08-26', isRefresh: true,
+    });
+    const write = calls.find((call) => call.body.action === 'blog_upsert');
+    assert.ok(write);
+    assert.equal(write.body.site_id, '6b053b68-51a0-4cfd-98e3-835e584f995e');
+    assert.equal(write.body.expected_revision, 7);
+    assert.equal(write.body.status, 'published');
+    assert.equal(String((write.headers as Record<string, string>).Authorization), 'Bearer awt_scoped');
+    assert.equal(JSON.stringify(calls).includes('service_role'), false);
+
+    const assetUrl = await store.putAsset!('/assets/blog/x.webp', Buffer.from('img'), 'image/webp');
+    assert.equal(assetUrl, 'https://cdn.example/x.webp');
+    const asset = calls.find((call) => call.body.action === 'blog_asset_upload');
+    assert.ok(asset);
+    assert.equal(asset.body.path, 'assets/blog/x.webp');
+    assert.equal(asset.body.data_base64, Buffer.from('img').toString('base64'));
+  } finally {
+    globalThis.fetch = realFetch;
   }
 });
 

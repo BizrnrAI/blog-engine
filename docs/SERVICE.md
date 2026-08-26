@@ -31,6 +31,23 @@ Sites
 
 ## Setup
 
+AllWeb-managed website repositories use `createAllWebStore`, which calls the
+site-scoped gateway and never receives a Supabase service-role key:
+
+```ts
+import { createAllWebStore } from '@bizrnr/blog-engine';
+
+hooks: {
+  store: createAllWebStore({
+    siteId: websiteManifest.site_id,
+    apiUrl: websiteManifest.allweb.api_url,
+  }),
+}
+```
+
+The direct `createSupabaseStore` path below remains appropriate for the trusted
+centralized service.
+
 **1. Apply the schema** (once per Supabase project):
 
 ```bash

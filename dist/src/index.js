@@ -1,6 +1,7 @@
 export { BLOG_CONFIG, blogBasePath, brandPersona, configureBlogEngine, getBlogConfig, getBlogHooks, getBlogRuntime, getBlogTopics, hasRemoteStore } from './config.js';
 export { createFileStore, getStore, listExistingPosts } from './store.js';
 export { createSupabaseStore } from './supabase-store.js';
+export { createAllWebStore } from './allweb-store.js';
 export { formatServiceReport, runBlogService } from './service.js';
 export { contentRules, generateBlogPost, normalizeGeneratedPost, parseModelJson, relatedLinkTargets, repairJsonStringNewlines, validateGeneratedPost } from './generate-post.js';
 export { generateCoverImage, applyWatermark, heroAltText, makeOgCard, writeHeroVariants } from './images.js';

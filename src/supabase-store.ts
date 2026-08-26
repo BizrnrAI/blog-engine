@@ -37,7 +37,7 @@ function resolve(options: SupabaseStoreOptions) {
   };
 }
 
-function rowToPost(row: Record<string, any>): ParsedBlogPost {
+export function rowToPost(row: Record<string, any>): ParsedBlogPost {
   const content = String(row.content || '');
   const answer = String(row.answer || row.description || '');
   return {

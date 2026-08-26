@@ -30,7 +30,7 @@ function resolve(options) {
         schema: options.schema || 'public',
     };
 }
-function rowToPost(row) {
+export function rowToPost(row) {
     const content = String(row.content || '');
     const answer = String(row.answer || row.description || '');
     return {

@@ -51,6 +51,23 @@ await generateBlogRun(process.cwd(), { count: 1, dryRun: false, skipPing: false 
 That publishes a complete, validated, illustrated post and submits it for indexing. Your site
 renders the row.
 
+AllWeb-managed repositories use the same engine with a least-privilege adapter,
+not a Supabase service role:
+
+```ts
+import { createAllWebStore } from '@bizrnr/blog-engine';
+
+hooks: {
+  store: createAllWebStore({
+    siteId: websiteManifest.site_id,
+    apiUrl: websiteManifest.allweb.api_url,
+  }),
+}
+```
+
+The adapter reads `ALLWEB_SITE_TOKEN`; AllWeb binds that token to exactly one
+immutable website tenant.
+
 ## What you get in every post
 
 - An answer-first lede and a 40–60-word quick answer, server-rendered for answer engines
