@@ -3,6 +3,24 @@
 All notable changes to `@bizrnr/blog-engine`. Consumers install from git, so
 the version in `package.json` is the contract marker.
 
+## 0.8.0 — 2026-08-26
+
+Canonical AllWeb publishing and rendering for a fleet of isolated websites.
+
+### Added
+- **`createAllWebBlogReader()`** — one reusable public-rendering client for every AllWeb site.
+  It follows the complete paginated corpus, targets one slug through `blog_get`, verifies every
+  returned tenant UUID, rejects drafts, bounds requests with a timeout, deduplicates warm reads
+  with a short invalidatable cache, and exposes no mutation method.
+- `AllWebBlogPost`, `AllWebBlogReader`, and `AllWebBlogReaderOptions` public types.
+
+### Changed
+- `createAllWebStore()` no longer sends `site_id`; tenant selection belongs exclusively to the
+  scoped gateway credential. Corpus reads paginate and validate every returned row before the
+  engine can use it.
+- AllWeb documentation now distinguishes the publishing store from the rendering reader and
+  forbids dynamic routes from searching a capped list for one slug.
+
 ## 0.7.1 — 2026-08-24
 
 Documentation restructured so an agent lands on a decision, not a history.

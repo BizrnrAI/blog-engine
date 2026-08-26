@@ -11,6 +11,7 @@ import { formatServiceReport, runBlogService } from '../src/service.js';
 import { createFileStore, getStore } from '../src/store.js';
 import { createSupabaseStore } from '../src/supabase-store.js';
 import { createAllWebStore } from '../src/allweb-store.js';
+import { createAllWebBlogReader } from '../src/allweb-reader.js';
 import type { BlogEngineRuntime, BlogStore, ParsedBlogPost, PutPostArgs, ServiceSite } from '../src/types.js';
 import { configureTestEngine, testConfig, validPost } from './helpers.js';
 
@@ -235,10 +236,11 @@ test('createAllWebStore uses only the site-agent gateway and preserves optimisti
     const body = JSON.parse(String(init.body));
     calls.push({ headers: init.headers, body });
     if (body.action === 'blog_list') return Response.json({ ok: true, posts: [{
+      site_id: '6b053b68-51a0-4cfd-98e3-835e584f995e',
       slug: 'existing', title: 'Existing', description: 'stored', category: 'Guides', tags: [],
       author: 'Alex', published_at: '2026-08-01', updated_at: '2026-08-01', answer: 'Answer',
       content: '## Heading\nBody', faqs: [], sources: [], status: 'published',
-    }] });
+    }], pagination: { has_more: false, next_offset: null } });
     if (body.action === 'blog_get') return Response.json({ ok: true, post: { slug: body.slug, revision: 7 } });
     if (body.action === 'blog_asset_upload') return Response.json({ ok: true, asset: { public_url: 'https://cdn.example/x.webp' } });
     return Response.json({ ok: true, post: { slug: body.slug, revision: 8 } });
@@ -257,7 +259,7 @@ test('createAllWebStore uses only the site-agent gateway and preserves optimisti
     });
     const write = calls.find((call) => call.body.action === 'blog_upsert');
     assert.ok(write);
-    assert.equal(write.body.site_id, '6b053b68-51a0-4cfd-98e3-835e584f995e');
+    assert.equal('site_id' in write.body, false, 'the scoped client never chooses its tenant');
     assert.equal(write.body.expected_revision, 7);
     assert.equal(write.body.status, 'published');
     assert.equal(String((write.headers as Record<string, string>).Authorization), 'Bearer awt_scoped');
@@ -269,6 +271,89 @@ test('createAllWebStore uses only the site-agent gateway and preserves optimisti
     assert.ok(asset);
     assert.equal(asset.body.path, 'assets/blog/x.webp');
     assert.equal(asset.body.data_base64, Buffer.from('img').toString('base64'));
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('createAllWebBlogReader paginates, verifies tenancy, targets one slug, and never writes', async () => {
+  const calls: Record<string, any>[] = [];
+  const siteId = '6b053b68-51a0-4cfd-98e3-835e584f995e';
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async (_url: string | URL, init: RequestInit = {}) => {
+    const body = JSON.parse(String(init.body));
+    calls.push(body);
+    if (body.action === 'blog_get') {
+      if (body.slug === 'draft') return Response.json({ ok: true, post: postRow({ slug: 'draft', status: 'draft' }) });
+      if (body.slug === 'missing') return Response.json({ ok: false, error: 'blog_not_found' }, { status: 404 });
+      return Response.json({ ok: true, post: postRow({ slug: body.slug }) });
+    }
+    const page = Number(body.offset || 0) === 0
+      ? [postRow({ slug: 'one' }), postRow({ slug: 'two' })]
+      : [postRow({ slug: 'three' })];
+    return Response.json({
+      ok: true,
+      posts: page,
+      pagination: { has_more: Number(body.offset || 0) === 0, next_offset: Number(body.offset || 0) === 0 ? 2 : null },
+    });
+  }) as typeof fetch;
+
+  const postRow = (over: Record<string, any> = {}) => ({
+    site_id: siteId, slug: 'post', title: 'Post', description: 'Description', category: 'Guides', tags: [],
+    author: 'Alex', published_at: '2026-08-01', updated_at: '2026-08-01', answer: 'Answer',
+    content: '## Heading\nBody', faqs: [], sources: [], status: 'published', revision: 3, ...over,
+  });
+
+  try {
+    const reader = createAllWebBlogReader({
+      apiUrl: 'https://allweb.example/functions/v1/site-agent', token: 'awt_scoped',
+      siteId, pageSize: 2, cacheTtlMs: 60_000, failClosed: false,
+    });
+    const listed = await reader.listPublishedPosts();
+    assert.deepEqual(listed.map((post) => post.slug), ['one', 'two', 'three']);
+    assert.equal(calls.filter((call) => call.action === 'blog_list').length, 2);
+    assert.ok(calls.every((call) => !('site_id' in call)), 'no request can select a tenant');
+    assert.ok(calls.every((call) => !String(call.action).includes('upsert')), 'reader exposes no mutation');
+
+    assert.equal((await reader.getPublishedPost('one'))?.revision, 3);
+    assert.equal(await reader.getPublishedPost('draft'), null);
+    assert.equal(await reader.getPublishedPost('missing'), null);
+    await reader.listPublishedPosts();
+    assert.equal(calls.filter((call) => call.action === 'blog_list').length, 2, 'warm list uses bounded cache');
+    reader.invalidate();
+    await reader.listPublishedPosts();
+    assert.equal(calls.filter((call) => call.action === 'blog_list').length, 4, 'invalidate refetches every page');
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('createAllWebBlogReader fails closed on foreign rows and can fail loudly for gates', async () => {
+  const siteId = '6b053b68-51a0-4cfd-98e3-835e584f995e';
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async () => Response.json({
+    ok: true,
+    posts: [{
+      site_id: '00000000-0000-4000-8000-000000000000', slug: 'foreign', title: 'Foreign',
+      description: '', category: '', tags: [], author: '', published_at: '2026-08-01',
+      answer: '', content: '', faqs: [], status: 'published', revision: 1,
+    }],
+    pagination: { has_more: false, next_offset: null },
+  })) as typeof fetch;
+  try {
+    const errors: string[] = [];
+    const safe = createAllWebBlogReader({
+      apiUrl: 'https://allweb.example/functions/v1/site-agent', token: 'awt_scoped', siteId,
+      cacheTtlMs: 0, onError: (_operation, error) => errors.push(error.message),
+    });
+    assert.deepEqual(await safe.listPublishedPosts(), []);
+    assert.match(errors[0], /tenant violation/);
+
+    const strict = createAllWebBlogReader({
+      apiUrl: 'https://allweb.example/functions/v1/site-agent', token: 'awt_scoped', siteId,
+      cacheTtlMs: 0, failClosed: false, onError: () => {},
+    });
+    await assert.rejects(strict.listPublishedPosts(), /tenant violation/);
   } finally {
     globalThis.fetch = realFetch;
   }

@@ -2,6 +2,7 @@ export { BLOG_CONFIG, blogBasePath, brandPersona, configureBlogEngine, getBlogCo
 export { createFileStore, getStore, listExistingPosts } from './store.js';
 export { createSupabaseStore } from './supabase-store.js';
 export { createAllWebStore } from './allweb-store.js';
+export { createAllWebBlogReader } from './allweb-reader.js';
 export { formatServiceReport, runBlogService, type RunServiceOptions } from './service.js';
 export { contentRules, generateBlogPost, normalizeGeneratedPost, parseModelJson, relatedLinkTargets, repairJsonStringNewlines, validateGeneratedPost } from './generate-post.js';
 export { generateCoverImage, applyWatermark, heroAltText, makeOgCard, writeHeroVariants } from './images.js';
@@ -60,6 +61,9 @@ export type {
   ServiceSite,
   SupabaseStoreOptions,
   AllWebStoreOptions,
+  AllWebBlogPost,
+  AllWebBlogReader,
+  AllWebBlogReaderOptions,
   DeriveTopicArgs,
   ParseFrontmatterArgs,
   ParsedFrontmatterResult,
