@@ -1,5 +1,5 @@
 import type { BlogStore, ParsedBlogPost, PutPostArgs, SupabaseStoreOptions } from './types.js';
-import { markdownToAnswerSections } from './content-reader.js';
+import { storedRowToPost } from './stored-row.js';
 
 /**
  * Supabase-backed content store: posts are rows, assets are objects in Storage.
@@ -37,34 +37,8 @@ function resolve(options: SupabaseStoreOptions) {
   };
 }
 
-export function rowToPost(row: Record<string, any>): ParsedBlogPost {
-  const content = String(row.content || '');
-  const answer = String(row.answer || row.description || '');
-  return {
-    slug: String(row.slug),
-    title: String(row.title || ''),
-    description: String(row.description || ''),
-    category: String(row.category || ''),
-    tags: Array.isArray(row.tags) ? row.tags.map(String) : [],
-    author: String(row.author || ''),
-    publishedAt: String(row.published_at || '').slice(0, 10),
-    updatedAt: String(row.updated_at || row.published_at || '').slice(0, 10),
-    heroImage: String(row.hero_image || ''),
-    heroImageAlt: String(row.hero_image_alt || ''),
-    heroImageWidth: row.hero_image_width ?? undefined,
-    heroImageHeight: row.hero_image_height ?? undefined,
-    heroImageSrcset: row.hero_image_srcset ?? undefined,
-    ogImage: row.og_image ?? undefined,
-    readMins: row.read_mins ?? undefined,
-    ...(Array.isArray(row.sources) && row.sources.length ? { sources: row.sources } : {}),
-    answer,
-    content,
-    faqs: Array.isArray(row.faqs)
-      ? row.faqs.map((f: any) => ({ question: String(f?.question ?? f?.q ?? ''), answer: String(f?.answer ?? f?.a ?? '') }))
-      : [],
-    body: markdownToAnswerSections(content, answer),
-  };
-}
+/** @deprecated Compatibility alias for earlier internal imports. */
+export const rowToPost = storedRowToPost;
 
 export function createSupabaseStore(options: SupabaseStoreOptions): BlogStore {
   const cfg = resolve(options);
@@ -86,7 +60,7 @@ export function createSupabaseStore(options: SupabaseStoreOptions): BlogStore {
         { headers },
       );
       if (!r.ok) throw new Error(`Supabase list ${r.status}: ${(await r.text()).slice(0, 200)}`);
-      return ((await r.json()) as Record<string, any>[]).map(rowToPost);
+      return ((await r.json()) as Record<string, any>[]).map(storedRowToPost);
     },
 
     async putPost({ post, cover, markdown, dateISO, isRefresh }: PutPostArgs): Promise<string> {

@@ -1,11 +1,13 @@
+/**
+ * Provider-neutral Blog Engine API.
+ *
+ * This entry point imports no AllWeb or database implementation. Platforms
+ * provide `BlogStore` and hook implementations, use the filesystem default,
+ * or import an explicit optional adapter subpath.
+ */
 export { BLOG_CONFIG, blogBasePath, blogPostPath, blogPostUrl, brandPersona, configureBlogEngine, getBlogConfig, getBlogHooks, getBlogRuntime, getBlogTopics, hasRemoteStore } from './config.js';
 export { createFileStore, getStore, listExistingPosts } from './store.js';
 export { storedRowToPost } from './stored-row.js';
-export { createSupabaseStore } from './supabase-store.js';
-export { createAllWebStore } from './allweb-store.js';
-export { createAllWebGscHooks } from './allweb-gsc.js';
-export { createAllWebBlogReader } from './allweb-reader.js';
-export { createResilientAllWebBlogReader } from './allweb-resilient-reader.js';
 export { BLOG_CACHE_CONTROL, BLOG_NO_STORE, BLOG_RETRY_AFTER_SECONDS, blogCacheControl, blogUnavailableResponse } from './http.js';
 export { formatServiceReport, isServiceSiteDue, runBlogService } from './service.js';
 export { createProsePolicyValidator, validateProsePolicy } from './prose-policy.js';
@@ -35,4 +37,4 @@ export { getGoogleAccessToken, getGscPageQueries, getGscQueries, pingGscSitemap 
 export { pingIndexNow } from './indexing.js';
 export { clampText, mimeTypeFor, norm, slugify, wordCount, xmlEscape } from './utils.js';
 export { toMarkdown } from './markdown.js';
-//# sourceMappingURL=index.js.map
+//# sourceMappingURL=core.js.map

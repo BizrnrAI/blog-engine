@@ -1,4 +1,4 @@
-import { rowToPost } from './supabase-store.js';
+import { storedRowToPost } from './stored-row.js';
 /**
  * Canonical, least-privilege AllWeb reader for website rendering.
  *
@@ -54,7 +54,7 @@ export function createAllWebBlogReader(options) {
             throw new Error(`AllWeb tenant violation: received site_id ${String(row.site_id || '<missing>')}`);
         }
         return {
-            ...rowToPost(row),
+            ...storedRowToPost(row),
             siteId,
             status: String(row.status || ''),
             revision: Number(row.revision || 0),

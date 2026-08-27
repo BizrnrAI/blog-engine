@@ -1,7 +1,7 @@
 {
   "name": "@bizrnr/blog-engine",
-  "version": "1.1.1",
-  "description": "Canonical BizRnR autonomous blog engine for database- or file-backed publishing and rendering.",
+  "version": "1.2.0",
+  "description": "Provider-neutral autonomous blog engine with optional storage and control-plane adapters.",
   "type": "module",
   "main": "./dist/src/index.js",
   "types": "./dist/src/index.d.ts",
@@ -9,6 +9,22 @@
     ".": {
       "types": "./dist/src/index.d.ts",
       "import": "./dist/src/index.js"
+    },
+    "./core": {
+      "types": "./dist/src/core.d.ts",
+      "import": "./dist/src/core.js"
+    },
+    "./adapters/filesystem": {
+      "types": "./dist/src/adapters/filesystem.d.ts",
+      "import": "./dist/src/adapters/filesystem.js"
+    },
+    "./adapters/supabase": {
+      "types": "./dist/src/adapters/supabase.d.ts",
+      "import": "./dist/src/adapters/supabase.js"
+    },
+    "./adapters/allweb": {
+      "types": "./dist/src/adapters/allweb.d.ts",
+      "import": "./dist/src/adapters/allweb.js"
     }
   },
   "files": [

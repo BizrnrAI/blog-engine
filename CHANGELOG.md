@@ -3,6 +3,28 @@
 All notable changes to `@bizrnr/blog-engine`. Consumers install from git, so
 the version in `package.json` is the contract marker.
 
+## 1.2.0 — 2026-08-27
+
+Provider-neutral core and explicit optional integrations.
+
+### Added
+- **`@bizrnr/blog-engine/core`** — the canonical platform-neutral entry point. It exposes the
+  generation, policy, publishing, discovery, and `BlogStore` contracts without importing a
+  database or control-plane implementation.
+- Explicit optional adapter entry points for filesystem, generic Supabase, and AllWeb.
+- Provider-boundary tests that fail if the core reaches an adapter or the AllWeb adapter reaches
+  the Supabase implementation.
+
+### Changed
+- AllWeb and generic Supabase now share a neutral stored-row mapper instead of AllWeb importing
+  an implementation detail from the Supabase adapter.
+- Documentation now requires platforms to inject their own `BlogStore` or deliberately import
+  one adapter. Credentials and database identity remain owned by the adopting platform.
+
+### Compatibility
+- The original `@bizrnr/blog-engine` entry point still exports every v1 API, including optional
+  adapters. Existing consumers keep working while new integrations use the explicit subpaths.
+
 ## 0.9.0 — 2026-08-27
 
 Fleet-wide resilient rendering and review-safe publishing.

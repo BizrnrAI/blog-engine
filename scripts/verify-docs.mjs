@@ -21,16 +21,30 @@ for (const [doc, body] of Object.entries(text)) {
   }
 }
 
-// 3. exported symbols the docs tell people to import really exist
-const api = await import(new URL('../dist/src/index.js', import.meta.url).href);
-const claimed = new Set();
+// 3. exported runtime symbols the docs tell people to import really exist at that exact subpath
+const entrypoints = {
+  '': '../dist/src/index.js',
+  '/core': '../dist/src/core.js',
+  '/adapters/filesystem': '../dist/src/adapters/filesystem.js',
+  '/adapters/supabase': '../dist/src/adapters/supabase.js',
+  '/adapters/allweb': '../dist/src/adapters/allweb.js',
+};
+const claimed = new Map(Object.keys(entrypoints).map(path => [path, new Set()]));
 for (const body of Object.values(text)) {
-  for (const [, names] of body.matchAll(/import \{([^}]+)\} from '@bizrnr\/blog-engine'/g)) {
-    names.split(',').map(s=>s.trim().replace(/^type\s+/,'')).filter(Boolean).forEach(n=>claimed.add(n));
+  for (const [, typeOnly, names, subpath = ''] of body.matchAll(/import (type )?\{([^}]+)\} from '@bizrnr\/blog-engine([^']*)'/g)) {
+    if (!(subpath in entrypoints)) {
+      errors.push(`docs import unsupported package subpath @bizrnr/blog-engine${subpath}`);
+      continue;
+    }
+    if (typeOnly) continue;
+    names.split(',').map(s=>s.trim()).filter(s=>s && !s.startsWith('type ')).forEach(name=>claimed.get(subpath).add(name));
   }
 }
-for (const name of claimed) {
-  if (!(name in api)) errors.push(`docs import { ${name} } from '@bizrnr/blog-engine' — not exported`);
+for (const [subpath, names] of claimed) {
+  const api = await import(new URL(entrypoints[subpath], import.meta.url).href);
+  for (const name of names) {
+    if (!(name in api)) errors.push(`docs import { ${name} } from '@bizrnr/blog-engine${subpath}' — not exported`);
+  }
 }
 
 // 4. examples referenced exist
@@ -41,6 +55,6 @@ for (const ex of ['minimal','service','sdbg','template']) {
 // 5. sql file the docs tell people to run
 if (!existsSync('sql/0001_blog_posts.sql')) errors.push('sql/0001_blog_posts.sql missing');
 
-console.log(`checked ${docs.length} docs, ${claimed.size} claimed exports`);
+console.log(`checked ${docs.length} docs, ${[...claimed.values()].reduce((n, names) => n + names.size, 0)} claimed exports`);
 if (errors.length) { console.error('\nDOC DRIFT:\n' + errors.map(e=>' - '+e).join('\n')); process.exit(1); }
 console.log('docs match the code ✓');

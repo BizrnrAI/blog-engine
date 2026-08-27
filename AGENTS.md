@@ -16,12 +16,13 @@ need no BizRnR-internal system, memory, or credential store to do correct work h
 | **Make a site get more traffic** | [docs/TRAFFIC.md](docs/TRAFFIC.md) — ranked by measured return | |
 | **Extend the engine itself** | This file, below | |
 
-**The single most useful decision:** if the site can read from a database at render time, use the
-Supabase store. Publishing becomes an upsert and every git/CI/token/rebuild failure mode
-disappears. If it's a static export, use the filesystem store. Both are first-class.
+**The single most useful decision:** choose the deployment-neutral core first, then inject the
+store and infrastructure hooks owned by the adopting platform. Files, SQL, a CMS, an API, or a
+control plane are all peers behind `BlogStore`; none is the engine's database.
 
-For an AllWeb-managed repository, use `createAllWebStore` with its exact site
-client. Never place a Supabase service-role key in an individual website repo.
+New code imports `@bizrnr/blog-engine/core`. Optional maintained adapters live under
+`@bizrnr/blog-engine/adapters/*`. Never infer that an adapter shown in this repository is a
+required service or permission boundary for another platform.
 
 ## Ground rules
 
@@ -51,7 +52,7 @@ adapter (per site: identity, topics, persona)
    ├─ topic-rotation + demand ──→ what to write about
    ├─ generate-post ────────────→ the content contract, validated, retried
    ├─ images ───────────────────→ hero + watermark + OG card + variants
-   ├─ store ────────────────────→ WHERE it lands (files | Supabase | yours)
+   ├─ store ────────────────────→ WHERE it lands (files | SQL | CMS | API | yours)
    ├─ indexing + gsc ───────────→ submitted only once live
    └─ audit · scorecard · refresh → measured, then improved
 ```
@@ -65,8 +66,8 @@ assets, so nothing else in the pipeline knows or cares whether a post is a file 
   it from `src/index.ts`, add tests, add a row to the README module table.
 - **New content rule**: add it to `BlogContentRules` (optional, defaulted), wire it into the
   prompt *and* `validateGeneratedPost`, and cover both the accept and reject paths in tests.
-- **New provider or storage**: implement the hook or the `BlogStore` interface. Do not add a
-  vendor SDK — `supabase-store.ts` is implemented with plain `fetch` for exactly this reason.
+- **New provider or storage**: implement the hook or the `BlogStore` interface. Keep it behind an
+  explicit adapter entry point; core must never import a vendor/control-plane module.
 
 ## Upkeep
 
