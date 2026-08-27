@@ -5,7 +5,7 @@ verifiable before you move on.
 
 **Decide one thing first — where posts live:**
 
-- **Database (recommended).** Publishing is an upsert; no git, CI, tokens or rebuild involved.
+- **Platform store.** Publishing is an upsert; no git, CI, tokens or rebuild involved.
   Do steps 1–4, then [docs/SERVICE.md](SERVICE.md).
 - **Markdown files.** Publishing is a commit; CI builds and deploys. Right for static-export
   sites. Do steps 1–6.
@@ -17,11 +17,11 @@ Everything except step 5 is identical for both.
 ## 1. Install
 
 ```bash
-npm install github:BizrnrAI/blog-engine#v0
+npm install github:BizrnrAI/blog-engine#v1.2.0
 ```
 
-Public repo, compiled `dist/` committed, so there is no build step on install. Pin `#v0.9.0` for
-reproducibility or track `#v0` for patches.
+Public repo, compiled `dist/` committed, so there is no build step on install. Pin the exact
+release tag for reproducibility.
 
 The smallest complete adapter lives in `examples/minimal` — copy it if you'd rather start from
 working code than from this page.
@@ -31,7 +31,7 @@ working code than from this page.
 One file, roughly 80 lines, exporting three things. This is the *entire* per-site surface.
 
 ```ts
-import type { BlogEngineConfig, BlogEngineTopics } from '@bizrnr/blog-engine';
+import type { BlogEngineConfig, BlogEngineTopics } from '@bizrnr/blog-engine/core';
 
 export const config: BlogEngineConfig = {
   identity: {
@@ -97,10 +97,13 @@ naming the config path. Run it once before wiring anything else.
 
 ## 3. Choose your store
 
-**Database:**
+**Any platform:** supply the provider-neutral `BlogStore` interface. The engine never needs to
+know whether the implementation is a directory database, CMS, API, or another storage service.
+
+**Optional Supabase adapter:**
 
 ```ts
-import { createSupabaseStore } from '@bizrnr/blog-engine';
+import { createSupabaseStore } from '@bizrnr/blog-engine/adapters/supabase';
 hooks: { store: createSupabaseStore({ siteId: 'acme-plumbing', author: 'Alex Acme' }) }
 ```
 
@@ -126,7 +129,7 @@ Apply `sql/0001_blog_posts.sql` once per Supabase project. Then continue at
 Each script is two lines — import the runner, pass the adapter:
 
 ```ts
-import { runBlogGenerateCli } from '@bizrnr/blog-engine';
+import { runBlogGenerateCli } from '@bizrnr/blog-engine/core';
 import { config, topics, brandPersona, hooks } from './adapter';
 await runBlogGenerateCli({ config, topics, brandPersona, hooks });
 ```
@@ -150,7 +153,7 @@ set up; there is no repository involvement in publishing.
 
 ```ts
 import { blogGenerateWorkflow, blogIndexingWorkflow, blogRefreshWorkflow,
-         blogScorecardWorkflow } from '@bizrnr/blog-engine';
+         blogScorecardWorkflow } from '@bizrnr/blog-engine/core';
 writeFileSync('.github/workflows/blog-generate.yml', blogGenerateWorkflow());
 writeFileSync('.github/workflows/blog-indexing.yml', blogIndexingWorkflow());
 writeFileSync('.github/workflows/blog-refresh.yml',  blogRefreshWorkflow());
@@ -167,7 +170,7 @@ multi-week silent outages in production.
 do not expose a Supabase anon or service-role credential:
 
 ```ts
-import { createResilientAllWebBlogReader } from '@bizrnr/blog-engine';
+import { createResilientAllWebBlogReader } from '@bizrnr/blog-engine/adapters/allweb';
 
 const blog = createResilientAllWebBlogReader({
   siteId: websiteManifest.site_id,
@@ -191,7 +194,7 @@ revalidate; a new row appears on the next revalidation.
 **Files:**
 
 ```ts
-import { readGeneratedBlogPosts, mergeBlogPosts } from '@bizrnr/blog-engine';
+import { readGeneratedBlogPosts, mergeBlogPosts } from '@bizrnr/blog-engine/core';
 const posts = mergeBlogPosts(seedPosts, readGeneratedBlogPosts({ fallback: { /* … */ } }));
 ```
 

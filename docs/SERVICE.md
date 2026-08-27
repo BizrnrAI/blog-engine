@@ -1,7 +1,7 @@
 # The blog service — publishing without GitHub
 
-The lowest-friction way to run this engine: **posts are rows, assets are objects, and one
-service publishes for every site.** Nothing in the publishing path touches git, CI, tokens,
+The lowest-friction way to run this engine: **content lives in the platform's chosen store, and one
+service publishes for every site.** Nothing in the publishing path needs git, CI, or a rebuild,
 branch permissions, or a site rebuild.
 
 ## Why
@@ -17,16 +17,16 @@ Content is not code. Give it its own store and the whole class of failure disapp
 ## Shape
 
 ```
-Supabase
-├─ blog_posts        one row per post, one row-space per site_id
-└─ blog-assets       heroes, OG cards, responsive variants
+Your content platform
+├─ BlogStore         list and persist structured posts
+└─ asset store       heroes, OG cards, responsive variants
 
 Blog service (one deployment: a cron route, a worker — anywhere fetch runs)
-└─ @bizrnr/blog-engine
+└─ @bizrnr/blog-engine/core
    for each due site: topic → generate → validate → images → upsert → ping → measure
 
 Sites
-└─ render /blog from the table with ISR; images from the bucket's CDN URL
+└─ render /blog from the same platform store
 ```
 
 ## Setup
@@ -35,7 +35,7 @@ AllWeb-managed website repositories use `createAllWebStore`, which calls the
 site-scoped gateway and never receives a Supabase service-role key:
 
 ```ts
-import { createAllWebStore } from '@bizrnr/blog-engine';
+import { createAllWebStore } from '@bizrnr/blog-engine/adapters/allweb';
 
 hooks: {
   store: createAllWebStore({
@@ -45,8 +45,7 @@ hooks: {
 }
 ```
 
-The direct `createSupabaseStore` path below remains appropriate for the trusted
-centralized service.
+The Supabase path below is one optional maintained adapter, not an engine dependency.
 
 **1. Apply the schema** (once per Supabase project):
 
@@ -60,7 +59,8 @@ service writes with the service-role key, which bypasses it.
 **2. Point a site's runtime at the store:**
 
 ```ts
-import { createSupabaseStore } from '@bizrnr/blog-engine';
+import { configureBlogEngine } from '@bizrnr/blog-engine/core';
+import { createSupabaseStore } from '@bizrnr/blog-engine/adapters/supabase';
 
 configureBlogEngine({
   config, topics, brandPersona,
@@ -77,7 +77,7 @@ all read through the store automatically.
 **3. Run the service:**
 
 ```ts
-import { runBlogService, formatServiceReport } from '@bizrnr/blog-engine';
+import { runBlogService, formatServiceReport } from '@bizrnr/blog-engine/core';
 
 const results = await runBlogService([
   { id: 'sandiegobuyguy', runtime: () => sdbgRuntime(), days: [1, 3, 5] },
@@ -109,7 +109,7 @@ Site-specific mechanical policy belongs in the shared retry seam so rejected pro
 before image generation or persistence:
 
 ```ts
-import { createProsePolicyValidator } from '@bizrnr/blog-engine';
+import { createProsePolicyValidator } from '@bizrnr/blog-engine/core';
 
 hooks: {
   validatePost: createProsePolicyValidator({
@@ -159,7 +159,7 @@ The service is one scheduled process. Anywhere Node runs on a timer works — th
 `src/app/api/cron/blog/route.ts`:
 
 ```ts
-import { formatServiceReport, runBlogService } from '@bizrnr/blog-engine';
+import { formatServiceReport, runBlogService } from '@bizrnr/blog-engine/core';
 import { sites } from '@/blog/sites';
 
 export const maxDuration = 300;
@@ -194,9 +194,11 @@ A complete, runnable example — two sites, their briefs, and the runner — is 
 
 ### Environment
 
-`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, one text-model key, and optionally
-`INDEXNOW_KEY` plus the `GOOGLE_OAUTH_*` trio. That is the complete list, in one place, for
-every site the service publishes. See [.env.example](../.env.example).
+The service needs one text-model key plus the credentials required by the adapter each site
+deliberately selects. The optional Supabase adapter uses `SUPABASE_URL` and
+`SUPABASE_SERVICE_ROLE_KEY`; AllWeb and custom stores use their own scoped credentials. Indexing
+can additionally use `INDEXNOW_KEY` and the `GOOGLE_OAUTH_*` trio. See
+[.env.example](../.env.example).
 
 **4. Render on the site.** Query the table with the anon key and revalidate:
 

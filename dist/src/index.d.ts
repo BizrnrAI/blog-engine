@@ -1,5 +1,6 @@
 export { BLOG_CONFIG, blogBasePath, blogPostPath, blogPostUrl, brandPersona, configureBlogEngine, getBlogConfig, getBlogHooks, getBlogRuntime, getBlogTopics, hasRemoteStore } from './config.js';
 export { createFileStore, getStore, listExistingPosts } from './store.js';
+export { storedRowToPost } from './stored-row.js';
 export { createSupabaseStore } from './supabase-store.js';
 export { createAllWebStore } from './allweb-store.js';
 export { createAllWebGscHooks } from './allweb-gsc.js';

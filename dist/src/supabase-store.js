@@ -1,4 +1,4 @@
-import { markdownToAnswerSections } from './content-reader.js';
+import { storedRowToPost } from './stored-row.js';
 /**
  * Supabase-backed content store: posts are rows, assets are objects in Storage.
  *
@@ -30,34 +30,8 @@ function resolve(options) {
         schema: options.schema || 'public',
     };
 }
-export function rowToPost(row) {
-    const content = String(row.content || '');
-    const answer = String(row.answer || row.description || '');
-    return {
-        slug: String(row.slug),
-        title: String(row.title || ''),
-        description: String(row.description || ''),
-        category: String(row.category || ''),
-        tags: Array.isArray(row.tags) ? row.tags.map(String) : [],
-        author: String(row.author || ''),
-        publishedAt: String(row.published_at || '').slice(0, 10),
-        updatedAt: String(row.updated_at || row.published_at || '').slice(0, 10),
-        heroImage: String(row.hero_image || ''),
-        heroImageAlt: String(row.hero_image_alt || ''),
-        heroImageWidth: row.hero_image_width ?? undefined,
-        heroImageHeight: row.hero_image_height ?? undefined,
-        heroImageSrcset: row.hero_image_srcset ?? undefined,
-        ogImage: row.og_image ?? undefined,
-        readMins: row.read_mins ?? undefined,
-        ...(Array.isArray(row.sources) && row.sources.length ? { sources: row.sources } : {}),
-        answer,
-        content,
-        faqs: Array.isArray(row.faqs)
-            ? row.faqs.map((f) => ({ question: String(f?.question ?? f?.q ?? ''), answer: String(f?.answer ?? f?.a ?? '') }))
-            : [],
-        body: markdownToAnswerSections(content, answer),
-    };
-}
+/** @deprecated Compatibility alias for earlier internal imports. */
+export const rowToPost = storedRowToPost;
 export function createSupabaseStore(options) {
     const cfg = resolve(options);
     const headers = {
@@ -75,7 +49,7 @@ export function createSupabaseStore(options) {
             const r = await fetch(`${cfg.url}/rest/v1/${cfg.table}?site_id=eq.${encodeURIComponent(cfg.siteId)}${status}&order=published_at.desc&limit=1000`, { headers });
             if (!r.ok)
                 throw new Error(`Supabase list ${r.status}: ${(await r.text()).slice(0, 200)}`);
-            return (await r.json()).map(rowToPost);
+            return (await r.json()).map(storedRowToPost);
         },
         async putPost({ post, cover, markdown, dateISO, isRefresh }) {
             // The row carries the structured post; `content` keeps the Markdown body so a site can

@@ -6,6 +6,36 @@ these two calls ever leave your machine during generation; everything else
 (watermarking, OG cards, validation, Markdown, RSS, schema) is local and
 deterministic.
 
+## Storage and platform integration
+
+Import the engine from `@bizrnr/blog-engine/core`. Core persists only through
+the `BlogStore` interface and contains no database URL, schema, credential, or
+control-plane assumption:
+
+```ts
+import type { BlogStore } from '@bizrnr/blog-engine/core';
+
+const store: BlogStore = {
+  name: 'my-platform',
+  listPosts: () => cms.listBlogPosts(),
+  putPost: (args) => cms.upsertBlogPost(args),
+  putAsset: (key, bytes, contentType) => objects.put(key, bytes, contentType),
+};
+```
+
+Filesystem, Supabase, and AllWeb integrations are maintained conveniences, not
+core dependencies:
+
+```ts
+import { createFileStore } from '@bizrnr/blog-engine/adapters/filesystem';
+import { createSupabaseStore } from '@bizrnr/blog-engine/adapters/supabase';
+import { createAllWebStore } from '@bizrnr/blog-engine/adapters/allweb';
+```
+
+An adopting directory or marketplace should import only its chosen adapter—or
+none when it supplies `BlogStore` itself. Provider credentials stay in that
+platform, never in Blog Engine.
+
 ## Text generation
 
 ### Default: any OpenAI-compatible chat endpoint

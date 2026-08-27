@@ -1,4 +1,4 @@
-import { rowToPost } from './supabase-store.js';
+import { storedRowToPost } from './stored-row.js';
 import type { AllWebBlogPost, AllWebBlogReader, AllWebBlogReaderOptions } from './types.js';
 
 type CacheEntry<T> = { expiresAt: number; promise: Promise<T> };
@@ -56,7 +56,7 @@ export function createAllWebBlogReader(options: AllWebBlogReaderOptions): AllWeb
       throw new Error(`AllWeb tenant violation: received site_id ${String(row.site_id || '<missing>')}`);
     }
     return {
-      ...rowToPost(row),
+      ...storedRowToPost(row),
       siteId,
       status: String(row.status || ''),
       revision: Number(row.revision || 0),

@@ -25,7 +25,7 @@ polls up to 10 minutes per URL before pinging.
 ## Stamping the workflows
 
 ```ts
-import { blogGenerateWorkflow, blogIndexingWorkflow } from '@bizrnr/blog-engine';
+import { blogGenerateWorkflow, blogIndexingWorkflow } from '@bizrnr/blog-engine/core';
 
 writeFileSync('.github/workflows/blog-generate.yml', blogGenerateWorkflow({
   nodeVersion: 22,

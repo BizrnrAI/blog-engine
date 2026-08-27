@@ -1,14 +1,18 @@
 # BizRnR Blog Engine
 
-Autonomous, answer-first blog publishing for any website. One shared engine writes the post,
+Provider-neutral, answer-first blog publishing for any website or platform. One shared engine writes the post,
 validates it against a strict content contract, generates and watermarks the imagery, stores it,
 submits it to search engines, then keeps improving what already ranks.
 
 **New here? Read [Start here](#start-here) — it's three questions and a path.**
 
-- Package: `@bizrnr/blog-engine` · install `github:BizrnrAI/blog-engine#v0` (public, no build step)
+- Package: `@bizrnr/blog-engine` · install `github:BizrnrAI/blog-engine#v1.2.0` (public, no build step)
 - Agents: [AGENTS.md](AGENTS.md) is the entry point for working *on* this repo
-- Everything is self-contained: no BizRnR-internal system is required to adopt or extend it
+- Everything is self-contained: no BizRnR, AllWeb, Supabase, or other external system is required
+
+The canonical API is `@bizrnr/blog-engine/core`. It imports no database or control-plane adapter.
+Optional integrations are explicit subpaths under `@bizrnr/blog-engine/adapters/*`; the legacy
+top-level exports remain temporarily for v1 compatibility.
 
 ## Start here
 
@@ -16,15 +20,15 @@ submits it to search engines, then keeps improving what already ranks.
 
 | | Choose | Read |
 |---|---|---|
-| **Database** (recommended) | Posts are rows in Supabase, assets in Storage. Publishing is an upsert — no git, CI, tokens, or rebuild in the path | [docs/SERVICE.md](docs/SERVICE.md) |
-| **Markdown files** | Posts are files in the repo, published by CI. Right for static-export sites and small corpora | [docs/ADOPTION.md](docs/ADOPTION.md) |
+| **Your platform store** | Implement `BlogStore` for SQL, a CMS, an API, object storage, or another backend | [docs/PROVIDERS.md](docs/PROVIDERS.md) |
+| **Maintained optional adapter** | Filesystem, Supabase, and AllWeb adapters are available as explicit subpath imports | [docs/SERVICE.md](docs/SERVICE.md) |
 
 Both run the same engine, the same content contract, the same validators and the same scorecard.
 The only difference is one line of adapter config, and you can switch later.
 
 **2. How much do you need to write?** A site supplies an *adapter*: who the brand is, which pages
 posts may link to, and the topic pool. That's it — roughly 80 lines. The engine owns everything
-else. See [docs/ADOPTION.md](docs/ADOPTION.md#1-write-the-adapter).
+else. See [docs/ADOPTION.md](docs/ADOPTION.md#2-write-the-adapter).
 
 **3. Running many sites?** One service publishes for all of them from a single process. See
 [docs/SERVICE.md](docs/SERVICE.md#the-service).
@@ -32,30 +36,28 @@ else. See [docs/ADOPTION.md](docs/ADOPTION.md#1-write-the-adapter).
 ## Sixty-second version
 
 ```bash
-npm install github:BizrnrAI/blog-engine#v0
-psql "$DATABASE_URL" -f node_modules/@bizrnr/blog-engine/sql/0001_blog_posts.sql
+npm install github:BizrnrAI/blog-engine#v1.2.0
 ```
 
 ```ts
-import { configureBlogEngine, generateBlogRun, createSupabaseStore } from '@bizrnr/blog-engine';
+import { configureBlogEngine, generateBlogRun } from '@bizrnr/blog-engine/core';
 import { config, topics, brandPersona } from './blog/adapter';
 
 configureBlogEngine({
   config, topics, brandPersona,
-  hooks: { store: createSupabaseStore({ siteId: 'my-site' }) },
 });
 
 await generateBlogRun(process.cwd(), { count: 1, dryRun: false, skipPing: false });
 ```
 
-That publishes a complete, validated, illustrated post and submits it for indexing. Your site
-renders the row.
+That uses the filesystem default. To use any other platform, supply a `BlogStore` implementation;
+the generation pipeline does not change. Maintained adapters are opt-in subpath imports.
 
 AllWeb-managed repositories use the same engine with a least-privilege adapter,
 not a Supabase service role:
 
 ```ts
-import { createAllWebStore } from '@bizrnr/blog-engine';
+import { createAllWebStore } from '@bizrnr/blog-engine/adapters/allweb';
 
 hooks: {
   store: createAllWebStore({
@@ -72,7 +74,7 @@ Website rendering uses the matching read-only surface rather than copied fetch
 logic:
 
 ```ts
-import { createAllWebBlogReader } from '@bizrnr/blog-engine';
+import { createAllWebBlogReader } from '@bizrnr/blog-engine/adapters/allweb';
 
 const blog = createAllWebBlogReader({
   siteId: websiteManifest.site_id,
@@ -109,9 +111,9 @@ rather than an empty 200 or a false 404.
 | Concern | Module | Notes |
 |---|---|---|
 | **Content store** | `store.ts` | The engine's only route to posts and assets. Filesystem by default, swappable in one line |
-| **Supabase store** | `supabase-store.ts` | Posts as rows, assets in Storage, via plain `fetch` — no SDK dependency |
-| **AllWeb reader/store** | `allweb-reader.ts` / `allweb-resilient-reader.ts` / `allweb-store.ts` | Tenant-bound rendering, last-known-good outage handling, and optimistic publishing through the site-agent gateway |
-| **AllWeb Search Console** | `allweb-gsc.ts` | Site-scoped demand and sitemap hooks without account-wide Google credentials in repositories |
+| **Provider-neutral core** | `core.ts` | Generation, validation, scheduling, rendering contracts, indexing, audit, and `BlogStore`; imports no database/control plane |
+| **Optional Supabase adapter** | `adapters/supabase.ts` | Explicit subpath; posts as rows and assets in Storage via plain `fetch` |
+| **Optional AllWeb adapter** | `adapters/allweb.ts` | Explicit subpath; tenant-bound reader/store and site-scoped GSC hooks |
 | **Blog service** | `service.ts` | One process publishes for many sites; per-site schedules and failure isolation |
 | Post generation | `generate-post.ts` | The content contract, strict-JSON prompting, tolerant parsing, 3-attempt validate-and-retry |
 | Topic selection | `topic-rotation.ts`, `demand.ts` | Search Console demand → editorial pool → cross-promo, with a two-signal demand gate |
@@ -133,7 +135,7 @@ rather than an empty 200 or a false 404.
 
 | Doc | When to read it |
 |---|---|
-| [docs/SERVICE.md](docs/SERVICE.md) | Running as a service with Supabase — the recommended path |
+| [docs/SERVICE.md](docs/SERVICE.md) | Running a multi-site service with your chosen store adapter |
 | [docs/ADOPTION.md](docs/ADOPTION.md) | Wiring the engine into one site, step by step |
 | [docs/CONTENT-SPEC.md](docs/CONTENT-SPEC.md) | Exactly what every post must contain, and why |
 | [docs/PROVIDERS.md](docs/PROVIDERS.md) | Models, env vars, and the hooks for your own infrastructure |
@@ -174,8 +176,8 @@ patches.
 ## Repository map
 
 ```
-src/            engine (see the table above)
-sql/            canonical Supabase schema
+src/            provider-neutral engine plus explicit optional adapters
+sql/            optional Supabase adapter schema
 tests/          offline test suite — no network, no API keys
 examples/       minimal · service · sdbg · template
 docs/           SERVICE · ADOPTION · CONTENT-SPEC · PROVIDERS · WORKFLOWS · TRAFFIC · ROADMAP

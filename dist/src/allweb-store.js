@@ -1,4 +1,4 @@
-import { rowToPost } from './supabase-store.js';
+import { storedRowToPost } from './stored-row.js';
 /**
  * Least-privilege AllWeb store for website repositories and delegated agents.
  *
@@ -61,7 +61,7 @@ export function createAllWebStore(options) {
                     // for audit history, but must not consume cadence or topic ownership.
                     if (String(row.status || '') === 'archived')
                         continue;
-                    posts.push(rowToPost(row));
+                    posts.push(storedRowToPost(row));
                 }
                 const pagination = result.pagination && typeof result.pagination === 'object' ? result.pagination : null;
                 const hasMore = pagination ? pagination.has_more === true : rows.length === pageSize;
