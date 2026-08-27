@@ -90,12 +90,14 @@ the reviewed slug, its exact revision, and an explicit accountable-review attest
 reviewer credential is a GitHub Actions secret with exactly `site:read`, `blog:read`, and
 `blog:publish`; it is never bundled into the repository or sent to the public runtime.
 
-The reusable workflow then performs the mechanical work autonomously: rebuild and run every site
-gate against the review row, verify the reviewer tenant and exact permission set, publish with an
-optimistic revision check, wait for the canonical URL to return successfully, submit IndexNow and
-Search Console sitemap signals, probe blog health, and append a WebMem release event. A retry after
-publication is idempotent so an indexing outage can be recovered without mutating the article
-again.
+The reusable workflow then performs the mechanical work autonomously: rebuild and run the
+repository contract, verify the reviewer tenant and exact permission set, fetch the exact review
+revision, run the adopter's release preflight against that row and the published corpus, publish
+with an optimistic revision check, wait for the canonical URL to return successfully, submit
+IndexNow and Search Console sitemap signals, probe blog health, and append a WebMem release event.
+A retry after publication is idempotent so an indexing outage can be recovered without mutating
+the article again. Generation checks are not a substitute for this preflight: an editor or agent
+can change a staged row before release.
 
 The website control plane distributes `.website/release-reviewed-blog.mjs`, a tiny wrapper around
 the maintained adapter:
@@ -107,6 +109,7 @@ const reviewer = createAllWebReviewer({
   apiUrl: manifest.allweb.api_url,
   siteId: manifest.site_id,
   token: process.env.ALLWEB_REVIEWER_TOKEN,
+  validatePost: validateReviewedPost,
 });
 await reviewer.releaseReviewedPost({ slug, expectedRevision });
 ```

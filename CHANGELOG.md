@@ -3,6 +3,19 @@
 All notable changes to `@bizrnr/blog-engine`. Consumers install from git, so
 the version in `package.json` is the contract marker.
 
+## 1.3.1 — 2026-08-27
+
+Fail-closed validation of the exact AllWeb row at release time.
+
+### Fixed
+- **Reviewed-row preflight** — `createAllWebReviewer()` can run an adopter validator against the
+  tenant-checked review row and complete published-slug corpus before `blog_publish`. Returned
+  complaints block mutation, so edits made after generation cannot bypass the site contract.
+- Release now always requires a hero image and alt text and rejects tenant drift encountered while
+  assembling the preflight corpus.
+- Workflow wording now distinguishes the repository test suite from the exact-row preflight; it no
+  longer claims that published-only build gates can see a staged row.
+
 ## 1.3.0 — 2026-08-27
 
 Accountable, retry-safe release for review-required AllWeb sites.
