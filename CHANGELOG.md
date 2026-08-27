@@ -349,3 +349,7 @@ with real byte lengths.
 Initial canonical engine: GSC-informed topic rotation, OpenRouter generation,
 Vercel AI Gateway heroes, Sharp watermarking, branded OG cards, Markdown +
 RSS, IndexNow/GSC pings, PR-safe workflow builders, template runtime.
+# 1.0.1 — 2026-08-27
+
+- Export `getGscPageQueries` from the public package entry point so canonical
+  fleet reports can use the same site-scoped Search Console hooks as publishing.

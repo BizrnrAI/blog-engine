@@ -1,6 +1,6 @@
 {
   "name": "@bizrnr/blog-engine",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Canonical BizRnR autonomous blog engine for database- or file-backed publishing and rendering.",
   "type": "module",
   "main": "./dist/src/index.js",
