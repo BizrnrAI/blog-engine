@@ -1,4 +1,4 @@
-import { blogBasePath, getBlogConfig } from './config.js';
+import { blogBasePath, formatBlogUrl, getBlogConfig } from './config.js';
 
 function defaultBase(): string {
   try {
@@ -21,6 +21,8 @@ export interface DiscoveryOptions {
   siteUrl?: string;
   /** Path prefix for post URLs (default '/blog'). */
   blogBasePath?: string;
+  /** Override the configured canonical trailing-slash policy. */
+  trailingSlash?: boolean;
   /** Slugs to omit from every public surface (e.g. corpus-audit BLOCK verdicts). */
   exclude?: readonly string[];
 }
@@ -28,6 +30,24 @@ export interface DiscoveryOptions {
 function resolveSiteUrl(options: DiscoveryOptions): string {
   if (options.siteUrl) return options.siteUrl.replace(/\/$/, '');
   return getBlogConfig().identity.siteUrl.replace(/\/$/, '');
+}
+
+function resolveTrailingSlash(options: DiscoveryOptions): boolean {
+  if (typeof options.trailingSlash === 'boolean') return options.trailingSlash;
+  try {
+    return Boolean(getBlogConfig().paths.trailingSlash);
+  } catch {
+    return false;
+  }
+}
+
+function publicUrl(options: DiscoveryOptions, slug?: string): string {
+  return formatBlogUrl(
+    resolveSiteUrl(options),
+    options.blogBasePath || defaultBase(),
+    slug,
+    resolveTrailingSlash(options),
+  );
 }
 
 export interface SitemapEntry {
@@ -55,22 +75,18 @@ export function excludeBlocked<T extends { slug: string }>(posts: readonly T[], 
  * defect in the playbook's field notes.
  */
 export function blogHubSitemapEntry(posts: readonly ParsedBlogPost[], options: DiscoveryOptions = {}): SitemapEntry {
-  const siteUrl = resolveSiteUrl(options);
-  const base = options.blogBasePath || defaultBase();
   const newest = posts
     .map((p) => p.updatedAt || p.publishedAt)
     .filter(Boolean)
     .sort()
     .pop();
-  return { loc: `${siteUrl}${base}`, lastmod: newest || new Date().toISOString().slice(0, 10) };
+  return { loc: publicUrl(options), lastmod: newest || new Date().toISOString().slice(0, 10) };
 }
 
 /** One <url> entry per post with lastmod = updatedAt (honest dates only). */
 export function blogSitemapEntries(posts: readonly ParsedBlogPost[], options: DiscoveryOptions = {}): SitemapEntry[] {
-  const siteUrl = resolveSiteUrl(options);
-  const base = options.blogBasePath || defaultBase();
   return excludeBlocked(posts, options.exclude).map((post) => ({
-    loc: `${siteUrl}${base}/${post.slug}`,
+    loc: publicUrl(options, post.slug),
     lastmod: post.updatedAt || post.publishedAt,
   }));
 }
@@ -91,7 +107,6 @@ export interface LlmsTxtOptions extends DiscoveryOptions {
  */
 export function buildBlogLlmsTxt(posts: readonly ParsedBlogPost[], options: LlmsTxtOptions = {}): string {
   const siteUrl = resolveSiteUrl(options);
-  const base = options.blogBasePath || defaultBase();
   let feedPath = options.feedPath;
   if (!feedPath) {
     try {
@@ -105,7 +120,7 @@ export function buildBlogLlmsTxt(posts: readonly ParsedBlogPost[], options: Llms
     '',
     `- RSS feed: ${siteUrl}${feedPath}`,
     ...excludeBlocked(posts, options.exclude).slice(0, options.limit ?? 50).map(
-      (post) => `- [${post.title}](${siteUrl}${base}/${post.slug}): ${post.description}`,
+      (post) => `- [${post.title}](${publicUrl(options, post.slug)}): ${post.description}`,
     ),
   ];
   return lines.join('\n');

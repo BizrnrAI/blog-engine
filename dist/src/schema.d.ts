@@ -10,6 +10,8 @@ export interface BlogSchemaOptions {
     siteUrl?: string;
     /** Path prefix for post URLs (default '/blog'). */
     blogBasePath?: string;
+    /** Override the configured canonical trailing-slash policy. */
+    trailingSlash?: boolean;
     /** Stable person entity for E-E-A-T, e.g. { id: 'https://example.com/#person', name: 'Jane Doe' }. */
     author?: {
         id?: string;

@@ -56,11 +56,20 @@ test('fetchGscQueries hook supplies topics without any OAuth credentials', async
   );
 });
 
-test('submitSitemap hook replaces the OAuth sitemap ping', async () => {
-  let submitted = '';
-  configureTestEngine({}, { submitSitemap: async ({ sitemap }) => void (submitted = sitemap) });
+test('submitSitemap hook submits every configured sitemap without OAuth', async () => {
+  const submitted: string[] = [];
+  configureTestEngine({
+    gsc: {
+      property: 'sc-domain:acme-plumbing.example',
+      sitemap: 'https://acme-plumbing.example/sitemap.xml',
+      sitemaps: ['https://acme-plumbing.example/sitemap-blog.xml'],
+    },
+  }, { submitSitemap: async ({ sitemap }) => void submitted.push(sitemap) });
   await pingGscSitemap(null); // no token — the hook owns its own auth
-  assert.equal(submitted, 'https://acme-plumbing.example/sitemap.xml');
+  assert.deepEqual(submitted, [
+    'https://acme-plumbing.example/sitemap.xml',
+    'https://acme-plumbing.example/sitemap-blog.xml',
+  ]);
 });
 
 /* -------------------------------------------------------- seam 2: markdown --- */
@@ -208,5 +217,6 @@ test('paths.blogBasePath and trailingSlash drive every canonical post URL', asyn
   assert.equal(blogPostPath('a'), '/log/a/');
   assert.equal(blogPostUrl('a'), 'https://acme-plumbing.example/log/a/');
   assert.ok(buildBlogRss([{ id: 'x', title: 't', description: 'd', date: new Date('2026-08-01') }]).includes('https://acme-plumbing.example/log/x/'));
+  assert.ok(buildBlogRss([{ id: 'x', title: 't', description: 'd', date: new Date('2026-08-01') }]).includes('<link>https://acme-plumbing.example/log/</link>'));
   assert.deepEqual(relatedLinkTargets([{ slug: 'a', title: 'A' }]), [{ title: 'A', path: '/log/a/' }]);
 });

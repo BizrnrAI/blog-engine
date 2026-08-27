@@ -10,6 +10,8 @@ export interface DiscoveryOptions {
     siteUrl?: string;
     /** Path prefix for post URLs (default '/blog'). */
     blogBasePath?: string;
+    /** Override the configured canonical trailing-slash policy. */
+    trailingSlash?: boolean;
     /** Slugs to omit from every public surface (e.g. corpus-audit BLOCK verdicts). */
     exclude?: readonly string[];
 }

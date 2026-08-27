@@ -1,4 +1,4 @@
-import { blogBasePath, getBlogConfig } from './config.js';
+import { blogBasePath, formatBlogUrl, getBlogConfig } from './config.js';
 function defaultBase() {
     try {
         return blogBasePath();
@@ -11,6 +11,19 @@ function resolveSiteUrl(options) {
     if (options.siteUrl)
         return options.siteUrl.replace(/\/$/, '');
     return getBlogConfig().identity.siteUrl.replace(/\/$/, '');
+}
+function resolveTrailingSlash(options) {
+    if (typeof options.trailingSlash === 'boolean')
+        return options.trailingSlash;
+    try {
+        return Boolean(getBlogConfig().paths.trailingSlash);
+    }
+    catch {
+        return false;
+    }
+}
+function publicUrl(options, slug) {
+    return formatBlogUrl(resolveSiteUrl(options), options.blogBasePath || defaultBase(), slug, resolveTrailingSlash(options));
 }
 /**
  * Drop posts that must not appear in any public surface — BLOCK verdicts from the corpus audit,
@@ -31,21 +44,17 @@ export function excludeBlocked(posts, exclude) {
  * defect in the playbook's field notes.
  */
 export function blogHubSitemapEntry(posts, options = {}) {
-    const siteUrl = resolveSiteUrl(options);
-    const base = options.blogBasePath || defaultBase();
     const newest = posts
         .map((p) => p.updatedAt || p.publishedAt)
         .filter(Boolean)
         .sort()
         .pop();
-    return { loc: `${siteUrl}${base}`, lastmod: newest || new Date().toISOString().slice(0, 10) };
+    return { loc: publicUrl(options), lastmod: newest || new Date().toISOString().slice(0, 10) };
 }
 /** One <url> entry per post with lastmod = updatedAt (honest dates only). */
 export function blogSitemapEntries(posts, options = {}) {
-    const siteUrl = resolveSiteUrl(options);
-    const base = options.blogBasePath || defaultBase();
     return excludeBlocked(posts, options.exclude).map((post) => ({
-        loc: `${siteUrl}${base}/${post.slug}`,
+        loc: publicUrl(options, post.slug),
         lastmod: post.updatedAt || post.publishedAt,
     }));
 }
@@ -56,7 +65,6 @@ export function blogSitemapEntries(posts, options = {}) {
  */
 export function buildBlogLlmsTxt(posts, options = {}) {
     const siteUrl = resolveSiteUrl(options);
-    const base = options.blogBasePath || defaultBase();
     let feedPath = options.feedPath;
     if (!feedPath) {
         try {
@@ -70,7 +78,7 @@ export function buildBlogLlmsTxt(posts, options = {}) {
         `## ${options.heading || 'Blog'}`,
         '',
         `- RSS feed: ${siteUrl}${feedPath}`,
-        ...excludeBlocked(posts, options.exclude).slice(0, options.limit ?? 50).map((post) => `- [${post.title}](${siteUrl}${base}/${post.slug}): ${post.description}`),
+        ...excludeBlocked(posts, options.exclude).slice(0, options.limit ?? 50).map((post) => `- [${post.title}](${publicUrl(options, post.slug)}): ${post.description}`),
     ];
     return lines.join('\n');
 }

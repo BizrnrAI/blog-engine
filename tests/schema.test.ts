@@ -57,6 +57,23 @@ test('blogPostGraph bundles article, breadcrumbs, and faq into one graph', () =>
   assert.deepEqual(types, ['BlogPosting', 'BreadcrumbList', 'FAQPage']);
 });
 
+test('schema graph honors the configured trailing-slash policy everywhere', () => {
+  const runtime = configureTestEngine();
+  runtime.config.paths.trailingSlash = true;
+  const graph = blogPostGraph(post);
+  const nodes = graph['@graph'] as Array<Record<string, any>>;
+  const article = nodes[0];
+  const breadcrumbs = nodes[1].itemListElement as Array<Record<string, any>>;
+  const faq = nodes[2];
+  assert.equal(article.url, 'https://acme-plumbing.example/blog/drain-cleaning-cost-springfield/');
+  assert.equal(article['@id'], 'https://acme-plumbing.example/blog/drain-cleaning-cost-springfield/#article');
+  assert.equal(article.mainEntityOfPage['@id'], article.url);
+  assert.equal(article.isPartOf['@id'], 'https://acme-plumbing.example/blog/#blog');
+  assert.equal(breadcrumbs[1].item, 'https://acme-plumbing.example/blog/');
+  assert.equal(breadcrumbs[2].item, article.url);
+  assert.equal(faq['@id'], `${article.url}#faq`);
+});
+
 test('blogPostGraph omits FAQPage when the post has no faqs', () => {
   const graph = blogPostGraph({ ...post, faqs: [] });
   const types = (graph['@graph'] as Array<Record<string, unknown>>).map((n) => n['@type']);

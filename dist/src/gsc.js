@@ -144,27 +144,35 @@ export async function getGscPageQueries(pathPrefix) {
     }
 }
 export async function pingGscSitemap(token) {
+    const sitemaps = [...new Set([
+            BLOG_CONFIG.gsc.sitemap,
+            ...(BLOG_CONFIG.gsc.sitemaps ?? []),
+        ].map((value) => value?.trim()).filter((value) => Boolean(value)))];
     // A site with its own Search Console auth submits through the hook; there is no OAuth token.
     const hook = getBlogHooks().submitSitemap;
     if (hook) {
-        try {
-            await hook({ sitemap: BLOG_CONFIG.gsc.sitemap, property: BLOG_CONFIG.gsc.property });
-            console.log('[blog-indexing] GSC sitemap resubmit: via submitSitemap hook');
-        }
-        catch (err) {
-            console.warn('[blog-indexing] submitSitemap hook failed:', err instanceof Error ? err.message : String(err));
+        for (const sitemap of sitemaps) {
+            try {
+                await hook({ sitemap, property: BLOG_CONFIG.gsc.property });
+                console.log('[blog-indexing] GSC sitemap resubmit via hook:', sitemap);
+            }
+            catch (err) {
+                console.warn('[blog-indexing] submitSitemap hook failed:', sitemap, err instanceof Error ? err.message : String(err));
+            }
         }
         return;
     }
     if (!token)
         return;
-    try {
-        const sm = encodeURIComponent(BLOG_CONFIG.gsc.sitemap);
-        const r = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(BLOG_CONFIG.gsc.property)}/sitemaps/${sm}`, { method: 'PUT', headers: { Authorization: `Bearer ${token}` } });
-        console.log('[blog-indexing] GSC sitemap resubmit:', r.status);
-    }
-    catch (err) {
-        console.warn('[blog-indexing] GSC sitemap ping failed:', err instanceof Error ? err.message : String(err));
+    for (const sitemap of sitemaps) {
+        try {
+            const sm = encodeURIComponent(sitemap);
+            const r = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(BLOG_CONFIG.gsc.property)}/sitemaps/${sm}`, { method: 'PUT', headers: { Authorization: `Bearer ${token}` } });
+            console.log('[blog-indexing] GSC sitemap resubmit:', sitemap, r.status);
+        }
+        catch (err) {
+            console.warn('[blog-indexing] GSC sitemap ping failed:', sitemap, err instanceof Error ? err.message : String(err));
+        }
     }
 }
 //# sourceMappingURL=gsc.js.map

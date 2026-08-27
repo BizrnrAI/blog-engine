@@ -101,6 +101,8 @@ rather than an empty 200 or a false 404.
   intrinsic dimensions and responsive variants
 - `BlogPosting` + `Breadcrumb` + `FAQPage` JSON-LD with stable entity ids
 - Zero fabricated statistics, prices, or sources — enforced, not hoped for
+- One canonical slash policy across HTML, JSON-LD, RSS, sitemaps, and `llms.txt`
+- Every configured sitemap is submitted after a verified live release
 
 ## What the engine owns
 
@@ -109,6 +111,7 @@ rather than an empty 200 or a false 404.
 | **Content store** | `store.ts` | The engine's only route to posts and assets. Filesystem by default, swappable in one line |
 | **Supabase store** | `supabase-store.ts` | Posts as rows, assets in Storage, via plain `fetch` — no SDK dependency |
 | **AllWeb reader/store** | `allweb-reader.ts` / `allweb-resilient-reader.ts` / `allweb-store.ts` | Tenant-bound rendering, last-known-good outage handling, and optimistic publishing through the site-agent gateway |
+| **AllWeb Search Console** | `allweb-gsc.ts` | Site-scoped demand and sitemap hooks without account-wide Google credentials in repositories |
 | **Blog service** | `service.ts` | One process publishes for many sites; per-site schedules and failure isolation |
 | Post generation | `generate-post.ts` | The content contract, strict-JSON prompting, tolerant parsing, 3-attempt validate-and-retry |
 | Topic selection | `topic-rotation.ts`, `demand.ts` | Search Console demand → editorial pool → cross-promo, with a two-signal demand gate |
