@@ -577,6 +577,38 @@ export interface AllWebStoreOptions {
     /** Page size used while reading a corpus (default 200, max 250). */
     pageSize?: number;
 }
+/** Exact least-privilege client used to release an already-reviewed AllWeb row. */
+export interface AllWebReviewerOptions {
+    /** Site-agent Edge Function URL. */
+    apiUrl: string;
+    /** Reviewer token with exactly site:read, blog:read, and blog:publish. */
+    token: string;
+    /** Immutable AllWeb site UUID from website.manifest.json. */
+    siteId: string;
+    /** Abort an unresponsive gateway request after this many milliseconds (default 8000). */
+    timeoutMs?: number;
+}
+export interface ReleaseReviewedAllWebPostArgs {
+    slug: string;
+    /** Revision the accountable reviewer actually inspected. */
+    expectedRevision: number;
+    /** Optional explicit publication timestamp accepted by the gateway. */
+    publishedAt?: string;
+}
+export interface ReleaseReviewedAllWebPostResult {
+    slug: string;
+    revision: number;
+    status: 'published';
+    /** False when a retry finds that this exact reviewed revision is already public. */
+    changed: boolean;
+}
+export interface AllWebReviewer {
+    /**
+     * Verify tenant and exact reviewer scope, require review state + optimistic revision,
+     * then publish. A retry after publication is idempotent for expectedRevision + 1.
+     */
+    releaseReviewedPost: (args: ReleaseReviewedAllWebPostArgs) => Promise<ReleaseReviewedAllWebPostResult>;
+}
 /** A tenant-verified row returned by the AllWeb rendering client. */
 export interface AllWebBlogPost extends ParsedBlogPost {
     /** Immutable AllWeb site UUID supplied by the gateway row. */

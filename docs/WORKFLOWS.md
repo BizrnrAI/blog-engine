@@ -83,6 +83,38 @@ during setup:
   gates pass. With AllWeb, generate to `publicationStatus: 'review'`; release the exact revision
   separately after review. Never submit the staged URL to search engines.
 
+### AllWeb review-required release
+
+Review-required sites call `.github/workflows/reusable-blog-release.yml`. The site supplies only
+the reviewed slug, its exact revision, and an explicit accountable-review attestation. The
+reviewer credential is a GitHub Actions secret with exactly `site:read`, `blog:read`, and
+`blog:publish`; it is never bundled into the repository or sent to the public runtime.
+
+The reusable workflow then performs the mechanical work autonomously: rebuild and run every site
+gate against the review row, verify the reviewer tenant and exact permission set, publish with an
+optimistic revision check, wait for the canonical URL to return successfully, submit IndexNow and
+Search Console sitemap signals, probe blog health, and append a WebMem release event. A retry after
+publication is idempotent so an indexing outage can be recovered without mutating the article
+again.
+
+The website control plane distributes `.website/release-reviewed-blog.mjs`, a tiny wrapper around
+the maintained adapter:
+
+```ts
+import { createAllWebReviewer } from '@bizrnr/blog-engine/adapters/allweb';
+
+const reviewer = createAllWebReviewer({
+  apiUrl: manifest.allweb.api_url,
+  siteId: manifest.site_id,
+  token: process.env.ALLWEB_REVIEWER_TOKEN,
+});
+await reviewer.releaseReviewedPost({ slug, expectedRevision });
+```
+
+Non-regulated sites may use `publicationStatus: 'published'`; the normal service already stores,
+submits, and reports those rows without the review workflow. Do not copy the release workflow into
+site-specific logic or give a review-required repository agent `blog:publish`.
+
 ## Action versions (keep current)
 
 The builders emit `actions/checkout@v7`, `actions/setup-node@v7`, and

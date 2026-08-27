@@ -1,0 +1,72 @@
+name: Canonical reviewed blog release
+
+on:
+  workflow_call:
+    inputs:
+      slug:
+        description: Reviewed AllWeb post slug
+        required: true
+        type: string
+      expected_revision:
+        description: Exact AllWeb revision the reviewer inspected
+        required: true
+        type: number
+      confirm_accountable_review:
+        description: Attest that an accountable reviewer approved this exact revision
+        required: true
+        type: boolean
+    secrets:
+      ALLWEB_REVIEWER_TOKEN:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: reviewed-blog-release-${{ github.repository }}-${{ inputs.slug }}
+      cancel-in-progress: false
+    steps:
+      - name: Require accountable review attestation
+        env:
+          CONFIRMED: ${{ inputs.confirm_accountable_review }}
+        shell: bash
+        run: |
+          if [[ "$CONFIRMED" != "true" ]]; then
+            echo 'Refusing release: confirm_accountable_review must be true.' >&2
+            exit 64
+          fi
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install zsh for portable website launchers
+        shell: bash
+        run: command -v zsh >/dev/null || { sudo apt-get update && sudo apt-get install -y zsh; }
+      - run: npm ci
+      - name: Re-run the complete site contract against the review row
+        run: npm test
+      - name: Release the exact reviewed revision
+        env:
+          ALLWEB_REVIEWER_TOKEN: ${{ secrets.ALLWEB_REVIEWER_TOKEN }}
+          BLOG_SLUG: ${{ inputs.slug }}
+          BLOG_EXPECTED_REVISION: ${{ inputs.expected_revision }}
+        run: node .website/release-reviewed-blog.mjs "$BLOG_SLUG" "$BLOG_EXPECTED_REVISION"
+      - name: Wait for the public URL, then submit canonical indexing signals
+        env:
+          BLOG_SLUG: ${{ inputs.slug }}
+        run: node .website/agent.mjs run npm run blog:index -- --slugs="$BLOG_SLUG" --wait-live
+      - name: Verify public blog health
+        run: npm run blog:health
+      - name: Record the durable release event
+        env:
+          BLOG_SLUG: ${{ inputs.slug }}
+          BLOG_EXPECTED_REVISION: ${{ inputs.expected_revision }}
+        run: >-
+          node .website/agent.mjs event blog.published
+          "Released $BLOG_SLUG from reviewed revision $BLOG_EXPECTED_REVISION;
+          live URL verified and indexing signals submitted by run $GITHUB_RUN_ID."

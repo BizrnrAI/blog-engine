@@ -3,6 +3,22 @@
 All notable changes to `@bizrnr/blog-engine`. Consumers install from git, so
 the version in `package.json` is the contract marker.
 
+## 1.3.0 — 2026-08-27
+
+Accountable, retry-safe release for review-required AllWeb sites.
+
+### Added
+- **`createAllWebReviewer()`** — validates the immutable site tenant and exact least-privilege
+  reviewer role, requires the inspected review revision, publishes optimistically, and safely
+  resumes an already-published revision after a downstream indexing failure.
+- **Reusable reviewed-release workflow** — re-runs the adopter's complete test contract, releases
+  only after an explicit accountable-review attestation, waits for the live URL, submits indexing
+  signals, verifies blog health, and records the durable WebMem event.
+
+### Security
+- The reviewer token remains separate from repository-agent and Vercel render credentials. The
+  release client rejects broader tokens, foreign tenants, non-review rows, and revision drift.
+
 ## 1.2.0 — 2026-08-27
 
 Provider-neutral core and explicit optional integrations.
