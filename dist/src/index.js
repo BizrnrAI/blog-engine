@@ -1,8 +1,10 @@
-export { BLOG_CONFIG, blogBasePath, brandPersona, configureBlogEngine, getBlogConfig, getBlogHooks, getBlogRuntime, getBlogTopics, hasRemoteStore } from './config.js';
+export { BLOG_CONFIG, blogBasePath, blogPostPath, blogPostUrl, brandPersona, configureBlogEngine, getBlogConfig, getBlogHooks, getBlogRuntime, getBlogTopics, hasRemoteStore } from './config.js';
 export { createFileStore, getStore, listExistingPosts } from './store.js';
 export { createSupabaseStore } from './supabase-store.js';
 export { createAllWebStore } from './allweb-store.js';
 export { createAllWebBlogReader } from './allweb-reader.js';
+export { createResilientAllWebBlogReader } from './allweb-resilient-reader.js';
+export { BLOG_CACHE_CONTROL, BLOG_NO_STORE, BLOG_RETRY_AFTER_SECONDS, blogCacheControl, blogUnavailableResponse } from './http.js';
 export { formatServiceReport, runBlogService } from './service.js';
 export { contentRules, generateBlogPost, normalizeGeneratedPost, parseModelJson, relatedLinkTargets, repairJsonStringNewlines, validateGeneratedPost } from './generate-post.js';
 export { generateCoverImage, applyWatermark, heroAltText, makeOgCard, writeHeroVariants } from './images.js';

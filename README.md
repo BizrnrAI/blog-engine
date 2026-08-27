@@ -85,7 +85,9 @@ const post = await blog.getPublishedPost('canonical-slug');
 
 The reader follows pagination, verifies every returned tenant UUID, rejects
 non-published rows, bounds network waits, and uses a short invalidatable cache.
-It exposes no mutation method.
+It exposes no mutation method. Dynamic public routes should wrap it with
+`createResilientAllWebBlogReader()` so a store outage becomes a retryable 503
+rather than an empty 200 or a false 404.
 
 ## What you get in every post
 
@@ -106,7 +108,7 @@ It exposes no mutation method.
 |---|---|---|
 | **Content store** | `store.ts` | The engine's only route to posts and assets. Filesystem by default, swappable in one line |
 | **Supabase store** | `supabase-store.ts` | Posts as rows, assets in Storage, via plain `fetch` — no SDK dependency |
-| **AllWeb reader/store** | `allweb-reader.ts` / `allweb-store.ts` | Tenant-bound rendering plus optimistic publishing through the site-agent gateway |
+| **AllWeb reader/store** | `allweb-reader.ts` / `allweb-resilient-reader.ts` / `allweb-store.ts` | Tenant-bound rendering, last-known-good outage handling, and optimistic publishing through the site-agent gateway |
 | **Blog service** | `service.ts` | One process publishes for many sites; per-site schedules and failure isolation |
 | Post generation | `generate-post.ts` | The content contract, strict-JSON prompting, tolerant parsing, 3-attempt validate-and-retry |
 | Topic selection | `topic-rotation.ts`, `demand.ts` | Search Console demand → editorial pool → cross-promo, with a two-signal demand gate |

@@ -78,6 +78,7 @@ export function createSupabaseStore(options: SupabaseStoreOptions): BlogStore {
 
   return {
     name: `supabase:${cfg.table}`,
+    publicationStatus: options.publishStatus || 'published',
     async listPosts(): Promise<ParsedBlogPost[]> {
       const status = options.includeDrafts ? '' : '&status=eq.published';
       const r = await fetch(

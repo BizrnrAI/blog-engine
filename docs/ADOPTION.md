@@ -20,7 +20,7 @@ Everything except step 5 is identical for both.
 npm install github:BizrnrAI/blog-engine#v0
 ```
 
-Public repo, compiled `dist/` committed, so there is no build step on install. Pin `#v0.8.0` for
+Public repo, compiled `dist/` committed, so there is no build step on install. Pin `#v0.9.0` for
 reproducibility or track `#v0` for patches.
 
 The smallest complete adapter lives in `examples/minimal` — copy it if you'd rather start from
@@ -46,6 +46,7 @@ export const config: BlogEngineConfig = {
   },
   paths: {
     blogBasePath: '/blog',                     // '/log', '/insights' — whatever your URLs use
+    trailingSlash: true,                       // declare once; every emitted post URL follows it
     blogDir: 'src/content/blog',               // file store only
     assetDir: 'public/assets/blog',            // branded OG cards
     heroDir: 'public/assets/blog/generated',   // watermarked heroes
@@ -162,21 +163,23 @@ multi-week silent outages in production.
 do not expose a Supabase anon or service-role credential:
 
 ```ts
-import { createAllWebBlogReader } from '@bizrnr/blog-engine';
+import { createResilientAllWebBlogReader } from '@bizrnr/blog-engine';
 
-const blog = createAllWebBlogReader({
+const blog = createResilientAllWebBlogReader({
   siteId: websiteManifest.site_id,
   apiUrl: websiteManifest.allweb.api_url,
 });
 
-const summaries = await blog.listPublishedPosts({ includeContent: false });
-const post = await blog.getPublishedPost(slug);
+const { posts, available, stale } = await blog.listPublishedPosts({ includeContent: false });
+const one = await blog.getPublishedPost(slug);
 ```
 
 Use `getPublishedPost()` for a dynamic post route; never search a capped list for one slug.
 Use `listPublishedPosts()` for the hub, feed, sitemap, related links, and corpus gates. It follows
-AllWeb pagination automatically. The reader fails closed for public rendering by default; pass
-`failClosed: false` in CI/content gates so an unavailable or mismatched store fails the check.
+AllWeb pagination automatically. If `available` is false, return 503 + `Retry-After`; if `stale`
+is true, render the last-known-good value with `no-store`. A null post is a real 404 only when
+`available` is true. Use the basic `createAllWebBlogReader({ failClosed: false })` in strict
+CI/content gates, where an unavailable or mismatched store must throw.
 
 **Direct Supabase database:** query the table with the dedicated project credential and
 revalidate; a new row appears on the next revalidation.
@@ -240,6 +243,7 @@ Every one of these is a supported seam, not a fork:
 | Service-account Search Console auth | `hooks.fetchGscQueries` / `fetchGscPageQueries` / `submitSitemap` |
 | A curated, priority-ordered topic catalog | `slug`/`title` pins on editorial topics, `hooks.pickTopic`, `hooks.deriveTopic` |
 | Posts under `/log` or `/insights` | `paths.blogBasePath` |
+| Canonical post URLs end in `/` | `paths.trailingSlash: true` |
 | Announce new posts somewhere | `hooks.afterIndexed` + `createAfterIndexedHook([...adapters])` |
 | Index-coverage reporting | `hooks.inspectUrl` |
 

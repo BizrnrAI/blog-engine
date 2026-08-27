@@ -195,13 +195,18 @@ test('topics.excludeQuery drops matching Search Console queries from selection',
   assert.deepEqual(queries.map((q) => q.query), ['la jolla condos']);
 });
 
-test('paths.blogBasePath drives post URLs in feed, link graph, and pings', async () => {
+test('paths.blogBasePath and trailingSlash drive every canonical post URL', async () => {
   const { buildBlogRss } = await import('../src/rss.js');
   const { relatedLinkTargets } = await import('../src/generate-post.js');
-  const { blogBasePath } = await import('../src/config.js');
+  const { blogBasePath, blogPostPath, blogPostUrl } = await import('../src/config.js');
   const rt = configureTestEngine();
   rt.config.paths.blogBasePath = '/log/';
   assert.equal(blogBasePath(), '/log');
   assert.ok(buildBlogRss([{ id: 'x', title: 't', description: 'd', date: new Date('2026-08-01') }]).includes('https://acme-plumbing.example/log/x'));
   assert.deepEqual(relatedLinkTargets([{ slug: 'a', title: 'A' }]), [{ title: 'A', path: '/log/a' }]);
+  rt.config.paths.trailingSlash = true;
+  assert.equal(blogPostPath('a'), '/log/a/');
+  assert.equal(blogPostUrl('a'), 'https://acme-plumbing.example/log/a/');
+  assert.ok(buildBlogRss([{ id: 'x', title: 't', description: 'd', date: new Date('2026-08-01') }]).includes('https://acme-plumbing.example/log/x/'));
+  assert.deepEqual(relatedLinkTargets([{ slug: 'a', title: 'A' }]), [{ title: 'A', path: '/log/a/' }]);
 });

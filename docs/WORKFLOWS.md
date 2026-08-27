@@ -79,6 +79,9 @@ during setup:
   build, ASEO/contract gate if the site has one) *before* the PR opens, so a
   bad generation never even reaches review.
 - `BLOG_ENGINE_DISABLED=1` as a repo variable is the emergency stop.
+- Regulated/YMYL content requires accountable subject-matter review even when deterministic
+  gates pass. With AllWeb, generate to `publicationStatus: 'review'`; release the exact revision
+  separately after review. Never submit the staged URL to search engines.
 
 ## Action versions (keep current)
 

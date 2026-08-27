@@ -44,6 +44,7 @@ export function createAllWebStore(options: AllWebStoreOptions): BlogStore {
 
   return {
     name: `allweb:${siteId}`,
+    publicationStatus: options.publishStatus || 'published',
 
     async listPosts(): Promise<ParsedBlogPost[]> {
       const posts: ParsedBlogPost[] = [];

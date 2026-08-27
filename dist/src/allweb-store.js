@@ -43,6 +43,7 @@ export function createAllWebStore(options) {
     }
     return {
         name: `allweb:${siteId}`,
+        publicationStatus: options.publishStatus || 'published',
         async listPosts() {
             const posts = [];
             let offset = 0;
