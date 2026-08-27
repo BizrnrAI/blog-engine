@@ -486,6 +486,8 @@ export interface PutPostArgs {
 export interface BlogStore {
   /** Human-readable name, used in logs. */
   name: string;
+  /** Persistence status, exposed so the service can verify review policy. */
+  publicationStatus?: BlogPublicationStatus;
   /** Repository root, when the store is filesystem-backed. */
   root?: string;
   /** Every post the site has published, newest first is not required. */
@@ -501,7 +503,7 @@ export interface ServiceSite {
   /** Stable id (use the registry's site_key). */
   id: string;
   /** Build this site's runtime. Async so config can come from a registry query. */
-  runtime: () => BlogEngineRuntime | Promise<BlogEngineRuntime>;
+  runtime: (context?: ServiceRuntimeContext) => BlogEngineRuntime | Promise<BlogEngineRuntime>;
   /** Filesystem root; only meaningful for filesystem-backed sites. */
   root?: string;
   /** Posts per run (default 1). */
@@ -510,13 +512,27 @@ export interface ServiceSite {
   days?: readonly number[];
   /** Set false to pause a site without deleting its entry. */
   enabled?: boolean;
+  /**
+   * Where a successful generation lands. Use review for legal, medical,
+   * financial, and other YMYL content. The service will not submit a staged
+   * URL to search engines before a separate release action publishes it.
+   */
+  publicationStatus?: BlogPublicationStatus;
+}
+
+export type BlogPublicationStatus = 'draft' | 'review' | 'published';
+
+export interface ServiceRuntimeContext {
+  publicationStatus: BlogPublicationStatus;
 }
 
 export interface ServiceRunResult {
   site: string;
-  status: 'published' | 'nothing-to-do' | 'skipped' | 'failed';
+  status: 'published' | 'queued-for-review' | 'drafted' | 'nothing-to-do' | 'skipped' | 'failed';
   detail?: string;
   published: string[];
+  /** Generated but deliberately not public or submitted to search engines. */
+  staged?: string[];
   refreshed: string[];
   ms?: number;
 }
@@ -554,7 +570,7 @@ export interface AllWebStoreOptions {
   /** Author recorded on written rows. */
   author?: string;
   /** Write posts as drafts instead of publishing immediately. */
-  publishStatus?: 'draft' | 'published';
+  publishStatus?: BlogPublicationStatus;
   /** Include non-published posts during corpus operations. */
   includeDrafts?: boolean;
   /** Abort an unresponsive gateway request after this many milliseconds (default 8000). */
@@ -597,6 +613,38 @@ export interface AllWebBlogReader {
   getPublishedPost: (slug: string, options?: { force?: boolean }) => Promise<AllWebBlogPost | null>;
   /** Drop all in-process list and slug caches. */
   invalidate: () => void;
+}
+
+export interface ResilientAllWebBlogReaderOptions extends Omit<AllWebBlogReaderOptions, 'failClosed'> {}
+
+export interface AllWebBlogListResult {
+  posts: AllWebBlogPost[];
+  /** True when a live or last-known-good response is safe to render. */
+  available: boolean;
+  /** True only when the current read failed and the value is last-known-good. */
+  stale: boolean;
+}
+
+export interface AllWebBlogPostResult {
+  post: AllWebBlogPost | null;
+  available: boolean;
+  stale: boolean;
+}
+
+export interface AllWebBlogReaderHealth {
+  lastOkAt: string | null;
+  lastErrorAt: string | null;
+  /** Sanitized code; never contains credentials, URLs, or response bodies. */
+  lastErrorCode: string | null;
+  warmCorpus: number | null;
+  warmPosts: number;
+}
+
+export interface ResilientAllWebBlogReader {
+  listPublishedPosts: (options?: { includeContent?: boolean; force?: boolean }) => Promise<AllWebBlogListResult>;
+  getPublishedPost: (slug: string, options?: { force?: boolean }) => Promise<AllWebBlogPostResult>;
+  health: () => AllWebBlogReaderHealth;
+  invalidate: (options?: { dropLastGood?: boolean }) => void;
 }
 
 export interface PersistPostArgs {

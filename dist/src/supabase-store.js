@@ -69,6 +69,7 @@ export function createSupabaseStore(options) {
     };
     return {
         name: `supabase:${cfg.table}`,
+        publicationStatus: options.publishStatus || 'published',
         async listPosts() {
             const status = options.includeDrafts ? '' : '&status=eq.published';
             const r = await fetch(`${cfg.url}/rest/v1/${cfg.table}?site_id=eq.${encodeURIComponent(cfg.siteId)}${status}&order=published_at.desc&limit=1000`, { headers });

@@ -3,6 +3,25 @@
 All notable changes to `@bizrnr/blog-engine`. Consumers install from git, so
 the version in `package.json` is the contract marker.
 
+## 0.9.0 — 2026-08-27
+
+Fleet-wide resilient rendering and review-safe publishing.
+
+### Added
+- **`createResilientAllWebBlogReader()`** — explicit live/stale/unavailable results, a
+  per-process last-known-good cache, safe health metadata, and correct separation between a
+  missing row and an unreachable content store.
+- Shared HTTP helpers: `BLOG_CACHE_CONTROL`, `BLOG_NO_STORE`, `blogCacheControl()`, and
+  `blogUnavailableResponse()`. Adopters no longer copy cache and retry semantics.
+- `ServiceSite.publicationStatus` with `review` and `draft` modes. Generated non-public rows are
+  reported as staged and are never submitted to IndexNow or Search Console.
+
+### Changed
+- Review/draft service runs reject refresh mode because overwriting a live row with a staged
+  status would unpublish it.
+- AllWeb store typing accepts the control plane's `review` status; existing callers retain the
+  backward-compatible `published` default.
+
 ## 0.8.0 — 2026-08-26
 
 Canonical AllWeb publishing and rendering for a fleet of isolated websites.

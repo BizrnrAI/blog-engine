@@ -12,6 +12,8 @@ import { createFileStore, getStore } from '../src/store.js';
 import { createSupabaseStore } from '../src/supabase-store.js';
 import { createAllWebStore } from '../src/allweb-store.js';
 import { createAllWebBlogReader } from '../src/allweb-reader.js';
+import { createResilientAllWebBlogReader } from '../src/allweb-resilient-reader.js';
+import { BLOG_CACHE_CONTROL, BLOG_NO_STORE, blogCacheControl, blogUnavailableResponse } from '../src/http.js';
 import type { BlogEngineRuntime, BlogStore, ParsedBlogPost, PutPostArgs, ServiceSite } from '../src/types.js';
 import { configureTestEngine, testConfig, validPost } from './helpers.js';
 
@@ -163,6 +165,33 @@ test('the service publishes across sites, isolates failures, and honours schedul
 
   const only = await runBlogService(sites, { only: ['site-c'] });
   assert.equal(only.length, 1);
+});
+
+test('the service stages review-required content and never submits a non-public URL', async () => {
+  const store = memoryStore();
+  store.publicationStatus = 'review';
+  let runtimeStatus = '';
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async () => {
+    throw new Error('search submission must not run for review content');
+  }) as typeof fetch;
+  try {
+    const results = await runBlogService([{
+      id: 'ymyl-site',
+      publicationStatus: 'review',
+      runtime: (context) => {
+        runtimeStatus = context?.publicationStatus || '';
+        return runtimeWith(store);
+      },
+    }]);
+    assert.equal(runtimeStatus, 'review');
+    assert.equal(results[0].status, 'queued-for-review');
+    assert.deepEqual(results[0].staged, ['drain-cleaning-cost-springfield']);
+    assert.deepEqual(results[0].published, []);
+    assert.match(formatServiceReport(results), /\?drain-cleaning-cost-springfield/);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 });
 
 // ---- Supabase store: contract, without a network ----
@@ -357,6 +386,64 @@ test('createAllWebBlogReader fails closed on foreign rows and can fail loudly fo
   } finally {
     globalThis.fetch = realFetch;
   }
+});
+
+test('resilient AllWeb reader distinguishes outage, missing row, and last-known-good data', async () => {
+  const siteId = '6b053b68-51a0-4cfd-98e3-835e584f995e';
+  const realFetch = globalThis.fetch;
+  let online = true;
+  const row = {
+    site_id: siteId, slug: 'known-post', title: 'Known', description: 'Description', category: 'Guides', tags: [],
+    author: 'Alex', published_at: '2026-08-01', updated_at: '2026-08-01', answer: 'Answer',
+    content: '## Heading\nBody', faqs: [], sources: [], status: 'published', revision: 3,
+  };
+  globalThis.fetch = (async (_url: string | URL, init: RequestInit = {}) => {
+    if (!online) return Response.json({ ok: false, error: 'store_down' }, { status: 503 });
+    const body = JSON.parse(String(init.body));
+    if (body.action === 'blog_get') {
+      if (body.slug === 'missing') return Response.json({ ok: false, error: 'blog_not_found' }, { status: 404 });
+      return Response.json({ ok: true, post: { ...row, slug: body.slug } });
+    }
+    return Response.json({ ok: true, posts: [row], pagination: { has_more: false, next_offset: null } });
+  }) as typeof fetch;
+
+  try {
+    const reader = createResilientAllWebBlogReader({
+      apiUrl: 'https://allweb.example/functions/v1/site-agent', token: 'awt_scoped', siteId,
+      cacheTtlMs: 0, onError: () => {},
+    });
+    assert.deepEqual(await reader.getPublishedPost('missing'), { post: null, available: true, stale: false });
+    assert.equal((await reader.listPublishedPosts()).posts.length, 1);
+    assert.equal((await reader.getPublishedPost('known-post')).post?.slug, 'known-post');
+
+    online = false;
+    const staleList = await reader.listPublishedPosts();
+    assert.deepEqual(staleList.posts.map((post) => post.slug), ['known-post']);
+    assert.equal(staleList.available, true);
+    assert.equal(staleList.stale, true);
+    const cached = await reader.getPublishedPost('known-post');
+    assert.equal(cached.post?.slug, 'known-post');
+    assert.equal(cached.available, true);
+    assert.equal(cached.stale, true);
+    assert.deepEqual(await reader.getPublishedPost('never-seen'), { post: null, available: false, stale: false });
+    assert.equal(reader.health().lastErrorCode, 'store_down');
+    assert.equal(reader.health().warmCorpus, 1);
+
+    reader.invalidate();
+    assert.deepEqual(await reader.listPublishedPosts(), { posts: [], available: false, stale: false });
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('fleet HTTP helpers cache healthy data and make outages retryable', async () => {
+  assert.equal(blogCacheControl(false), BLOG_CACHE_CONTROL);
+  assert.equal(blogCacheControl(true), BLOG_NO_STORE);
+  const response = blogUnavailableResponse({ body: 'branded message', retryAfterSeconds: 90 });
+  assert.equal(response.status, 503);
+  assert.equal(response.headers.get('cache-control'), BLOG_NO_STORE);
+  assert.equal(response.headers.get('retry-after'), '90');
+  assert.equal(await response.text(), 'branded message');
 });
 
 test('createFileStore round-trips a post and an asset', async () => {

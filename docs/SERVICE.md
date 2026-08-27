@@ -91,6 +91,32 @@ console.log(formatServiceReport(results));
 One site's failure never stops the others — every site returns a result, including
 `status: 'failed'` with the reason.
 
+### Review-required sites
+
+Legal, medical, financial, and other YMYL sites should stage generated rows for accountable
+review. Declare the policy on the service entry and apply the same status to its AllWeb store:
+
+```ts
+{
+  id: 'legal-guides',
+  publicationStatus: 'review',
+  runtime: ({ publicationStatus = 'review' } = {}) => ({
+    config, topics, brandPersona,
+    hooks: { store: createAllWebStore({
+      siteId: manifest.site_id,
+      apiUrl: manifest.allweb.api_url,
+      publishStatus: publicationStatus,
+      includeDrafts: true,
+    }) },
+  }),
+}
+```
+
+The result is `queued-for-review`, not `published`, and the service does not submit a URL that
+is not live. Publish the reviewed row through the control plane with optimistic revision
+checking; then submit the live URL. Refresh mode is intentionally rejected in review/draft mode
+because changing an existing published row to a staged status would unpublish it.
+
 ## Deploying it
 
 The service is one scheduled process. Anywhere Node runs on a timer works — the point is that

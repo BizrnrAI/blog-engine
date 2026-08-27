@@ -4,6 +4,7 @@ import { refreshBlogRun } from './refresh.js';
 import { pingIndexNow } from './indexing.js';
 import { pingGscSitemap } from './gsc.js';
 import { blogBasePath } from './config.js';
+import { getStore } from './store.js';
 /**
  * The blog service: one process that publishes for many sites.
  *
@@ -40,16 +41,28 @@ export async function runBlogService(sites, options = {}) {
         }
         const started = Date.now();
         try {
-            const runtime = await site.runtime();
+            const publicationStatus = site.publicationStatus || 'published';
+            const runtime = await site.runtime({ publicationStatus });
             configureBlogEngine(runtime);
             // Every site runs on its own root; a store-backed site never touches the filesystem, so
             // the value only matters for filesystem stores.
             const root = site.root || process.cwd();
+            const storeStatus = getStore(root).publicationStatus;
+            if (publicationStatus !== 'published' && storeStatus !== publicationStatus) {
+                throw new Error(`publication policy mismatch: service=${publicationStatus}, store=${storeStatus || 'unspecified'}`);
+            }
+            if (options.refresh && publicationStatus !== 'published') {
+                throw new Error('refresh requires publicationStatus=published; review/draft mode must not unpublish a live row');
+            }
             const published = [];
+            const staged = [];
             const refreshed = [];
             if (options.generate !== false) {
                 const run = await generateBlogRun(root, { count: site.count ?? 1, dryRun: Boolean(options.dryRun), skipPing: true });
-                published.push(...run.written);
+                if (publicationStatus === 'published')
+                    published.push(...run.written);
+                else
+                    staged.push(...run.written);
                 if (run.skipped) {
                     results.push({ site: site.id, status: 'skipped', detail: run.skipped, published: [], refreshed: [], ms: Date.now() - started });
                     continue;
@@ -66,10 +79,14 @@ export async function runBlogService(sites, options = {}) {
                 await pingIndexNow(changed.map((slug) => `${runtime.config.identity.siteUrl}${base}/${slug}`));
                 await pingGscSitemap(null);
             }
+            const status = staged.length
+                ? publicationStatus === 'review' ? 'queued-for-review' : 'drafted'
+                : changed.length ? 'published' : 'nothing-to-do';
             results.push({
                 site: site.id,
-                status: changed.length ? 'published' : 'nothing-to-do',
+                status,
                 published,
+                ...(staged.length ? { staged } : {}),
                 refreshed,
                 ms: Date.now() - started,
             });
@@ -89,14 +106,18 @@ export async function runBlogService(sites, options = {}) {
     return results;
 }
 export function formatServiceReport(results) {
-    const icon = { published: '✓', 'nothing-to-do': '·', skipped: '·', failed: '✗' };
+    const icon = { published: '✓', 'queued-for-review': '◌', drafted: '◌', 'nothing-to-do': '·', skipped: '·', failed: '✗' };
     const failed = results.filter((r) => r.status === 'failed').length;
-    const posts = results.reduce((n, r) => n + r.published.length + r.refreshed.length, 0);
+    const posts = results.reduce((n, r) => n + r.published.length + (r.staged?.length || 0) + r.refreshed.length, 0);
     return [
         `blog service: ${posts} post(s) across ${results.length} site(s)${failed ? `, ${failed} failed` : ''}`,
         '',
         ...results.map((r) => {
-            const what = [...r.published.map((s) => `+${s}`), ...r.refreshed.map((s) => `~${s}`)].join(' ') || r.detail || '';
+            const what = [
+                ...r.published.map((s) => `+${s}`),
+                ...(r.staged || []).map((s) => `?${s}`),
+                ...r.refreshed.map((s) => `~${s}`),
+            ].join(' ') || r.detail || '';
             return `${icon[r.status]} ${r.site.padEnd(28)} ${r.status.padEnd(14)} ${what}`;
         }),
     ].join('\n');
