@@ -57,6 +57,10 @@ export function createAllWebStore(options) {
                 for (const row of rows) {
                     if (String(row.site_id || '') !== siteId)
                         throw new Error(`AllWeb tenant violation: received site_id ${String(row.site_id || '<missing>')}`);
+                    // Unfiltered editorial reads include archived rows. They are retained
+                    // for audit history, but must not consume cadence or topic ownership.
+                    if (String(row.status || '') === 'archived')
+                        continue;
                     posts.push(rowToPost(row));
                 }
                 const pagination = result.pagination && typeof result.pagination === 'object' ? result.pagination : null;
