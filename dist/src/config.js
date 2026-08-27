@@ -28,6 +28,15 @@ export function blogBasePath() {
     const cleaned = '/' + raw.replace(/^\/+|\/+$/g, '');
     return cleaned === '/' ? '' : cleaned;
 }
+/** Canonical relative URL for one post, honoring the adopting site's policy. */
+export function blogPostPath(slug) {
+    const path = `${blogBasePath()}/${String(slug).replace(/^\/+|\/+$/g, '')}`;
+    return getBlogConfig().paths.trailingSlash ? `${path}/` : path;
+}
+/** Canonical absolute URL for one post. */
+export function blogPostUrl(slug) {
+    return new URL(blogPostPath(slug), getBlogConfig().identity.siteUrl).href;
+}
 /** True when this site persists posts somewhere other than the filesystem. */
 export function hasRemoteStore() {
     try {

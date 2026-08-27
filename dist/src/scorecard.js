@@ -1,4 +1,4 @@
-import { BLOG_CONFIG, blogBasePath, getBlogHooks } from './config.js';
+import { BLOG_CONFIG, blogBasePath, blogPostUrl, getBlogHooks } from './config.js';
 import { auditPosts } from './audit.js';
 import { getStore } from './store.js';
 import { getGscPageQueries } from './gsc.js';
@@ -236,7 +236,7 @@ export async function runScorecard(root, options = {}) {
         let unavailable = 0;
         for (const post of cohort) {
             try {
-                const result = await inspect({ url: `${BLOG_CONFIG.identity.siteUrl}${blogBasePath()}/${post.slug}` });
+                const result = await inspect({ url: blogPostUrl(post.slug) });
                 if (!result) {
                     unavailable++;
                     continue;

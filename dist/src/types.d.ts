@@ -200,6 +200,8 @@ export interface BlogEngineConfig {
     paths: {
         /** URL path prefix for posts (default '/blog'); e.g. '/log' for a site whose posts live at /log/<slug>. */
         blogBasePath?: string;
+        /** Emit canonical post URLs with a trailing slash. Default false. */
+        trailingSlash?: boolean;
         /**
          * Extra frontmatter key aliases (alias -> canonical engine key), merged OVER
          * DEFAULT_FRONTMATTER_ALIASES (pubDate->date, updatedDate->updated, cover->image,

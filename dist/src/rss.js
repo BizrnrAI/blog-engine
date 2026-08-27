@@ -1,6 +1,6 @@
 import { existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { BLOG_CONFIG, blogBasePath } from './config.js';
+import { BLOG_CONFIG, blogBasePath, blogPostUrl } from './config.js';
 import { mimeTypeFor, xmlEscape } from './utils.js';
 function enclosureLength(imagePath, options) {
     if (!options.root || !imagePath.startsWith('/'))
@@ -20,7 +20,7 @@ export function buildBlogRss(posts, options = {}) {
     const blocked = new Set(options.exclude || []);
     const items = posts.filter((p) => !blocked.has(p.id)).slice(0, BLOG_CONFIG.rss.limit)
         .map((p) => {
-        const url = `${BLOG_CONFIG.identity.siteUrl}${blogBasePath()}/${p.id}`;
+        const url = blogPostUrl(p.id);
         const imageUrl = p.ogImage || p.image;
         const mime = imageUrl ? mimeTypeFor(imageUrl) : '';
         const length = imageUrl ? enclosureLength(imageUrl, options) : 0;

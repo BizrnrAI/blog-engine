@@ -1,5 +1,5 @@
 import { writeFileSync } from 'node:fs';
-import { BLOG_CONFIG, blogBasePath, configureBlogEngine, getBlogHooks } from './config.js';
+import { BLOG_CONFIG, blogBasePath, blogPostUrl, configureBlogEngine, getBlogHooks } from './config.js';
 import { generateBlogRun } from './publisher.js';
 import { refreshBlogRun } from './refresh.js';
 import { auditBlogCorpus, formatAuditReport } from './audit.js';
@@ -94,7 +94,7 @@ export async function runBlogIndexPublishedCli(runtime: BlogEngineRuntime): Prom
     return;
   }
 
-  const urls = slugs.map((slug) => `${BLOG_CONFIG.identity.siteUrl}${blogBasePath()}/${slug}`);
+  const urls = slugs.map(blogPostUrl);
 
   if (dryRun) {
     console.log(`[blog-indexing] Dry run: would submit ${urls.length} live URL(s): ${urls.join(', ')}`);

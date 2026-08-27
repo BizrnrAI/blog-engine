@@ -15,6 +15,8 @@ Fleet-wide resilient rendering and review-safe publishing.
   `blogUnavailableResponse()`. Adopters no longer copy cache and retry semantics.
 - `ServiceSite.publicationStatus` with `review` and `draft` modes. Generated non-public rows are
   reported as staged and are never submitted to IndexNow or Search Console.
+- `paths.trailingSlash`, `blogPostPath()`, and `blogPostUrl()` so feeds, indexing, internal links,
+  scorecards, and syndication all use the adopter's canonical URL shape without redirects.
 
 ### Changed
 - Review/draft service runs reject refresh mode because overwriting a live row with a staged

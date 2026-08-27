@@ -1,4 +1,4 @@
-import { BLOG_CONFIG, blogBasePath, brandPersona, getBlogHooks, getBlogTopics } from './config.js';
+import { BLOG_CONFIG, blogPostPath, brandPersona, getBlogHooks, getBlogTopics } from './config.js';
 import { ALLOWED_CATEGORIES, INTERNAL_LINKS } from './topics.js';
 import type { BlogContentRules, ExistingPost, GeneratedBlogPost, SeoTopic } from './types.js';
 import { clampText, env, slugify, wordCount } from './utils.js';
@@ -38,7 +38,7 @@ export function relatedLinkTargets(existing: readonly ExistingPost[], limit = 30
   return existing
     .filter((p) => p.title)
     .slice(-limit)
-    .map((p) => ({ title: p.title, path: `${blogBasePath()}/${p.slug}` }));
+    .map((p) => ({ title: p.title, path: blogPostPath(p.slug) }));
 }
 
 function buildMessages(topic: SeoTopic, existing: readonly ExistingPost[]) {
@@ -292,7 +292,7 @@ export function validateGeneratedPost(
     const backlinkHost = new URL(backlink.url).host;
     if (!(post.body || '').includes(backlinkHost)) errs.push(`cross-promo post must link ${backlinkHost}`);
   }
-  const existingPostPaths = new Set(args.existingSlugs.map((s) => `${blogBasePath()}/${s}`));
+  const existingPostPaths = new Set(args.existingSlugs.map(blogPostPath));
   const badLinks = [...(post.body || '').matchAll(/\]\((\/[^)]*)\)/g)]
     .map((m) => m[1].split('#')[0].split('?')[0])
     .filter((p) => p !== '/' && !(INTERNAL_LINKS as readonly string[]).includes(p) && !existingPostPaths.has(p));

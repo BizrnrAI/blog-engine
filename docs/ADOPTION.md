@@ -46,6 +46,7 @@ export const config: BlogEngineConfig = {
   },
   paths: {
     blogBasePath: '/blog',                     // '/log', '/insights' — whatever your URLs use
+    trailingSlash: true,                       // declare once; every emitted post URL follows it
     blogDir: 'src/content/blog',               // file store only
     assetDir: 'public/assets/blog',            // branded OG cards
     heroDir: 'public/assets/blog/generated',   // watermarked heroes
@@ -242,6 +243,7 @@ Every one of these is a supported seam, not a fork:
 | Service-account Search Console auth | `hooks.fetchGscQueries` / `fetchGscPageQueries` / `submitSitemap` |
 | A curated, priority-ordered topic catalog | `slug`/`title` pins on editorial topics, `hooks.pickTopic`, `hooks.deriveTopic` |
 | Posts under `/log` or `/insights` | `paths.blogBasePath` |
+| Canonical post URLs end in `/` | `paths.trailingSlash: true` |
 | Announce new posts somewhere | `hooks.afterIndexed` + `createAfterIndexedHook([...adapters])` |
 | Index-coverage reporting | `hooks.inspectUrl` |
 

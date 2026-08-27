@@ -12,6 +12,10 @@ export declare function getBlogConfig(): BlogEngineConfig;
 export declare function getBlogTopics(): BlogEngineTopics;
 /** Normalized post URL prefix, no trailing slash (default '/blog'). */
 export declare function blogBasePath(): string;
+/** Canonical relative URL for one post, honoring the adopting site's policy. */
+export declare function blogPostPath(slug: string): string;
+/** Canonical absolute URL for one post. */
+export declare function blogPostUrl(slug: string): string;
 /** True when this site persists posts somewhere other than the filesystem. */
 export declare function hasRemoteStore(): boolean;
 export declare function getBlogHooks(): BlogEngineHooks;
