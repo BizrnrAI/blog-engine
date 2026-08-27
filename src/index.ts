@@ -29,7 +29,7 @@ export { buildTemplateBlogEngineRuntime } from './template-runtime.js';
 export { assertBlogEngineRuntime, validateBlogEngineRuntime, BlogEngineConfigError } from './validate-runtime.js';
 export { cleanBlogSlugs, runBlogAuditCli, runBlogFanoutCli, runBlogGenerateCli, runBlogIndexPublishedCli, runBlogRefreshCli, runBlogScorecardCli, waitUntilBlogUrlsLive } from './cli.js';
 export { blogGenerateWorkflow, blogIndexingWorkflow, blogRefreshWorkflow, blogScorecardWorkflow } from './workflows.js';
-export { getGoogleAccessToken, getGscQueries, pingGscSitemap } from './gsc.js';
+export { getGoogleAccessToken, getGscPageQueries, getGscQueries, pingGscSitemap } from './gsc.js';
 export { pingIndexNow } from './indexing.js';
 export { clampText, mimeTypeFor, norm, slugify, wordCount, xmlEscape } from './utils.js';
 export { toMarkdown } from './markdown.js';
