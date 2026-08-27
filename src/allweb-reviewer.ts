@@ -1,6 +1,7 @@
 import type {
   AllWebReviewer,
   AllWebReviewerOptions,
+  ReviewedAllWebPost,
   ReleaseReviewedAllWebPostArgs,
   ReleaseReviewedAllWebPostResult,
 } from './types.js';
@@ -82,6 +83,20 @@ export function createAllWebReviewer(options: AllWebReviewerOptions): AllWebRevi
         throw new Error(`AllWeb reviewer: ${cleanSlug} revision changed (expected ${expectedRevision}, found ${revision})`);
       }
 
+      const candidate = reviewedPost(current, siteId, revision);
+      const structuralErrors = [
+        ...(!candidate.heroImage ? ['hero image is required'] : []),
+        ...(!candidate.heroImageAlt ? ['hero image alt text is required'] : []),
+      ];
+      if (structuralErrors.length) throw validationError(cleanSlug, structuralErrors);
+
+      if (options.validatePost) {
+        const existingPublishedSlugs = await listPublishedSlugs();
+        const errors = (await options.validatePost({ post: candidate, existingPublishedSlugs }))
+          .map(String).map((value) => value.trim()).filter(Boolean);
+        if (errors.length) throw validationError(cleanSlug, errors);
+      }
+
       const released = (await call({
         action: 'blog_publish',
         slug: cleanSlug,
@@ -101,6 +116,59 @@ export function createAllWebReviewer(options: AllWebReviewerOptions): AllWebRevi
       return { slug: cleanSlug, revision: releasedRevision, status: 'published', changed: true };
     },
   };
+
+  async function listPublishedSlugs(): Promise<string[]> {
+    const slugs: string[] = [];
+    let offset = 0;
+    const limit = 250;
+    while (true) {
+      const result = await call({ action: 'blog_list', status: 'published', limit, offset, include_content: false });
+      const rows = Array.isArray(result.posts) ? result.posts : [];
+      for (const row of rows) {
+        if (String(row.site_id || '') !== siteId) throw new Error('AllWeb reviewer tenant violation in blog_list');
+        const slug = requiredSlug(String(row.slug || ''));
+        if (!slugs.includes(slug)) slugs.push(slug);
+      }
+      const pagination = result.pagination && typeof result.pagination === 'object' ? result.pagination : null;
+      const hasMore = pagination ? pagination.has_more === true : rows.length === limit;
+      if (!hasMore || rows.length === 0) break;
+      const next = Number(pagination?.next_offset ?? offset + rows.length);
+      if (!Number.isInteger(next) || next <= offset) throw new Error('AllWeb reviewer: invalid blog_list pagination');
+      offset = next;
+    }
+    return slugs;
+  }
+}
+
+function reviewedPost(row: Record<string, any>, siteId: string, revision: number): ReviewedAllWebPost {
+  return {
+    siteId,
+    status: 'review',
+    revision,
+    slug: String(row.slug || ''),
+    title: String(row.title || ''),
+    description: String(row.description || ''),
+    category: String(row.category || ''),
+    tags: Array.isArray(row.tags) ? row.tags.map(String) : [],
+    author: String(row.author || ''),
+    answer: String(row.answer || ''),
+    body: String(row.content || ''),
+    readMins: Number(row.read_mins || 0),
+    faqs: Array.isArray(row.faqs)
+      ? row.faqs.map((faq: any) => ({ q: String(faq?.question ?? faq?.q ?? ''), a: String(faq?.answer ?? faq?.a ?? '') }))
+      : [],
+    ...(Array.isArray(row.sources) ? { sources: row.sources } : {}),
+    heroImage: String(row.hero_image || ''),
+    heroImageAlt: String(row.hero_image_alt || ''),
+    ...(row.hero_image_width == null ? {} : { heroImageWidth: Number(row.hero_image_width) }),
+    ...(row.hero_image_height == null ? {} : { heroImageHeight: Number(row.hero_image_height) }),
+    ...(row.hero_image_srcset ? { heroImageSrcset: String(row.hero_image_srcset) } : {}),
+    ...(row.og_image ? { ogImage: String(row.og_image) } : {}),
+  };
+}
+
+function validationError(slug: string, errors: string[]): Error {
+  return new Error(`AllWeb reviewer: validation failed for ${slug}: ${errors.join('; ')}`);
 }
 
 function required(value: string | undefined, name: string): string {

@@ -48,9 +48,9 @@ jobs:
         shell: bash
         run: command -v zsh >/dev/null || { sudo apt-get update && sudo apt-get install -y zsh; }
       - run: npm ci
-      - name: Re-run the complete site contract against the review row
+      - name: Re-run the complete repository contract
         run: npm test
-      - name: Release the exact reviewed revision
+      - name: Preflight and release the exact reviewed revision
         env:
           ALLWEB_REVIEWER_TOKEN: ${{ secrets.ALLWEB_REVIEWER_TOKEN }}
           BLOG_SLUG: ${{ inputs.slug }}

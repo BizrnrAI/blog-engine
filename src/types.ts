@@ -602,6 +602,33 @@ export interface AllWebReviewerOptions {
   siteId: string;
   /** Abort an unresponsive gateway request after this many milliseconds (default 8000). */
   timeoutMs?: number;
+  /**
+   * Validate the exact tenant-checked review row immediately before mutation. Use this for the
+   * adopter's engine and rendering contracts; generation validation alone is insufficient because
+   * a review row may be edited before release. Any returned complaint fails closed.
+   */
+  validatePost?: (args: ValidateReviewedAllWebPostArgs) => string[] | Promise<string[]>;
+}
+
+/** Exact AllWeb row shape exposed to a release preflight, with no credential or transport data. */
+export interface ReviewedAllWebPost extends GeneratedBlogPost {
+  siteId: string;
+  status: 'review';
+  revision: number;
+  author: string;
+  heroImage: string;
+  heroImageAlt: string;
+  heroImageWidth?: number;
+  heroImageHeight?: number;
+  heroImageSrcset?: string;
+  ogImage?: string;
+}
+
+export interface ValidateReviewedAllWebPostArgs {
+  /** The exact row whose revision will be passed to blog_publish. */
+  post: ReviewedAllWebPost;
+  /** Published corpus available for slug/link validation; never includes the candidate. */
+  existingPublishedSlugs: string[];
 }
 
 export interface ReleaseReviewedAllWebPostArgs {
