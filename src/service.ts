@@ -19,7 +19,12 @@ import type { BlogEngineRuntime, ServiceRunResult, ServiceSite } from './types.j
  * still want one. Each site is isolated — one site's failure never stops the rest.
  */
 
-function dueToday(site: ServiceSite, now: Date): boolean {
+export function isServiceSiteDue(site: ServiceSite, now: Date): boolean {
+  if (site.dailyCampaign) {
+    const starts = Date.parse(site.dailyCampaign.startsAt);
+    const ends = Date.parse(site.dailyCampaign.endsAt);
+    if (Number.isFinite(starts) && Number.isFinite(ends) && starts < ends && now.getTime() >= starts && now.getTime() < ends) return true;
+  }
   if (!site.days || !site.days.length) return true;
   return site.days.includes(now.getUTCDay());
 }
@@ -53,7 +58,7 @@ export async function runBlogService(
       results.push({ site: site.id, status: 'skipped', detail: 'disabled', published: [], refreshed: [] });
       continue;
     }
-    if (!dueToday(site, now)) {
+    if (!isServiceSiteDue(site, now)) {
       results.push({ site: site.id, status: 'skipped', detail: 'not scheduled today', published: [], refreshed: [] });
       continue;
     }

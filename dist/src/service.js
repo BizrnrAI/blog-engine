@@ -16,7 +16,13 @@ import { getStore } from './store.js';
  * Run it from anywhere a cron can run: a Vercel cron route, a worker, a GitHub schedule if you
  * still want one. Each site is isolated — one site's failure never stops the rest.
  */
-function dueToday(site, now) {
+export function isServiceSiteDue(site, now) {
+    if (site.dailyCampaign) {
+        const starts = Date.parse(site.dailyCampaign.startsAt);
+        const ends = Date.parse(site.dailyCampaign.endsAt);
+        if (Number.isFinite(starts) && Number.isFinite(ends) && starts < ends && now.getTime() >= starts && now.getTime() < ends)
+            return true;
+    }
     if (!site.days || !site.days.length)
         return true;
     return site.days.includes(now.getUTCDay());
@@ -35,7 +41,7 @@ export async function runBlogService(sites, options = {}) {
             results.push({ site: site.id, status: 'skipped', detail: 'disabled', published: [], refreshed: [] });
             continue;
         }
-        if (!dueToday(site, now)) {
+        if (!isServiceSiteDue(site, now)) {
             results.push({ site: site.id, status: 'skipped', detail: 'not scheduled today', published: [], refreshed: [] });
             continue;
         }

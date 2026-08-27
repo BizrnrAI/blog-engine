@@ -347,6 +347,9 @@ export async function generateBlogPost(topic: SeoTopic, existing: ExistingPost[]
       const post = normalizeGeneratedPost(parseModelJson(rawText), topic);
       errs = validateGeneratedPost(post, { existingSlugs, topic });
       if (errs.length === 0 && contentRules().requireSources) errs = await verifySources(post.sources || []);
+      if (errs.length === 0 && getBlogHooks().validatePost) {
+        errs = await getBlogHooks().validatePost!({ post, topic, operation: 'generate' });
+      }
       if (errs.length === 0) return post;
       messages.push({ role: 'assistant', content: JSON.stringify(post).slice(0, 500) });
       messages.push({ role: 'user', content: `That JSON failed validation: ${errs.join('; ')}. Return corrected STRICT JSON only.` });

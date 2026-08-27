@@ -53,6 +53,11 @@ export interface GeneratedBlogPost {
     /** Verified external sources (opt-in via content.requireSources). */
     sources?: BlogSource[];
 }
+export interface ValidatePostArgs {
+    post: GeneratedBlogPost;
+    topic: SeoTopic;
+    operation: 'generate' | 'refresh';
+}
 export interface BlogSource {
     title: string;
     url: string;
@@ -504,6 +509,11 @@ export interface ServiceSite {
     count?: number;
     /** UTC weekdays this site publishes on (0=Sun). Omit for every run. */
     days?: readonly number[];
+    /** Bounded UTC window when the site is due daily; `endsAt` is exclusive. */
+    dailyCampaign?: {
+        startsAt: string;
+        endsAt: string;
+    };
     /** Set false to pause a site without deleting its entry. */
     enabled?: boolean;
     /**
@@ -669,6 +679,8 @@ export interface RenderMarkdownArgs {
 export interface BlogEngineHooks {
     generateText?: (args: GenerateTextArgs) => Promise<string>;
     generateHeroImage?: (args: GenerateHeroImageArgs) => Promise<Buffer | null>;
+    /** Site policy checks run inside the model retry loop, before assets or persistence. */
+    validatePost?: (args: ValidatePostArgs) => string[] | Promise<string[]>;
     /**
      * Supply topic candidates from your own Search Console auth. The built-in reader needs an OAuth
      * refresh token; a site using a SERVICE ACCOUNT (or any other analytics source) provides this

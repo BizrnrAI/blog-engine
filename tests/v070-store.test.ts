@@ -7,7 +7,8 @@ import { auditPosts } from '../src/audit.js';
 import { generateBlogRun } from '../src/publisher.js';
 import { refreshBlogRun } from '../src/refresh.js';
 import { runScorecard } from '../src/scorecard.js';
-import { formatServiceReport, runBlogService } from '../src/service.js';
+import { formatServiceReport, isServiceSiteDue, runBlogService } from '../src/service.js';
+import { validateProsePolicy } from '../src/prose-policy.js';
 import { createFileStore, getStore } from '../src/store.js';
 import { createSupabaseStore } from '../src/supabase-store.js';
 import { createAllWebStore } from '../src/allweb-store.js';
@@ -165,6 +166,32 @@ test('the service publishes across sites, isolates failures, and honours schedul
 
   const only = await runBlogService(sites, { only: ['site-c'] });
   assert.equal(only.length, 1);
+});
+
+test('a bounded daily campaign overrides weekdays and returns to the normal schedule', () => {
+  const site = {
+    id: 'campaign', runtime: () => runtimeWith(memoryStore()), days: [2],
+    dailyCampaign: { startsAt: '2026-08-28T00:00:00Z', endsAt: '2026-09-27T00:00:00Z' },
+  };
+  assert.equal(isServiceSiteDue(site, new Date('2026-08-27T15:00:00Z')), false, 'Thursday before campaign follows weekday schedule');
+  assert.equal(isServiceSiteDue(site, new Date('2026-08-28T15:00:00Z')), true, 'campaign start is included');
+  assert.equal(isServiceSiteDue(site, new Date('2026-09-26T15:00:00Z')), true, 'last campaign day is included');
+  assert.equal(isServiceSiteDue(site, new Date('2026-09-27T15:00:00Z')), false, 'end is exclusive and Sunday follows weekday schedule');
+  assert.equal(isServiceSiteDue(site, new Date('2026-09-29T15:00:00Z')), true, 'Tuesday fallback resumes');
+});
+
+test('canonical prose policy catches regulated claims without hiding statute numbers', () => {
+  const post = validPost();
+  const check = (body: string) => validateProsePolicy({ ...post, body }, {
+    forbidMoneyAmounts: true, forbidObligationDurations: true, forbidOfficeClaims: true,
+  });
+  assert.ok(check('It costs $2,500.').some((error) => error.includes('money amount')));
+  assert.ok(check('It can cost a few hundred to a few thousand dollars.').some((error) => error.includes('money amount')));
+  assert.ok(check('A beneficiary must object within sixty days.').some((error) => error.includes('legal deadline')));
+  assert.ok(check('Visit our office in San Diego.').some((error) => error.includes('office-location')));
+  assert.deepEqual(check('Probate Code section 16061.7 requires notice.'), []);
+  assert.deepEqual(check('The court sets a hearing date, typically six to ten weeks out.'), []);
+  assert.deepEqual(check('A petition may reach a hearing in two to four months.'), []);
 });
 
 test('the service stages review-required content and never submits a non-public URL', async () => {
