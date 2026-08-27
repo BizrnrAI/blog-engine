@@ -53,7 +53,11 @@ export const config: BlogEngineConfig = {
     brandLogo: 'public/logo.png',              // OG card logo (SVG works; missing degrades)
     watermarkLogo: 'public/logo.png',
   },
-  gsc: { property: 'sc-domain:acmeplumbing.com', sitemap: 'https://acmeplumbing.com/sitemap.xml' },
+  gsc: {
+    property: 'sc-domain:acmeplumbing.com',
+    sitemap: 'https://acmeplumbing.com/sitemap.xml',
+    sitemaps: ['https://acmeplumbing.com/sitemap-blog.xml'],
+  },
   indexNow: { key: '<key>' },                  // also host /<key>.txt publicly
   text: { provider: 'openrouter', url: 'https://openrouter.ai/api/v1/chat/completions',
           model: 'deepseek/deepseek-v4-flash', maxTokens: 4000, temperature: 0.7 },

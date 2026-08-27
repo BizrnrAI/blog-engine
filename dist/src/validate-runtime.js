@@ -100,6 +100,12 @@ export function validateBlogEngineRuntime(runtime) {
         problems.push('rss.path must be a site-relative path starting with "/"');
     if (config.gsc && !config.gsc.property?.trim())
         problems.push('gsc.property is required (e.g. "sc-domain:example.com")');
+    if (config.gsc) {
+        const sitemaps = [config.gsc.sitemap, ...(config.gsc.sitemaps ?? [])];
+        if (!sitemaps.length || sitemaps.some((value) => !value?.trim() || !isHttpUrl(value))) {
+            problems.push('gsc.sitemap and every gsc.sitemaps entry must be an absolute http(s) URL');
+        }
+    }
     if (config.image?.og && config.image.og.enabled !== false) {
         if (!config.image.og.width || !config.image.og.height)
             problems.push('image.og.width/height are required unless image.og.enabled is false');

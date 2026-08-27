@@ -1,6 +1,6 @@
 import { existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { BLOG_CONFIG, blogBasePath, blogPostUrl } from './config.js';
+import { BLOG_CONFIG, blogHubUrl, blogPostUrl } from './config.js';
 import { mimeTypeFor, xmlEscape } from './utils.js';
 function enclosureLength(imagePath, options) {
     if (!options.root || !imagePath.startsWith('/'))
@@ -43,7 +43,7 @@ export function buildBlogRss(posts, options = {}) {
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/">
   <channel>
     <title>${xmlEscape(BLOG_CONFIG.rss.title)}</title>
-    <link>${BLOG_CONFIG.identity.siteUrl}${blogBasePath() || '/'}</link>
+    <link>${blogHubUrl()}</link>
     <description>${xmlEscape(BLOG_CONFIG.rss.description)}</description>
     <language>${(BLOG_CONFIG.identity.locale || 'en-US').toLowerCase()}</language>
     <lastBuildDate>${lastBuildDate.toUTCString()}</lastBuildDate>

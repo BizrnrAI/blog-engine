@@ -221,7 +221,10 @@ export interface BlogEngineConfig {
   };
   gsc: {
     property: string;
+    /** Primary sitemap retained for backward compatibility. */
     sitemap: string;
+    /** Additional sitemap URLs submitted alongside `sitemap`. */
+    sitemaps?: readonly string[];
   };
   indexNow: {
     key: string;
@@ -440,7 +443,7 @@ export interface FetchGscQueriesArgs {
 }
 
 export interface SubmitSitemapArgs {
-  /** Absolute sitemap URL from config (`gsc.sitemap`). */
+  /** One absolute sitemap URL from config (`gsc.sitemap` plus `gsc.sitemaps`). */
   sitemap: string;
   property: string;
 }

@@ -28,14 +28,41 @@ export function blogBasePath() {
     const cleaned = '/' + raw.replace(/^\/+|\/+$/g, '');
     return cleaned === '/' ? '' : cleaned;
 }
+/**
+ * Pure canonical URL formatter used by every public blog surface.
+ *
+ * Keeping this independent of the installed runtime lets schema/discovery
+ * builders honor explicit standalone options while sharing the exact same
+ * slash policy as configured sites.
+ */
+export function formatBlogPath(basePath, slug, trailingSlash = false) {
+    const cleanedBase = '/' + String(basePath || '').replace(/^\/+|\/+$/g, '');
+    const base = cleanedBase === '/' ? '' : cleanedBase;
+    const cleanSlug = slug == null ? '' : String(slug).replace(/^\/+|\/+$/g, '');
+    const path = cleanSlug ? `${base}/${cleanSlug}` : (base || '/');
+    if (!trailingSlash || path === '/')
+        return path;
+    return `${path}/`;
+}
+/** Pure absolute counterpart to formatBlogPath(). */
+export function formatBlogUrl(siteUrl, basePath, slug, trailingSlash = false) {
+    return new URL(formatBlogPath(basePath, slug, trailingSlash), siteUrl).href;
+}
+/** Canonical relative URL for the blog hub. */
+export function blogHubPath() {
+    return formatBlogPath(blogBasePath(), undefined, Boolean(getBlogConfig().paths.trailingSlash));
+}
+/** Canonical absolute URL for the blog hub. */
+export function blogHubUrl() {
+    return formatBlogUrl(getBlogConfig().identity.siteUrl, blogBasePath(), undefined, Boolean(getBlogConfig().paths.trailingSlash));
+}
 /** Canonical relative URL for one post, honoring the adopting site's policy. */
 export function blogPostPath(slug) {
-    const path = `${blogBasePath()}/${String(slug).replace(/^\/+|\/+$/g, '')}`;
-    return getBlogConfig().paths.trailingSlash ? `${path}/` : path;
+    return formatBlogPath(blogBasePath(), slug, Boolean(getBlogConfig().paths.trailingSlash));
 }
 /** Canonical absolute URL for one post. */
 export function blogPostUrl(slug) {
-    return new URL(blogPostPath(slug), getBlogConfig().identity.siteUrl).href;
+    return formatBlogUrl(getBlogConfig().identity.siteUrl, blogBasePath(), slug, Boolean(getBlogConfig().paths.trailingSlash));
 }
 /** True when this site persists posts somewhere other than the filesystem. */
 export function hasRemoteStore() {

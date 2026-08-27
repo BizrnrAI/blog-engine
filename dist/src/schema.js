@@ -1,4 +1,4 @@
-import { blogBasePath, getBlogConfig } from './config.js';
+import { blogBasePath, formatBlogPath, formatBlogUrl, getBlogConfig } from './config.js';
 function defaultBase() {
     try {
         return blogBasePath();
@@ -9,12 +9,11 @@ function defaultBase() {
 }
 /** The Blog node for the hub page; post graphs point at it via isPartOf. */
 export function blogSchema(options) {
-    const siteUrl = resolveSiteUrl(options);
-    const base = options.blogBasePath || defaultBase();
+    const url = schemaUrl(options);
     return {
         '@type': 'Blog',
-        '@id': `${siteUrl}${base}#blog`,
-        url: `${siteUrl}${base}`,
+        '@id': `${url}#blog`,
+        url,
         name: options.name,
         ...(options.description ? { description: options.description } : {}),
         inLanguage: options.locale || configuredLocale(),
@@ -65,13 +64,26 @@ function configuredAuthor() {
         return undefined; // standalone use without a configured runtime
     }
 }
+function resolveTrailingSlash(options) {
+    if (typeof options.trailingSlash === 'boolean')
+        return options.trailingSlash;
+    try {
+        return Boolean(getBlogConfig().paths.trailingSlash);
+    }
+    catch {
+        return false;
+    }
+}
+function schemaUrl(options, slug) {
+    return formatBlogUrl(resolveSiteUrl(options), options.blogBasePath || defaultBase(), slug, resolveTrailingSlash(options));
+}
 function absolute(siteUrl, path) {
     return path.startsWith('http') ? path : `${siteUrl}${path.startsWith('/') ? '' : '/'}${path}`;
 }
 export function blogPostingSchema(post, options = {}) {
     const siteUrl = resolveSiteUrl(options);
-    const base = options.blogBasePath || defaultBase();
-    const url = `${siteUrl}${base}/${post.slug}`;
+    const url = schemaUrl(options, post.slug);
+    const hubUrl = schemaUrl(options);
     const images = [];
     if (post.ogImage)
         images.push(absolute(siteUrl, post.ogImage));
@@ -93,7 +105,7 @@ export function blogPostingSchema(post, options = {}) {
         keywords: post.tags.join(', '),
         inLanguage: options.locale || configuredLocale(),
         ...(post.content ? { wordCount: post.content.trim().split(/\s+/).filter(Boolean).length } : {}),
-        isPartOf: { '@id': `${siteUrl}${base}#blog` },
+        isPartOf: { '@id': `${hubUrl}#blog` },
         ...(post.sources?.length
             ? { citation: post.sources.map((s) => ({ '@type': 'CreativeWork', name: s.title, url: s.url, ...(s.publisher ? { publisher: { '@type': 'Organization', name: s.publisher } } : {}) })) }
             : {}),
@@ -150,15 +162,15 @@ export function breadcrumbSchema(items, options = {}) {
  * <script type="application/ld+json"> tag.
  */
 export function blogPostGraph(post, options = {}) {
-    const siteUrl = resolveSiteUrl(options);
     const base = options.blogBasePath || defaultBase();
-    const url = `${siteUrl}${base}/${post.slug}`;
+    const trailingSlash = resolveTrailingSlash(options);
+    const url = schemaUrl(options, post.slug);
     const graph = [
         blogPostingSchema(post, options),
         breadcrumbSchema([
             { name: 'Home', path: '/' },
-            { name: 'Blog', path: base },
-            { name: post.title, path: `${base}/${post.slug}` },
+            { name: 'Blog', path: formatBlogPath(base, undefined, trailingSlash) },
+            { name: post.title, path: formatBlogPath(base, post.slug, trailingSlash) },
         ], options),
     ];
     if (post.faqs.length)

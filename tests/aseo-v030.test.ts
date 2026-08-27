@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, test } from 'node:test';
 import { parseBlogFrontmatter, readGeneratedBlogPosts } from '../src/content-reader.js';
-import { blogSitemapEntries, buildBlogLlmsTxt } from '../src/discovery.js';
+import { blogHubSitemapEntry, blogSitemapEntries, buildBlogLlmsTxt } from '../src/discovery.js';
 import { readExistingPosts } from '../src/existing-posts.js';
 import { validateGeneratedPost } from '../src/generate-post.js';
 import { toMarkdown } from '../src/markdown.js';
@@ -103,6 +103,10 @@ test('schema: hero with dimensions becomes an ImageObject; speakable emitted onl
 
 test('discovery: sitemap entries use updatedAt as lastmod', () => {
   assert.deepEqual(blogSitemapEntries([parsedPost]), [{ loc: 'https://acme-plumbing.example/blog/x', lastmod: '2026-08-22' }]);
+  const runtime = configureTestEngine();
+  runtime.config.paths.trailingSlash = true;
+  assert.deepEqual(blogSitemapEntries([parsedPost]), [{ loc: 'https://acme-plumbing.example/blog/x/', lastmod: '2026-08-22' }]);
+  assert.equal(blogHubSitemapEntry([parsedPost]).loc, 'https://acme-plumbing.example/blog/');
 });
 
 test('discovery: llms.txt section lists the feed and posts with their meta descriptions', () => {
@@ -110,6 +114,9 @@ test('discovery: llms.txt section lists the feed and posts with their meta descr
   assert.ok(txt.startsWith('## Blog'));
   assert.ok(txt.includes('- RSS feed: https://acme-plumbing.example/blog/feed.xml'));
   assert.ok(txt.includes('- [X?](https://acme-plumbing.example/blog/x): D'));
+  const runtime = configureTestEngine();
+  runtime.config.paths.trailingSlash = true;
+  assert.ok(buildBlogLlmsTxt([parsedPost]).includes('- [X?](https://acme-plumbing.example/blog/x/): D'));
 });
 
 test('validator: citable blockquote accepts up to 220 words and rejects longer', () => {

@@ -1,4 +1,4 @@
-import { blogBasePath, getBlogConfig } from './config.js';
+import { blogBasePath, formatBlogPath, formatBlogUrl, getBlogConfig } from './config.js';
 
 function defaultBase(): string {
   try {
@@ -21,6 +21,8 @@ export interface BlogSchemaOptions {
   siteUrl?: string;
   /** Path prefix for post URLs (default '/blog'). */
   blogBasePath?: string;
+  /** Override the configured canonical trailing-slash policy. */
+  trailingSlash?: boolean;
   /** Stable person entity for E-E-A-T, e.g. { id: 'https://example.com/#person', name: 'Jane Doe' }. */
   author?: { id?: string; name: string; url?: string };
   /** Stable organization entity, e.g. { id: 'https://example.com/#organization', name: 'Brand', logo: '/logo.png' }. */
@@ -37,12 +39,11 @@ export interface BlogSchemaOptions {
 
 /** The Blog node for the hub page; post graphs point at it via isPartOf. */
 export function blogSchema(options: BlogSchemaOptions & { name: string; description?: string } ): JsonLd {
-  const siteUrl = resolveSiteUrl(options);
-  const base = options.blogBasePath || defaultBase();
+  const url = schemaUrl(options);
   return {
     '@type': 'Blog',
-    '@id': `${siteUrl}${base}#blog`,
-    url: `${siteUrl}${base}`,
+    '@id': `${url}#blog`,
+    url,
     name: options.name,
     ...(options.description ? { description: options.description } : {}),
     inLanguage: options.locale || configuredLocale(),
@@ -107,14 +108,32 @@ function configuredAuthor(): BlogSchemaOptions['author'] | undefined {
   }
 }
 
+function resolveTrailingSlash(options: BlogSchemaOptions): boolean {
+  if (typeof options.trailingSlash === 'boolean') return options.trailingSlash;
+  try {
+    return Boolean(getBlogConfig().paths.trailingSlash);
+  } catch {
+    return false;
+  }
+}
+
+function schemaUrl(options: BlogSchemaOptions, slug?: string): string {
+  return formatBlogUrl(
+    resolveSiteUrl(options),
+    options.blogBasePath || defaultBase(),
+    slug,
+    resolveTrailingSlash(options),
+  );
+}
+
 function absolute(siteUrl: string, path: string): string {
   return path.startsWith('http') ? path : `${siteUrl}${path.startsWith('/') ? '' : '/'}${path}`;
 }
 
 export function blogPostingSchema(post: ParsedBlogPost, options: BlogSchemaOptions = {}): JsonLd {
   const siteUrl = resolveSiteUrl(options);
-  const base = options.blogBasePath || defaultBase();
-  const url = `${siteUrl}${base}/${post.slug}`;
+  const url = schemaUrl(options, post.slug);
+  const hubUrl = schemaUrl(options);
   const images: unknown[] = [];
   if (post.ogImage) images.push(absolute(siteUrl, post.ogImage));
   if (post.heroImage) {
@@ -138,7 +157,7 @@ export function blogPostingSchema(post: ParsedBlogPost, options: BlogSchemaOptio
     keywords: post.tags.join(', '),
     inLanguage: options.locale || configuredLocale(),
     ...(post.content ? { wordCount: post.content.trim().split(/\s+/).filter(Boolean).length } : {}),
-    isPartOf: { '@id': `${siteUrl}${base}#blog` },
+    isPartOf: { '@id': `${hubUrl}#blog` },
     ...(post.sources?.length
       ? { citation: post.sources.map((s) => ({ '@type': 'CreativeWork', name: s.title, url: s.url, ...(s.publisher ? { publisher: { '@type': 'Organization', name: s.publisher } } : {}) })) }
       : {}),
@@ -202,16 +221,16 @@ export function breadcrumbSchema(
  * <script type="application/ld+json"> tag.
  */
 export function blogPostGraph(post: ParsedBlogPost, options: BlogSchemaOptions = {}): JsonLd {
-  const siteUrl = resolveSiteUrl(options);
   const base = options.blogBasePath || defaultBase();
-  const url = `${siteUrl}${base}/${post.slug}`;
+  const trailingSlash = resolveTrailingSlash(options);
+  const url = schemaUrl(options, post.slug);
   const graph: JsonLd[] = [
     blogPostingSchema(post, options),
     breadcrumbSchema(
       [
         { name: 'Home', path: '/' },
-        { name: 'Blog', path: base },
-        { name: post.title, path: `${base}/${post.slug}` },
+        { name: 'Blog', path: formatBlogPath(base, undefined, trailingSlash) },
+        { name: post.title, path: formatBlogPath(base, post.slug, trailingSlash) },
       ],
       options,
     ),
