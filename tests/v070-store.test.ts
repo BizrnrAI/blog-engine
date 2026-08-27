@@ -296,6 +296,11 @@ test('createAllWebStore uses only the site-agent gateway and preserves optimisti
       slug: 'existing', title: 'Existing', description: 'stored', category: 'Guides', tags: [],
       author: 'Alex', published_at: '2026-08-01', updated_at: '2026-08-01', answer: 'Answer',
       content: '## Heading\nBody', faqs: [], sources: [], status: 'published',
+    }, {
+      site_id: '6b053b68-51a0-4cfd-98e3-835e584f995e',
+      slug: 'rejected', title: 'Rejected', description: 'archived', category: 'Guides', tags: [],
+      author: 'Alex', published_at: '2026-08-26', updated_at: '2026-08-26', answer: 'Answer',
+      content: '## Heading\nBody', faqs: [], sources: [], status: 'archived',
     }], pagination: { has_more: false, next_offset: null } });
     if (body.action === 'blog_get') return Response.json({ ok: true, post: { slug: body.slug, revision: 7 } });
     if (body.action === 'blog_asset_upload') return Response.json({ ok: true, asset: { public_url: 'https://cdn.example/x.webp' } });
@@ -308,7 +313,7 @@ test('createAllWebStore uses only the site-agent gateway and preserves optimisti
       siteId: '6b053b68-51a0-4cfd-98e3-835e584f995e', author: 'Alex',
     });
     assert.equal(store.name, 'allweb:6b053b68-51a0-4cfd-98e3-835e584f995e');
-    assert.equal((await store.listPosts())[0].slug, 'existing');
+    assert.deepEqual((await store.listPosts()).map((post) => post.slug), ['existing'], 'archived rows do not consume cadence or topic ownership');
     await store.putPost({
       post: validPost(), cover: { image: '/h.webp', imageAlt: 'a', ogImage: '/o.jpg', source: 'ai-generated' },
       markdown: '---\nx\n---', dateISO: '2026-08-26', isRefresh: true,
