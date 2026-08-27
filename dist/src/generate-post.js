@@ -358,6 +358,9 @@ export async function generateBlogPost(topic, existing) {
             errs = validateGeneratedPost(post, { existingSlugs, topic });
             if (errs.length === 0 && contentRules().requireSources)
                 errs = await verifySources(post.sources || []);
+            if (errs.length === 0 && getBlogHooks().validatePost) {
+                errs = await getBlogHooks().validatePost({ post, topic, operation: 'generate' });
+            }
             if (errs.length === 0)
                 return post;
             messages.push({ role: 'assistant', content: JSON.stringify(post).slice(0, 500) });

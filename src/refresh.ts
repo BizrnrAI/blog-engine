@@ -158,6 +158,9 @@ export async function refreshBlogPost(
       rawText = await callLLM(messages);
       const candidate = normalizeGeneratedPost(parseModelJson(rawText), topic);
       errs = validateGeneratedPost(candidate, { existingSlugs: otherSlugs, topic });
+      if (!errs.length && getBlogHooks().validatePost) {
+        errs = await getBlogHooks().validatePost!({ post: candidate, topic, operation: 'refresh' });
+      }
       if (!errs.length) { post = candidate; break; }
       messages.push({ role: 'assistant', content: JSON.stringify(candidate).slice(0, 500) });
       messages.push({ role: 'user', content: `That JSON failed validation: ${errs.join('; ')}. Return corrected STRICT JSON only.` });

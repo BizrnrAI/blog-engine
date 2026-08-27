@@ -91,6 +91,38 @@ console.log(formatServiceReport(results));
 One site's failure never stops the others — every site returns a result, including
 `status: 'failed'` with the reason.
 
+A temporary daily push belongs in a bounded campaign, not a permanent site fork. This example
+runs daily for exactly 30 UTC dates, then automatically returns to Tuesday/Friday:
+
+```ts
+{
+  id: 'legal-guides',
+  days: [2, 5],
+  dailyCampaign: {
+    startsAt: '2026-08-28T00:00:00Z',
+    endsAt: '2026-09-27T00:00:00Z', // exclusive
+  },
+}
+```
+
+Site-specific mechanical policy belongs in the shared retry seam so rejected prose is corrected
+before image generation or persistence:
+
+```ts
+import { createProsePolicyValidator } from '@bizrnr/blog-engine';
+
+hooks: {
+  validatePost: createProsePolicyValidator({
+    forbidMoneyAmounts: true,
+    forbidObligationDurations: true,
+    forbidOfficeClaims: true,
+  }),
+}
+```
+
+`content.blockedPhrases` is already enforced by the engine. `content.extraRules` remains prompt
+guidance; put deterministic rules in `validatePost` instead of wrapping a store.
+
 ### Review-required sites
 
 Legal, medical, financial, and other YMYL sites should stage generated rows for accountable

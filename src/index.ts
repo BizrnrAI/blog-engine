@@ -6,7 +6,8 @@ export { createAllWebGscHooks } from './allweb-gsc.js';
 export { createAllWebBlogReader } from './allweb-reader.js';
 export { createResilientAllWebBlogReader } from './allweb-resilient-reader.js';
 export { BLOG_CACHE_CONTROL, BLOG_NO_STORE, BLOG_RETRY_AFTER_SECONDS, blogCacheControl, blogUnavailableResponse } from './http.js';
-export { formatServiceReport, runBlogService, type RunServiceOptions } from './service.js';
+export { formatServiceReport, isServiceSiteDue, runBlogService, type RunServiceOptions } from './service.js';
+export { createProsePolicyValidator, validateProsePolicy, type ProsePolicyOptions } from './prose-policy.js';
 export { contentRules, generateBlogPost, normalizeGeneratedPost, parseModelJson, relatedLinkTargets, repairJsonStringNewlines, validateGeneratedPost } from './generate-post.js';
 export { generateCoverImage, applyWatermark, heroAltText, makeOgCard, writeHeroVariants } from './images.js';
 export { countPostsSince, generateBlogRun } from './publisher.js';
@@ -98,4 +99,5 @@ export type {
   TemplateRuntimeOptions,
   TemplateSiteProfile,
   TopicCategory,
+  ValidatePostArgs,
 } from './types.js';
