@@ -56,6 +56,46 @@ test('fetchGscQueries hook supplies topics without any OAuth credentials', async
   );
 });
 
+test('generation can require a configured and healthy query source', async () => {
+  configureTestEngine({
+    gsc: {
+      ...testConfig().gsc,
+      requireQuerySource: true,
+    },
+  }, {
+    fetchGscQueries: async () => { throw new Error('upstream unavailable'); },
+  });
+  await assert.rejects(
+    getGscQueries(),
+    /fetchGscQueries hook failed: upstream unavailable/,
+    'a required source outage must not look like a quiet period',
+  );
+
+  configureTestEngine({
+    gsc: {
+      ...testConfig().gsc,
+      requireQuerySource: true,
+    },
+  }, { fetchGscQueries: async () => [] });
+  assert.deepEqual(
+    await getGscQueries(),
+    { token: null, queries: [] },
+    'an empty successful response remains a valid quiet period',
+  );
+});
+
+test('generation rejects malformed query-source payloads before topic selection', async () => {
+  configureTestEngine({
+    gsc: {
+      ...testConfig().gsc,
+      requireQuerySource: true,
+    },
+  }, {
+    fetchGscQueries: async () => null as unknown as [],
+  });
+  await assert.rejects(getGscQueries(), /non-array payload/);
+});
+
 test('submitSitemap hook submits every configured sitemap without OAuth', async () => {
   const submitted: string[] = [];
   configureTestEngine({

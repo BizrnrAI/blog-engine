@@ -148,6 +148,24 @@ queries dropped, brand terms removed, ranked by impressions — so the
 topic-selection invariants hold no matter where the data came from. Return
 `[]` for "nothing to suggest"; the editorial pool takes over.
 
+By default, a missing or failed query source also falls back to the editorial
+pool so existing sites keep publishing. A site whose policy requires current
+demand data can opt into fail-closed generation:
+
+```ts
+config: {
+  gsc: {
+    property: 'sc-domain:example.com',
+    sitemap: 'https://example.com/sitemap.xml',
+    requireQuerySource: true,
+  },
+}
+```
+
+With that flag, a missing source, transport failure, or malformed response
+throws before topic selection. A successful `[]` remains a legitimate quiet
+period and still uses the editorial pool.
+
 `submitSitemap` takes precedence over the OAuth ping and needs no token, so
 it works in `runBlogIndexPublishedCli` without any `GOOGLE_OAUTH_*` env.
 

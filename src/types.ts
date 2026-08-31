@@ -231,6 +231,15 @@ export interface BlogEngineConfig {
     sitemap: string;
     /** Additional sitemap URLs submitted alongside `sitemap`. */
     sitemaps?: readonly string[];
+    /**
+     * Require the generation-time query source to be configured and healthy.
+     *
+     * Default false preserves the fleet-safe behavior: a missing or failed source yields no
+     * candidates and topic selection uses the editorial pool. Set true when silently treating a
+     * Search Console outage as a quiet period would violate the adopting site's publishing policy.
+     * A successful query that returns no rows is still a valid quiet period.
+     */
+    requireQuerySource?: boolean;
   };
   indexNow: {
     key: string;
