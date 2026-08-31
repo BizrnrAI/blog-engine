@@ -29,6 +29,22 @@ function filterQueries(rows) {
         .filter((q) => !(exclude && exclude(q.query)))
         .sort((a, b) => b.impressions - a.impressions);
 }
+function querySourceFailure(message, err) {
+    const detail = err === undefined ? '' : `: ${err instanceof Error ? err.message : String(err)}`;
+    const full = `${message}${detail}`;
+    if (BLOG_CONFIG.gsc.requireQuerySource)
+        throw new Error(full, err === undefined ? undefined : { cause: err });
+    console.warn(`[blog-gsc] ${full}; falling back to editorial pool`);
+    return { token: null, queries: [] };
+}
+function assertQueryRows(rows) {
+    if (!Array.isArray(rows))
+        throw new Error('query source returned a non-array payload');
+    const invalid = rows.findIndex((row) => !row || typeof row.query !== 'string' || !row.query.trim() ||
+        typeof row.impressions !== 'number' || !Number.isFinite(row.impressions) || row.impressions < 0);
+    if (invalid !== -1)
+        throw new Error(`query source returned an invalid row at index ${invalid}`);
+}
 export async function getGoogleAccessToken() {
     const body = new URLSearchParams({
         client_id: env('GOOGLE_OAUTH_CLIENT_ID'),
@@ -54,17 +70,17 @@ export async function getGscQueries() {
                 siteUrl: BLOG_CONFIG.identity.siteUrl,
                 days: LOOKBACK_DAYS,
             });
-            return { token: null, queries: filterQueries(rows || []) };
+            assertQueryRows(rows);
+            return { token: null, queries: filterQueries(rows) };
         }
         catch (err) {
-            console.warn('[blog-gsc] fetchGscQueries hook failed, falling back to editorial pool:', err instanceof Error ? err.message : String(err));
-            return { token: null, queries: [] };
+            return querySourceFailure('fetchGscQueries hook failed', err);
         }
     }
     if (!process.env.GOOGLE_OAUTH_CLIENT_ID ||
         !process.env.GOOGLE_OAUTH_CLIENT_SECRET ||
         !process.env.GOOGLE_OAUTH_REFRESH_TOKEN) {
-        return { token: null, queries: [] };
+        return querySourceFailure('no fetchGscQueries hook or Google OAuth credentials are configured');
     }
     const token = await getGoogleAccessToken();
     const end = new Date(Date.now() - FINAL_DATA_LAG_DAYS * 864e5);
@@ -82,7 +98,11 @@ export async function getGscQueries() {
                 dataState: 'final',
             }),
         });
+        if (!r.ok)
+            throw new Error(`Search Console query request failed with HTTP ${r.status}`);
         const j = await r.json();
+        if (j.rows !== undefined && !Array.isArray(j.rows))
+            throw new Error('Search Console returned a non-array rows payload');
         const queries = filterQueries((j.rows || []).map((row) => ({
             query: row.keys[0],
             impressions: row.impressions,
@@ -90,8 +110,8 @@ export async function getGscQueries() {
         return { token, queries };
     }
     catch (err) {
-        console.warn('[blog-gsc] query fetch failed, falling back to editorial pool:', err instanceof Error ? err.message : String(err));
-        return { token, queries: [] };
+        const fallback = querySourceFailure('Search Console query fetch failed', err);
+        return { token, queries: fallback.queries };
     }
 }
 /**

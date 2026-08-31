@@ -75,6 +75,18 @@ test('malformed urls and paths are named precisely', () => {
   assert.ok(problems.some((p) => p.startsWith('identity.ctaPath')), 'ctaPath must be site-relative');
 });
 
+test('requireQuerySource is an explicit boolean policy', () => {
+  const broken = runtime({
+    config: testConfig({
+      gsc: {
+        ...testConfig().gsc,
+        requireQuerySource: 'yes' as unknown as boolean,
+      },
+    }),
+  });
+  assert.match(validateBlogEngineRuntime(broken).join('\n'), /gsc\.requireQuerySource must be a boolean/);
+});
+
 test('internal links must be site-relative', () => {
   const problems = validateBlogEngineRuntime(runtime({ topics: topics({ internalLinks: ['/', 'https://example.com/blog'] }) }));
   assert.ok(problems.some((p) => p.startsWith('topics.internalLinks')));

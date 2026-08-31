@@ -105,6 +105,9 @@ export function validateBlogEngineRuntime(runtime) {
         if (!sitemaps.length || sitemaps.some((value) => !value?.trim() || !isHttpUrl(value))) {
             problems.push('gsc.sitemap and every gsc.sitemaps entry must be an absolute http(s) URL');
         }
+        if (config.gsc.requireQuerySource !== undefined && typeof config.gsc.requireQuerySource !== 'boolean') {
+            problems.push('gsc.requireQuerySource must be a boolean when set');
+        }
     }
     if (config.image?.og && config.image.og.enabled !== false) {
         if (!config.image.og.width || !config.image.og.height)
