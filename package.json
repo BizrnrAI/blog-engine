@@ -43,9 +43,9 @@
     "verify:docs": "node scripts/verify-docs.mjs"
   },
   "dependencies": {
-    "@ai-sdk/gateway": "^4.0.62",
-    "ai": "^7.0.77",
-    "sharp": "^0.35.3"
+    "@ai-sdk/gateway": "^4.0.70",
+    "ai": "^7.0.87",
+    "sharp": "^0.35.4"
   },
   "devDependencies": {
     "@types/node": "^22.20.1",
