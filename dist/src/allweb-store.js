@@ -1,3 +1,4 @@
+import { assertNoEmDashes } from './punctuation.js';
 import { storedRowToPost } from './stored-row.js';
 /**
  * Least-privilege AllWeb store for website repositories and delegated agents.
@@ -43,6 +44,7 @@ export function createAllWebStore(options) {
     }
     return {
         name: `allweb:${siteId}`,
+        assetOrigins: [new URL(apiUrl).origin, ...(options.assetOrigins || [])],
         publicationStatus: options.publishStatus || 'published',
         async listPosts() {
             const posts = [];
@@ -75,6 +77,7 @@ export function createAllWebStore(options) {
             return posts;
         },
         async putPost({ post, cover, markdown, dateISO, isRefresh }) {
+            assertNoEmDashes({ post, cover, markdown, author: options.author });
             let expectedRevision;
             try {
                 const current = await call({ action: 'blog_get', slug: post.slug });
@@ -95,7 +98,7 @@ export function createAllWebStore(options) {
                 content: post.body,
                 markdown,
                 read_mins: post.readMins,
-                author: options.author || null,
+                ...(isRefresh && options.author === undefined ? {} : { author: options.author || null }),
                 faqs: post.faqs.map((faq) => ({ question: faq.q, answer: faq.a })),
                 sources: post.sources || [],
                 hero_image: cover.image || null,

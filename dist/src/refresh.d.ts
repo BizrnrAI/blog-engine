@@ -10,6 +10,7 @@ export declare function buildRefreshMessages(args: {
         position: number;
     }>;
     otherTitles: string[];
+    sources?: GeneratedBlogPost['sources'];
     /** Other existing posts offered as link targets (internal link graph). */
     linkTargets?: Array<{
         title: string;

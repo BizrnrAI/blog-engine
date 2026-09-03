@@ -1,3 +1,27 @@
+# 2.0.0 - 2026-09-03
+
+- Publishing workflows write directly to Supabase-backed stores, without content PRs, git-history
+  indexing, or engine-owned cron defaults. Existing website workflows require migration.
+- Remove the shared `content.maxPostsPerWeek` setting and enforcement. Websites own schedules,
+  counts, and all volume limits.
+- Enforce no em dashes in generated and persisted posts. Add idempotent SQL prose cleanup and
+  future-write normalization for the standard Supabase schema.
+- Verify citation URLs on refresh and generation, including optional citations. Reject embedded
+  model HTML and provide safe JSON-LD serialization.
+- Isolate concurrent service runtimes, require remote stores, validate publication status, make
+  service dry runs model-free, and preserve persisted slugs on partial failure.
+- Paginate Supabase corpora, bound requests, reject cross-tenant/non-public responses, insert new
+  posts without overwrites, and update only existing published rows on refresh.
+- Add a read-only Supabase website adapter; hide future posts from public reads.
+- Require live canonical article URLs before indexing; repair store-backed audits/syndication,
+  owned-image recognition, remote srcsets, sitemap exclusion, and robots access checks.
+- Add regression coverage and a concrete v2 adoption guide. See docs/AUDIT-2026-09.md.
+
+Breaking changes: weekly-cap configuration is removed; default service publication requires a
+remote store; workflow builders no longer open content PRs or supply publication cron schedules;
+new-post Supabase collisions fail instead of overwriting. Explicit low-level filesystem APIs and
+platform-authorized reviewed release remain available.
+
 # Changelog
 
 All notable changes to `@bizrnr/blog-engine`. Consumers install from git, so

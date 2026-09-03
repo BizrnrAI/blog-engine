@@ -6,10 +6,15 @@ import { getBlogHooks, getBlogTopics } from './config.js';
  */
 export function hostAllowed(url) {
     const allow = getBlogTopics().trustedSourceDomains;
-    if (!allow || !allow.length)
-        return true;
     try {
-        const host = new URL(url).host.toLowerCase();
+        const parsed = new URL(url);
+        if (!/^https?:$/.test(parsed.protocol) || parsed.username || parsed.password)
+            return false;
+        const host = parsed.hostname.toLowerCase();
+        if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || /^[\d.]+$/.test(host) || host.includes(':'))
+            return false;
+        if (!allow || !allow.length)
+            return true;
         return allow.some((d) => host === d.toLowerCase() || host.endsWith('.' + d.toLowerCase()));
     }
     catch {
@@ -32,10 +37,26 @@ async function defaultVerify(url, timeoutMs = 8000) {
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), timeoutMs);
     try {
-        let r = await fetch(url, { method: 'HEAD', redirect: 'follow', signal: ctl.signal });
-        if (r.status === 405 || r.status === 403 || r.status === 404)
-            r = await fetch(url, { method: 'GET', redirect: 'follow', signal: ctl.signal });
-        return r.ok;
+        let target = url;
+        for (let redirects = 0; redirects <= 5; redirects++) {
+            if (!hostAllowed(target))
+                return false;
+            let r = await fetch(target, { method: 'HEAD', redirect: 'manual', signal: ctl.signal });
+            if ([405, 403, 404].includes(r.status)) {
+                await r.body?.cancel();
+                r = await fetch(target, { method: 'GET', redirect: 'manual', signal: ctl.signal });
+            }
+            await r.body?.cancel();
+            if ([301, 302, 303, 307, 308].includes(r.status)) {
+                const location = r.headers.get('location');
+                if (!location)
+                    return false;
+                target = new URL(location, target).href;
+                continue;
+            }
+            return r.ok;
+        }
+        return false;
     }
     catch {
         return false;

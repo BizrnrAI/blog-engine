@@ -1,3 +1,4 @@
+import { assertNoEmDashes } from './punctuation.js';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { BLOG_CONFIG, getBlogHooks } from './config.js';
@@ -32,7 +33,8 @@ export function createFileStore(root: string): BlogStore {
         },
       });
     },
-    async putPost({ post, markdown }: PutPostArgs): Promise<string> {
+    async putPost({ post, cover, markdown }: PutPostArgs): Promise<string> {
+      assertNoEmDashes({ post, cover, markdown });
       const file = join(root, BLOG_CONFIG.paths.blogDir, `${post.slug}${contentExtensions()[0]}`);
       mkdirSync(dirname(file), { recursive: true });
       writeFileSync(file, markdown, 'utf8');

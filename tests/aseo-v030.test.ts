@@ -42,14 +42,11 @@ test('countPostsSince counts only posts inside the window', () => {
   assert.equal(countPostsSince(existing, 7), 2);
 });
 
-test('cadence guard skips the run when maxPostsPerWeek is reached', async () => {
-  configureTestEngine({ content: { maxPostsPerWeek: 2 } }, {
-    generateText: async () => { throw new Error('should not generate when capped'); },
-  });
-  const root = tempRootWithPosts([iso(1), iso(2)]);
+test('the website owns volume: engine generates even with multiple recent posts', async () => {
+  configureTestEngine({}, { generateText: async () => JSON.stringify(validPost()) });
+  const root = tempRootWithPosts([iso(1), iso(2), iso(3), iso(4)]);
   const result = await generateBlogRun(root, { count: 1, dryRun: true, skipPing: true });
-  assert.equal(result.skipped, 'CADENCE_CAP');
-  assert.deepEqual(result.written, []);
+  assert.equal(result.skipped, undefined);
 });
 
 test('cadence guard is inert when unset (existing behaviour)', async () => {

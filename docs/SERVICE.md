@@ -29,6 +29,9 @@ Sites
 └─ render /blog from the same platform store
 ```
 
+Each website owns its schedule, requested post count, and publishing limits. There is no shared
+weekly cap. A service dry run validates its runtime without model calls or writes.
+
 ## Setup
 
 AllWeb-managed website repositories use `createAllWebStore`, which calls the
@@ -51,6 +54,7 @@ The Supabase path below is one optional maintained adapter, not an engine depend
 
 ```bash
 psql "$DATABASE_URL" -f node_modules/@bizrnr/blog-engine/sql/0001_blog_posts.sql
+psql "$DATABASE_URL" -f node_modules/@bizrnr/blog-engine/sql/0002_post_punctuation.sql
 ```
 
 One table serves every site. Anonymous reads are limited to `status = 'published'` by RLS; the
@@ -233,6 +237,6 @@ A new post appears on the next revalidation. No build, no deploy.
 
 ## Both models are supported
 
-The filesystem store remains the default and is unchanged. A static-export site keeps publishing
-files; a database-backed site publishes rows; both run the same engine, the same content contract
-and the same scorecard. Migrate a site when it is cheap, not on principle.
+The low-level filesystem adapter remains for offline compatibility. `runBlogService` requires a remote
+store by default. Static-export sites must implement a database snapshot/deploy path or dynamic
+blog rendering before enabling autonomous publication. See [UPGRADE-V2.md](UPGRADE-V2.md).

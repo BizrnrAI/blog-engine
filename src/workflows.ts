@@ -3,133 +3,80 @@ export interface BlogWorkflowOptions {
   nodeVersion?: number;
   generateCommand?: string;
   indexCommand?: string;
-  /** Daily sweep cron for the indexing workflow (default '30 16 * * *'); schedule it after your generate cron + merge. */
+  /** Website-owned schedule. Omit to use dispatch or the site's external scheduler. */
+  generateCron?: string;
+  /** @deprecated Database indexing uses explicit slugs, never git history. */
   indexSweepCron?: string;
 }
 
-export function blogGenerateWorkflow(options: BlogWorkflowOptions = {}): string {
-  const siteId = options.defaultSiteId || 'generic-service-business';
-  const nodeVersion = options.nodeVersion || 22;
-  const command = options.generateCommand || 'npm run blog:generate -- --count=${{ inputs.count }} --skip-ping';
+function schedule(cron?: string): string {
+  return cron ? `  schedule:\n    - cron: ${JSON.stringify(cron)}\n` : '';
+}
 
-  return `name: Blog Generate
+function directWorkflow(kind: 'generate' | 'refresh', options: BlogWorkflowOptions & { refreshCommand?: string; refreshCron?: string }): string {
+  const command = kind === 'generate'
+    ? options.generateCommand || 'npm run blog:generate -- --count="$BLOG_COUNT" --skip-ping'
+    : options.refreshCommand || 'npm run blog:refresh -- --max=1';
+  const index = options.indexCommand || 'npm run blog:index -- --slugs="$BLOG_SLUGS" --wait-live';
+  return `name: Blog ${kind === 'generate' ? 'Generate' : 'Refresh'}
 
 on:
   workflow_dispatch:
     inputs:
       count:
-        description: Number of posts to generate
-        required: false
+        description: Number of posts (website policy applies)
         default: "1"
-      site_id:
-        description: Site profile id for this template clone
+      slugs:
+        description: Optional existing slugs for refresh
         required: false
-        default: ${siteId}
-
+${schedule(kind === 'generate' ? options.generateCron : options.refreshCron)}
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
+
+concurrency:
+  group: blog-publishing-\${{ github.repository }}
+  cancel-in-progress: false
 
 jobs:
-  generate:
+  publish:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      BLOG_REQUIRE_REMOTE_STORE: "1"
+      NEXT_PUBLIC_SITE_ID: ${JSON.stringify(options.defaultSiteId || 'generic-service-business')}
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v7
         with:
-          node-version: ${nodeVersion}
+          node-version: ${options.nodeVersion || 22}
           cache: npm
       - run: npm ci
-      - id: blog
+      - name: Generate, validate, and persist directly to the configured store
+        id: blog
         run: ${command}
         env:
-          NEXT_PUBLIC_SITE_ID: \${{ inputs.site_id }}
+          BLOG_COUNT: \${{ inputs.count || '1' }}
+          BLOG_SLUGS: \${{ inputs.slugs }}
+          SUPABASE_URL: \${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: \${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ALLWEB_SITE_AGENT_URL: \${{ vars.ALLWEB_SITE_AGENT_URL }}
+          ALLWEB_SITE_TOKEN: \${{ secrets.ALLWEB_SITE_TOKEN }}
           OPENROUTER_API_KEY: \${{ secrets.OPENROUTER_API_KEY }}
           VERCEL_AI_GATEWAY_BLOG_KEY: \${{ secrets.VERCEL_AI_GATEWAY_BLOG_KEY }}
           GOOGLE_OAUTH_CLIENT_ID: \${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
           GOOGLE_OAUTH_CLIENT_SECRET: \${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
           GOOGLE_OAUTH_REFRESH_TOKEN: \${{ secrets.GOOGLE_OAUTH_REFRESH_TOKEN }}
-      - run: npm run typecheck
-      - run: npm run build
-      - uses: peter-evans/create-pull-request@v8
-        if: steps.blog.outputs.slugs != ''
-        with:
-          branch: automation/blog-\${{ github.run_id }}
-          title: "Add generated blog post"
-          commit-message: "Add generated blog post"
-          body: |
-            Generated with the canonical Business Runner blog engine.
-
-            Slugs: \`\${{ steps.blog.outputs.slugs }}\`
-          labels: blog, automation, seo
-`;
-}
-
-export function blogIndexingWorkflow(options: BlogWorkflowOptions = {}): string {
-  const siteId = options.defaultSiteId || 'generic-service-business';
-  const nodeVersion = options.nodeVersion || 22;
-  const command = options.indexCommand || 'npm run blog:index -- --slugs=${{ steps.changed.outputs.slugs }} --wait-live';
-
-  const sweepCron = options.indexSweepCron || '30 16 * * *';
-
-  return `name: Blog Indexing
-
-# GitHub never runs a workflow for a push made by the GITHUB_TOKEN, so a PR that
-# the generate workflow auto-merges does NOT fire the push trigger below. The
-# scheduled sweep catches those posts (anything changed on main in the last 36h);
-# workflow_dispatch is the manual backfill.
-
-on:
-  workflow_dispatch:
-    inputs:
-      slugs:
-        description: Comma-separated blog slugs to submit
-        required: true
-      site_id:
-        description: Site profile id for this template clone
-        required: false
-        default: ${siteId}
-  schedule:
-    - cron: "${sweepCron}"
-  push:
-    branches:
-      - main
-    paths:
-      - "src/content/blog/**"
-
-permissions:
-  contents: read
-
-jobs:
-  index:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-node@v7
-        with:
-          node-version: ${nodeVersion}
-          cache: npm
-      - run: npm ci
-      - id: changed
-        shell: bash
-        run: |
-          if [ -n "\${{ inputs.slugs }}" ]; then
-            echo "slugs=\${{ inputs.slugs }}" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          if [ "\${{ github.event_name }}" = "schedule" ]; then
-            files="$(git log --since='36 hours ago' --name-only --format= -- src/content/blog)"
-          else
-            files="$(git diff --name-only HEAD^ HEAD -- src/content/blog)"
-          fi
-          slugs="$(printf '%s\\n' "$files" | sed -nE 's#^src/content/blog/(.+)\\.md$#\\1#p' | sort -u | paste -sd, -)"
-          echo "slugs=$slugs" >> "$GITHUB_OUTPUT"
-      - if: steps.changed.outputs.slugs != ''
-        run: ${command}
+      - name: Verify live URLs and submit discovery signals
+        if: always() && steps.blog.outputs.slugs != ''
+        run: ${index}
         env:
-          NEXT_PUBLIC_SITE_ID: \${{ inputs.site_id || '${siteId}' }}
+          BLOG_SLUGS: \${{ steps.blog.outputs.slugs }}
+          SUPABASE_URL: \${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: \${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ALLWEB_SITE_AGENT_URL: \${{ vars.ALLWEB_SITE_AGENT_URL }}
+          ALLWEB_SITE_TOKEN: \${{ secrets.ALLWEB_SITE_TOKEN }}
           INDEXNOW_KEY: \${{ secrets.INDEXNOW_KEY }}
           GOOGLE_OAUTH_CLIENT_ID: \${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
           GOOGLE_OAUTH_CLIENT_SECRET: \${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
@@ -137,60 +84,53 @@ jobs:
 `;
 }
 
-/**
- * Weekly refresh workflow: rank rescue picks the best existing post (position 8–30) and
- * regenerates it under the content contract on a PR. Same PR-safe shape as generate.
- */
+/** Direct database publication. Never opens a content pull request or changes the checkout. */
+export function blogGenerateWorkflow(options: BlogWorkflowOptions = {}): string {
+  return directWorkflow('generate', options);
+}
+
 export function blogRefreshWorkflow(options: BlogWorkflowOptions & { refreshCommand?: string; refreshCron?: string } = {}): string {
-  const nodeVersion = options.nodeVersion || 22;
-  const command = options.refreshCommand || 'npm run blog:refresh -- --max=1';
-  const cron = options.refreshCron || '0 14 * * 2';
-  return `name: Blog Refresh
+  return directWorkflow('refresh', options);
+}
+
+/** Retry discovery for known stored slugs without regenerating or consulting git history. */
+export function blogIndexingWorkflow(options: BlogWorkflowOptions = {}): string {
+  return `name: Blog Indexing
 
 on:
   workflow_dispatch:
     inputs:
       slugs:
-        description: Comma-separated slugs to refresh (blank = rank rescue picks)
-        required: false
-  schedule:
-    - cron: "${cron}"
+        description: Published database slugs to submit
+        required: true
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
-  refresh:
+  index:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v7
         with:
-          node-version: ${nodeVersion}
+          node-version: ${options.nodeVersion || 22}
           cache: npm
       - run: npm ci
-      - id: blog
-        run: ${command}
+      - run: ${options.indexCommand || 'npm run blog:index -- --slugs="$BLOG_SLUGS" --wait-live'}
         env:
           BLOG_SLUGS: \${{ inputs.slugs }}
-          OPENROUTER_API_KEY: \${{ secrets.OPENROUTER_API_KEY }}
+          INDEXNOW_KEY: \${{ secrets.INDEXNOW_KEY }}
+          SUPABASE_URL: \${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: \${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ALLWEB_SITE_AGENT_URL: \${{ vars.ALLWEB_SITE_AGENT_URL }}
+          ALLWEB_SITE_TOKEN: \${{ secrets.ALLWEB_SITE_TOKEN }}
           GOOGLE_OAUTH_CLIENT_ID: \${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
           GOOGLE_OAUTH_CLIENT_SECRET: \${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
           GOOGLE_OAUTH_REFRESH_TOKEN: \${{ secrets.GOOGLE_OAUTH_REFRESH_TOKEN }}
-      - run: npm run typecheck
-      - run: npm run build
-      - uses: peter-evans/create-pull-request@v8
-        if: steps.blog.outputs.slugs != ''
-        with:
-          branch: automation/blog-refresh-\${{ github.run_id }}
-          title: "Refresh blog post(s): \${{ steps.blog.outputs.slugs }}"
-          commit-message: "Refresh blog post(s): \${{ steps.blog.outputs.slugs }}"
-          body: |
-            Rank-rescue refresh by the canonical blog engine (existing URL, honest updated date).
-
-            Slugs: \`\${{ steps.blog.outputs.slugs }}\`
-          labels: blog, automation, seo
 `;
 }
 

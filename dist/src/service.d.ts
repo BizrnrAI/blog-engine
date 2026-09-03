@@ -21,6 +21,8 @@ export interface RunServiceOptions {
     /** Only run these site ids. */
     only?: readonly string[];
     now?: Date;
+    /** Permit explicit filesystem services for legacy offline tooling only. */
+    allowFileStore?: boolean;
 }
 /**
  * Publish for every due site. Returns one result per site — always, including failures, so a

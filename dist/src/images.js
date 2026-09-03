@@ -1,3 +1,4 @@
+import { normalizeBlogProse } from './punctuation.js';
 import { generateImage } from 'ai';
 import { createGateway } from '@ai-sdk/gateway';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
@@ -117,7 +118,7 @@ async function fetchRawHero(post, topic) {
  * Responsive variants (image.variants, e.g. [1024, 640]) written as <slug>-<w>.<format>; returns
  * an HTML srcset string including the full-size hero, or '' when no variants are configured.
  */
-export async function writeHeroVariants(root, slug, format, fullBuf, fullWidth, publicPath) {
+export async function writeHeroVariants(root, slug, format, fullBuf, fullWidth, publicPath, fullImageUrl = publicPath) {
     const widths = (BLOG_CONFIG.image.variants || []).filter((w) => w > 0 && (!fullWidth || w < fullWidth)).sort((a, b) => a - b);
     if (!widths.length)
         return '';
@@ -129,7 +130,7 @@ export async function writeHeroVariants(root, slug, format, fullBuf, fullWidth, 
         entries.push(`${url} ${w}w`);
     }
     if (fullWidth)
-        entries.push(`${publicPath} ${fullWidth}w`);
+        entries.push(`${fullImageUrl} ${fullWidth}w`);
     return entries.join(', ');
 }
 /**
@@ -150,14 +151,15 @@ async function generateAiHero(root, post, topic) {
         const format = BLOG_CONFIG.image.format;
         const watermarked = await applyWatermark(root, raw);
         const outDir = join(root, BLOG_CONFIG.paths.heroDir);
-        ensureDir(outDir);
+        if (getStore(root).root)
+            ensureDir(outDir);
         const outFile = join(outDir, `${post.slug}.${format}`);
         // applyWatermark returns WebP; re-encode only when the configured format differs.
         const finalBuf = format === 'webp' ? watermarked : await encodeTo(format, sharp(watermarked));
         const dims = await sharp(finalBuf).metadata();
         const key = `/${BLOG_CONFIG.paths.heroDir.replace(/^public\//, '')}/${post.slug}.${format}`;
         const publicPath = await storeAsset(root, key, finalBuf, mimeTypeFor(format));
-        const srcset = await writeHeroVariants(root, post.slug, format, finalBuf, dims.width, key);
+        const srcset = await writeHeroVariants(root, post.slug, format, finalBuf, dims.width, key, publicPath);
         return {
             image: publicPath,
             imageAlt: heroAltText(post),
@@ -246,7 +248,7 @@ export async function generateCoverImage(root, post, topic, ordinal, dryRun = fa
     const fallback = HERO_PHOTOS[ordinal % HERO_PHOTOS.length];
     return {
         image: fallback.url,
-        imageAlt: fallback.alt,
+        imageAlt: normalizeBlogProse(fallback.alt),
         ogImage: ogCard || fallback.url,
         source: 'curated-fallback',
     };

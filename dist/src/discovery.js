@@ -44,7 +44,7 @@ export function excludeBlocked(posts, exclude) {
  * defect in the playbook's field notes.
  */
 export function blogHubSitemapEntry(posts, options = {}) {
-    const newest = posts
+    const newest = excludeBlocked(posts, options.exclude)
         .map((p) => p.updatedAt || p.publishedAt)
         .filter(Boolean)
         .sort()

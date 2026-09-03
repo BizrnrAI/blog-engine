@@ -1,6 +1,7 @@
 import { BLOG_CONFIG, blogPostPath, brandPersona, getBlogHooks, getBlogTopics } from './config.js';
 import { ALLOWED_CATEGORIES, INTERNAL_LINKS } from './topics.js';
 import { clampText, env, slugify, wordCount } from './utils.js';
+import { assertNoEmDashes, hasEmDash, normalizeBlogProse } from './punctuation.js';
 import { hostAllowed, normalizeSources, verifySources } from './sources.js';
 const DEFAULT_RULES = {
     minBodyWords: 450,
@@ -26,7 +27,8 @@ function monthYear() {
 }
 /** Existing posts offered as link targets: the most recent 30, as { title, path }. */
 export function relatedLinkTargets(existing, limit = 30) {
-    return existing
+    return [...existing]
+        .sort((a, b) => (a.date || '').localeCompare(b.date || ''))
         .filter((p) => p.title)
         .slice(-limit)
         .map((p) => ({ title: p.title, path: blogPostPath(p.slug) }));
@@ -58,6 +60,7 @@ function buildMessages(topic, existing) {
         'Write a single, original, genuinely useful SEO + AEO optimized blog post as STRICT JSON only. No prose around it.',
         '',
         'HARD RULES (this publishes automatically to a public brand site):',
+        '- Never use em dashes anywhere, including titles, metadata, FAQs, sources, and image alt text. Use commas, parentheses, periods, or a simple hyphen.',
         '- NEVER fabricate specific prices, percentages, statistics, dates, interest rates, review counts, awards, or named sources. Speak qualitatively or in general ranges.',
         '- No legal, tax, medical, or financial guarantees or advice; where relevant, suggest consulting the appropriate professional.',
         `- Be accurate and on-brand: ${rules.tone}. American English.`,
@@ -75,6 +78,7 @@ function buildMessages(topic, existing) {
         '- State limitations plainly where they are material ("this does not cover X", "figures vary by Y"). A stated boundary is a trust signal, not a weakness, and assistants quote hedged claims more readily than absolute ones.',
         '- Do NOT repeat the same distinctive keyword at both the start and the end of the title; if the topic has a synonym pair, use one in the title and the other in the first H2.',
         '- Do NOT include an FAQ section or a "Quick answer" section in the body; those render automatically from the JSON fields.',
+        '- Use plain Markdown only. Never include scripts, embedded HTML, event handlers, or javascript/data links.',
         '- Include 2-4 natural internal links chosen ONLY from this list: ' + JSON.stringify(INTERNAL_LINKS) + '.',
         linkTargets.length
             ? '- Internal link graph: where genuinely relevant, link 1-2 of these EXISTING posts by their exact path (descriptive anchor text, no "click here"): ' + JSON.stringify(linkTargets) + '. Never link a post that is off-topic just to add a link.'
@@ -131,6 +135,7 @@ async function callLLM(messages) {
     const apiKeyEnv = BLOG_CONFIG.text.apiKeyEnv || 'OPENROUTER_API_KEY';
     const r = await fetch(BLOG_CONFIG.text.url, {
         method: 'POST',
+        signal: AbortSignal.timeout(120_000),
         headers: {
             Authorization: `Bearer ${env(apiKeyEnv)}`,
             'Content-Type': 'application/json',
@@ -247,6 +252,10 @@ function blockquoteWordCount(body) {
 export function validateGeneratedPost(post, args) {
     const rules = contentRules();
     const errs = [];
+    if (hasEmDash(post))
+        errs.push('em dashes are forbidden in all post fields, including HTML entities');
+    if (/<\/?[a-z][^>]*>/i.test([post.title, post.description, post.answer, post.body, ...(post.faqs || []).flatMap((f) => [f?.q, f?.a])].join('\n')) || /\]\(\s*(?:javascript|data|vbscript):/i.test(post.body || ''))
+        errs.push('use plain Markdown, without embedded HTML or executable links');
     if (!post.title || post.title.length > 90)
         errs.push('title missing or > 90 chars');
     if (!post.slug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(post.slug))
@@ -272,8 +281,8 @@ export function validateGeneratedPost(post, args) {
         errs.push(`answer must be 30-70 words (got ${aw})`);
     if (!Array.isArray(post.tags) || post.tags.length < 2)
         errs.push('need >= 2 tags');
-    if (!Array.isArray(post.faqs) || post.faqs.length < 3)
-        errs.push('need >= 3 faqs');
+    if (!Array.isArray(post.faqs) || post.faqs.length !== 3)
+        errs.push('need exactly 3 faqs');
     else if (post.faqs.some((f) => !f || !f.q || !f.a))
         errs.push('every faq needs q and a');
     if (!post.body || wordCount(post.body) < rules.minBodyWords)
@@ -315,8 +324,10 @@ export function validateGeneratedPost(post, args) {
         errs.push('blocked claim phrases present: ' + blocked.join(', '));
     if (rules.requireSources) {
         const sources = post.sources || [];
-        if (sources.length < 2)
+        if (sources.length < 2 || sources.length > 4)
             errs.push(`need 2-4 verified sources (got ${sources.length})`);
+        if (new Set(sources.map((source) => source.url)).size !== sources.length)
+            errs.push('source URLs must be distinct');
         const offList = sources.filter((s) => !hostAllowed(s.url)).map((s) => s.url);
         if (offList.length)
             errs.push('sources outside trustedSourceDomains: ' + offList.join(', '));
@@ -325,25 +336,26 @@ export function validateGeneratedPost(post, args) {
 }
 export function normalizeGeneratedPost(raw, topic) {
     const rules = contentRules();
+    const prose = (value) => normalizeBlogProse(String(value || '')).trim();
     // A pinned slug is used verbatim: slugify() strips stop words ("to", "a", "of"), which would
     // silently move a curated URL.
     const slug = topic?.slug || slugify(String(raw.slug || raw.title || ''));
     return {
-        title: topic?.title || String(raw.title || '').trim(),
+        title: topic?.title || prose(raw.title),
         slug,
-        description: clampText(String(raw.description || ''), rules.clampDescriptionTo),
-        category: String(raw.category || ''),
-        answer: String(raw.answer || '').trim(),
-        readMins: Number(raw.readMins || 7),
+        description: clampText(prose(raw.description), rules.clampDescriptionTo),
+        category: prose(raw.category),
+        answer: prose(raw.answer),
+        readMins: Math.max(1, Math.ceil(wordCount(String(raw.body || '')) / 220)),
         tags: Array.isArray(raw.tags)
-            ? [...new Set(raw.tags.map((t) => String(t).toLowerCase().trim()).filter(Boolean))].slice(0, 6)
+            ? [...new Set(raw.tags.map((t) => prose(t).toLowerCase()).filter(Boolean))].slice(0, 6)
             : [],
-        heroImageAlt: raw.heroImageAlt ? clampText(String(raw.heroImageAlt), 140) : undefined,
+        heroImageAlt: raw.heroImageAlt ? clampText(prose(raw.heroImageAlt), 140) : undefined,
         faqs: Array.isArray(raw.faqs)
-            ? raw.faqs.map((f) => ({ q: String(f.q || '').trim(), a: String(f.a || '').trim() }))
+            ? raw.faqs.map((f) => ({ q: prose(f?.q), a: prose(f?.a) }))
             : [],
-        body: String(raw.body || '').trim(),
-        ...(raw.sources ? { sources: normalizeSources(raw.sources) } : {}),
+        body: prose(raw.body),
+        ...(raw.sources ? { sources: normalizeSources(raw.sources).map((source) => ({ ...source, title: prose(source.title), ...(source.publisher ? { publisher: prose(source.publisher) } : {}) })) } : {}),
     };
 }
 export async function generateBlogPost(topic, existing) {
@@ -356,13 +368,17 @@ export async function generateBlogPost(topic, existing) {
             rawText = await callLLM(messages);
             const post = normalizeGeneratedPost(parseModelJson(rawText), topic);
             errs = validateGeneratedPost(post, { existingSlugs, topic });
-            if (errs.length === 0 && contentRules().requireSources)
+            if (errs.length === 0 && post.sources?.length)
                 errs = await verifySources(post.sources || []);
             if (errs.length === 0 && getBlogHooks().validatePost) {
                 errs = await getBlogHooks().validatePost({ post, topic, operation: 'generate' });
             }
-            if (errs.length === 0)
+            if (errs.length === 0 && existing.some((p) => p.title.trim().toLowerCase() === post.title.trim().toLowerCase()))
+                errs.push('title already exists; answer a distinct question');
+            if (errs.length === 0) {
+                assertNoEmDashes(post);
                 return post;
+            }
             messages.push({ role: 'assistant', content: JSON.stringify(post).slice(0, 500) });
             messages.push({ role: 'user', content: `That JSON failed validation: ${errs.join('; ')}. Return corrected STRICT JSON only.` });
         }

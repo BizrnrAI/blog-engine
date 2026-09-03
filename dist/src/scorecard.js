@@ -8,7 +8,7 @@ import { cannibalizationPairs } from './rank-rescue.js';
  * opposed to training crawlers. Blocking one of these is a silent, total loss of AI citation
  * for that provider, and nothing in a build ever notices.
  */
-export const RETRIEVAL_CRAWLERS = ['OAI-SearchBot', 'ChatGPT-User', 'PerplexityBot', 'Claude-SearchBot', 'Claude-User', 'Google-Extended'];
+export const RETRIEVAL_CRAWLERS = ['OAI-SearchBot', 'ChatGPT-User', 'PerplexityBot', 'Claude-SearchBot', 'Claude-User', 'Googlebot'];
 async function fetchText(url, timeoutMs = 12000) {
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), timeoutMs);
@@ -25,28 +25,49 @@ async function fetchText(url, timeoutMs = 12000) {
 }
 /** Is this user agent disallowed from the blog path by robots.txt? */
 export function crawlerBlocked(robotsTxt, userAgent, path) {
-    const lines = robotsTxt.split(/\r?\n/).map((l) => l.replace(/#.*$/, '').trim()).filter(Boolean);
-    let active = false;
-    let matched = false;
-    const disallows = [];
-    for (const line of lines) {
-        const [rawKey, ...rest] = line.split(':');
-        const key = rawKey.trim().toLowerCase();
-        const value = rest.join(':').trim();
-        if (key === 'user-agent') {
-            if (matched && active)
-                break; // finished the block that matched this UA
-            active = value.toLowerCase() === userAgent.toLowerCase();
-            if (active)
-                matched = true;
+    const groups = [];
+    let group;
+    let sawRule = false;
+    for (const line of robotsTxt.split(/\r?\n/)) {
+        const clean = line.replace(/#.*$/, '').trim();
+        const colon = clean.indexOf(':');
+        if (colon < 0)
             continue;
+        const key = clean.slice(0, colon).trim().toLowerCase();
+        const value = clean.slice(colon + 1).trim();
+        if (key === 'user-agent') {
+            if (!group || sawRule) {
+                group = { agents: [], rules: [] };
+                groups.push(group);
+                sawRule = false;
+            }
+            group.agents.push(value.toLowerCase());
         }
-        if (active && key === 'disallow' && value)
-            disallows.push(value);
+        else if (group && (key === 'allow' || key === 'disallow')) {
+            sawRule = true;
+            if (value)
+                group.rules.push({ allow: key === 'allow', path: value });
+        }
     }
-    if (!matched)
-        return false; // no rule naming this UA: allowed
-    return disallows.some((d) => d === '/' || path.startsWith(d));
+    const ua = userAgent.toLowerCase();
+    const specificity = (agents) => Math.max(-1, ...agents.map((agent) => agent === '*' ? 0 : ua.includes(agent) ? agent.length : -1));
+    const best = Math.max(-1, ...groups.map((g) => specificity(g.agents)));
+    if (best < 0)
+        return false;
+    let winningLength = -1;
+    let allowed = true;
+    for (const rule of groups.filter((g) => specificity(g.agents) === best).flatMap((g) => g.rules)) {
+        const anchored = rule.path.endsWith('$');
+        const pattern = (anchored ? rule.path.slice(0, -1) : rule.path).split('*').map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.*');
+        if (!new RegExp('^' + pattern + (anchored ? '$' : '')).test(path))
+            continue;
+        const length = rule.path.replace(/[*$]/g, '').length;
+        if (length > winningLength || length === winningLength && rule.allow) {
+            winningLength = length;
+            allowed = rule.allow;
+        }
+    }
+    return !allowed;
 }
 /**
  * Fetch the live pages a reader and a retrieval crawler actually hit, and assert the citable
@@ -60,8 +81,8 @@ async function liveProbeChecks(posts, siteUrl, base) {
     const targets = [
         { name: 'live:hub', url: `${siteUrl}${base}` },
         { name: 'live:feed', url: `${siteUrl}${BLOG_CONFIG.rss.path}` },
-        ...(sorted[0] ? [{ name: 'live:oldest-post', url: `${siteUrl}${base}/${sorted[0].slug}` }] : []),
-        ...(newest && sorted.length > 1 ? [{ name: 'live:newest-post', url: `${siteUrl}${base}/${newest.slug}` }] : []),
+        ...(sorted[0] ? [{ name: 'live:oldest-post', url: `${blogPostUrl(sorted[0].slug)}` }] : []),
+        ...(newest && sorted.length > 1 ? [{ name: 'live:newest-post', url: `${blogPostUrl(newest.slug)}` }] : []),
     ];
     let newestHtml = '';
     for (const target of targets) {
@@ -164,10 +185,6 @@ export async function runScorecard(root, options = {}) {
     const now = options.now || new Date();
     const checks = [];
     const site = BLOG_CONFIG.identity.siteHost;
-    // 0. cadence policy: an uncapped autonomous publisher will outrun its own evidence.
-    if (!BLOG_CONFIG.content?.maxPostsPerWeek) {
-        checks.push({ name: 'cadence-policy', status: 'warn', detail: 'content.maxPostsPerWeek is unset — ASEO policy caps search-led posts at 2 per rolling 7 days until reviewed evidence supports more' });
-    }
     // 1. cadence — read through the store so a database-backed site is measured the same way.
     const storedPosts = await getStore(root).listPosts();
     const latest = storedPosts
@@ -198,7 +215,7 @@ export async function runScorecard(root, options = {}) {
     // 3. feed
     try {
         const feedUrl = `${BLOG_CONFIG.identity.siteUrl}${BLOG_CONFIG.rss.path}`;
-        const r = await fetch(feedUrl, { redirect: 'follow' });
+        const r = await fetch(feedUrl, { redirect: 'follow', signal: AbortSignal.timeout(12_000) });
         const text = r.ok ? await r.text() : '';
         const items = (text.match(/<item>/g) || []).length;
         checks.push({ name: 'feed', status: r.ok && items > 0 ? 'pass' : 'fail', detail: `${feedUrl} → ${r.status}, ${items} items` });

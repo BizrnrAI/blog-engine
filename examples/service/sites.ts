@@ -99,7 +99,7 @@ function runtimeFor(brief: SiteBrief): BlogEngineRuntime {
       },
     },
     rss: { title: `${brief.brand} Insights`, description: `Answer-first guides from ${brief.brand}.`, path: '/blog/feed.xml', limit: 20 },
-    content: { maxPostsPerWeek: 2 },
+
   };
 
   const topics: BlogEngineTopics = {

@@ -87,6 +87,11 @@ export function authorProfileSchema(args: {
 
 type JsonLd = Record<string, unknown>;
 
+/** Safe text for a script[type=application/ld+json], including model-authored strings. */
+export function serializeBlogJsonLd(graph: JsonLd): string {
+  return JSON.stringify(graph).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+}
+
 function resolveSiteUrl(options: BlogSchemaOptions): string {
   if (options.siteUrl) return options.siteUrl.replace(/\/$/, '');
   return getBlogConfig().identity.siteUrl.replace(/\/$/, '');

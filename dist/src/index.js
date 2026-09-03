@@ -35,4 +35,8 @@ export { getGoogleAccessToken, getGscPageQueries, getGscQueries, pingGscSitemap 
 export { pingIndexNow } from './indexing.js';
 export { clampText, mimeTypeFor, norm, slugify, wordCount, xmlEscape } from './utils.js';
 export { toMarkdown } from './markdown.js';
+export { hasEmDash, normalizeBlogProse, assertNoEmDashes } from './punctuation.js';
+export { withBlogEngineRuntime } from './config.js';
+export { serializeBlogJsonLd } from './schema.js';
+export { BlogRunError } from './run-error.js';
 //# sourceMappingURL=index.js.map

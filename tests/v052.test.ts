@@ -122,7 +122,7 @@ test('readGeneratedBlogPosts understands a site-shaped post end to end', () => {
   assert.equal(post.readMins, 7);
 });
 
-test('readExistingPosts reads pubDate, so the cadence guard applies to site-shaped posts', async () => {
+test('readExistingPosts exposes pubDate for website-owned publishing policies', async () => {
   const root = rootWith({
     'a.md': kpPost('a').replace('pubDate: 2026-07-01', `pubDate: ${iso(1)}`),
     'b.md': kpPost('b').replace('pubDate: 2026-07-01', `pubDate: ${iso(2)}`),
@@ -131,9 +131,7 @@ test('readExistingPosts reads pubDate, so the cadence guard applies to site-shap
   assert.deepEqual(existing.map((p) => p.date).sort(), [iso(2), iso(1)].sort());
   assert.equal(existing[0].title, 'When Not to Automate');
 
-  configureTestEngine({ content: { maxPostsPerWeek: 2 } }, { generateText: async () => { throw new Error('must not generate'); } });
-  const result = await generateBlogRun(root, { count: 1, dryRun: true, skipPing: true });
-  assert.equal(result.skipped, 'CADENCE_CAP');
+
 });
 
 test('corpus audit no longer reports a site-shaped post as image-less or date-less', () => {

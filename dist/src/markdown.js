@@ -8,7 +8,7 @@ export function toMarkdown(post, args) {
         `date: ${args.dateISO}`,
         `updated: ${args.dateISO}`,
         ...(args.author ? [`author: ${yamlString(args.author)}`] : []),
-        `readMins: ${Math.max(3, Math.min(15, Number(post.readMins) || 7))}`,
+        `readMins: ${Math.max(1, Math.ceil(Number(post.readMins) || 1))}`,
         `answer: ${yamlString(post.answer)}`,
         ...(post.tags.length ? ['tags:', ...post.tags.map((t) => `  - ${yamlString(t)}`)] : []),
         `gradient: ${yamlString(args.gradient)}`,

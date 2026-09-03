@@ -19,7 +19,7 @@ measurably working on the production adopters.
 ## Tier 0 — already in the engine (turn it on)
 
 `identity.author` (stable `#person`), `topics.ownerPages`,
-`content.maxPostsPerWeek`, `content.blockedPhrases`, question-led H2s,
+website-owned publishing limits, `content.blockedPhrases`, question-led H2s,
 120–160-word citable passage, model-written branded alt + dimensions, FAQPage
 + BlogPosting + Breadcrumb graph, speakable (opt-in), RSS with media, sitemap
 + `llms.txt` helpers, IndexNow only after the URL is live. A site that uses all

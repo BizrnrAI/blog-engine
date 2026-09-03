@@ -1,6 +1,5 @@
 import type { BlogContentRules, ExistingPost, GeneratedBlogPost, SeoTopic } from './types.js';
-declare const DEFAULT_RULES: Required<Omit<BlogContentRules, 'blockedPhrases' | 'extraRules' | 'maxPostsPerWeek'>> & {
-    maxPostsPerWeek?: number;
+declare const DEFAULT_RULES: Required<Omit<BlogContentRules, 'blockedPhrases' | 'extraRules'>> & {
     blockedPhrases: readonly string[];
     extraRules: readonly string[];
 };

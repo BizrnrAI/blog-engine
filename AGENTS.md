@@ -24,6 +24,13 @@ New code imports `@bizrnr/blog-engine/core`. Optional maintained adapters live u
 `@bizrnr/blog-engine/adapters/*`. Never infer that an adapter shown in this repository is a
 required service or permission boundary for another platform.
 
+## Publication policy (owner-directed, September 2026)
+
+- Autonomous posts go directly to Supabase, optionally through the authorized site gateway.
+- Never generate a content pull request. Code reviews remain separate from post publication.
+- Weekly caps and publishing schedules belong to each website, never to the shared engine.
+- No em dashes in posts, including metadata, FAQs, sources, and alt text. Validate final output.
+
 ## Ground rules
 
 - **Verify before claiming done.** `npm run verify` (typecheck + tests + build) must pass. Tests

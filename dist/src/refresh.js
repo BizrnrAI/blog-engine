@@ -1,3 +1,4 @@
+import { BlogRunError } from './run-error.js';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import sharp from 'sharp';
 import { join } from 'node:path';
@@ -10,6 +11,8 @@ import { toMarkdown } from './markdown.js';
 import { rankRescueCandidates } from './rank-rescue.js';
 import { auditPosts } from './audit.js';
 import { INTERNAL_LINKS } from './topics.js';
+import { verifySources } from './sources.js';
+import { assertNoEmDashes, normalizeBlogProse } from './punctuation.js';
 import { env } from './utils.js';
 /**
  * Refresh mode — re-optimize an EXISTING post for the queries it already earns impressions on,
@@ -28,6 +31,7 @@ async function callLLM(messages) {
     const apiKeyEnv = BLOG_CONFIG.text.apiKeyEnv || 'OPENROUTER_API_KEY';
     const r = await fetch(BLOG_CONFIG.text.url, {
         method: 'POST',
+        signal: AbortSignal.timeout(120_000),
         headers: { Authorization: `Bearer ${env(apiKeyEnv)}`, 'Content-Type': 'application/json', ...(BLOG_CONFIG.text.headers || {}) },
         body: JSON.stringify({ model: BLOG_CONFIG.text.model, messages, temperature: BLOG_CONFIG.text.temperature, max_tokens: BLOG_CONFIG.text.maxTokens, response_format: { type: 'json_object' } }),
     });
@@ -50,12 +54,13 @@ export function buildRefreshMessages(args) {
         `You are REFRESHING an existing published post on ${identity.name}'s site so it better answers the searches it already earns. Return STRICT JSON only.`,
         '',
         'HARD RULES:',
+        '- Never use em dashes anywhere, including metadata, FAQs, sources, and alt text. Use commas, parentheses, periods, or a simple hyphen.',
         '- NEVER fabricate specific prices, percentages, statistics, dates, interest rates, review counts, awards, or named sources.',
         '- No legal, tax, medical, or financial guarantees or advice.',
         `- Be accurate and on-brand: ${rules.tone}. American English.`,
         '- Keep the post\'s core subject and the same slug; you may sharpen the title, but do not change what the page is about.',
         '- Keep anything in the existing body that is accurate and useful; cut filler; add the missing answers the queries below reveal.',
-        `- Update all timeframe language to "as of ${monthYear()}".`,
+        '- Update time-sensitive claims only when supported by current evidence. Do not label old facts newly verified just because this post is refreshed.',
         '- Do NOT duplicate these other post titles: ' + JSON.stringify(args.otherTitles.slice(0, 40)) + '.',
         ...rules.extraRules,
         '',
@@ -66,6 +71,7 @@ export function buildRefreshMessages(args) {
             ? `- Exactly ONE "> " blockquote of 120-160 words: a self-contained, citable passage with concrete scope and the timeframe "as of ${monthYear()}".`
             : '',
         '- Tables/lists over prose for comparisons. No FAQ or quick-answer section in the body.',
+        '- Use plain Markdown only, without embedded HTML, scripts, or javascript/data links.',
         '- Include 2-4 internal links chosen ONLY from: ' + JSON.stringify(INTERNAL_LINKS) + '.',
         linkTargets.length
             ? '- Internal link graph: where genuinely relevant, link 1-2 of these EXISTING posts by their exact path (descriptive anchor text): ' + JSON.stringify(linkTargets) + '.'
@@ -73,6 +79,7 @@ export function buildRefreshMessages(args) {
         ownerPages.length
             ? '- These pages are the canonical OWNERS of their commercial topics: ' + JSON.stringify(ownerPages) + '. Support them — link the most relevant one naturally — and keep this post a distinct, more specific answer that hands off to the owner for the decision.'
             : '',
+        rules.requireSources ? '- Cite 2-4 authoritative sources with exact URLs in the sources array. Every URL is checked live before publication; never invent a URL.' : '',
         rules.blockedPhrases.length ? '- NEVER use these phrases: ' + JSON.stringify(rules.blockedPhrases) + '.' : '',
     ].filter(Boolean).join('\n');
     const user = [
@@ -80,6 +87,9 @@ export function buildRefreshMessages(args) {
         '',
         'Real search queries this page currently earns (from Search Console, last 28 days):',
         queryLines,
+        '',
+        'Existing sources to verify and retain when they still support the refreshed claims:',
+        JSON.stringify(args.sources || []),
         '',
         'Existing body (Markdown):',
         '"""',
@@ -96,6 +106,7 @@ export function buildRefreshMessages(args) {
         '  "readMins": integer 5-9,',
         '  "tags": array of 3-6 short lowercase topical tags,',
         '  "faqs": array of EXACTLY 3 objects { "q": string (a real search question, ideally from the list above), "a": string (2-4 sentences) },',
+        '  "sources": array of objects { "title": string, "url": string (absolute https URL), "publisher": string }; retain supporting citations,',
         '  "body": string (the refreshed Markdown body per the rules above)',
         '}',
     ].join('\n');
@@ -106,6 +117,8 @@ export function buildRefreshMessages(args) {
 }
 export async function refreshBlogPost(root, slug, args = {}) {
     const store = getStore(root);
+    if (store.publicationStatus && store.publicationStatus !== 'published')
+        throw new Error('Refresh requires a published store and must not unpublish an existing article');
     const posts = await store.listPosts();
     const stored = posts.find((p) => p.slug === slug);
     if (!stored)
@@ -129,6 +142,7 @@ export async function refreshBlogPost(root, slug, args = {}) {
         existingBody: content,
         queries: args.queries || [],
         otherTitles,
+        sources: stored.sources,
         linkTargets: relatedLinkTargets(existing.filter((p) => p.slug !== slug)),
     });
     let errs = [];
@@ -139,6 +153,8 @@ export async function refreshBlogPost(root, slug, args = {}) {
             rawText = await callLLM(messages);
             const candidate = normalizeGeneratedPost(parseModelJson(rawText), topic);
             errs = validateGeneratedPost(candidate, { existingSlugs: otherSlugs, topic });
+            if (!errs.length && candidate.sources?.length)
+                errs = await verifySources(candidate.sources);
             if (!errs.length && getBlogHooks().validatePost) {
                 errs = await getBlogHooks().validatePost({ post: candidate, topic, operation: 'refresh' });
             }
@@ -164,7 +180,7 @@ export async function refreshBlogPost(root, slug, args = {}) {
     post.heroImageAlt = undefined;
     const cover = {
         image: stored.heroImage || '',
-        imageAlt: stored.heroImageAlt || `${BLOG_CONFIG.identity.name} guide: ${post.title}`,
+        imageAlt: normalizeBlogProse(stored.heroImageAlt || `${BLOG_CONFIG.identity.name} guide: ${post.title}`),
         ogImage: stored.ogImage || stored.heroImage || '',
         source: 'ai-generated',
         ...(stored.heroImageWidth ? { width: stored.heroImageWidth, height: stored.heroImageHeight } : {}),
@@ -191,6 +207,7 @@ export async function refreshBlogPost(root, slug, args = {}) {
     let markdown = render ? render(renderArgs) : toMarkdown(post, renderArgs);
     // toMarkdown writes updated = dateISO; a refresh must carry today's date there.
     markdown = markdown.replace(/^updated: .*$/m, `updated: ${today}`);
+    assertNoEmDashes({ post, cover, markdown });
     if (!args.dryRun) {
         const persist = getBlogHooks().persistPost;
         if (persist) {
@@ -243,15 +260,20 @@ export async function refreshBlogRun(root, options) {
         return { refreshed: [], candidates, skipped: 'NO_CANDIDATES' };
     }
     const refreshed = [];
-    for (const slug of slugs) {
-        const c = byslug.get(slug);
-        console.log(`${logPrefix} refreshing ${slug}${c ? ` (pos ${c.position}, ${c.impressions} impr, score ${c.score})` : ''}`);
-        const { markdown } = await refreshBlogPost(root, slug, { queries: c?.queries, dryRun: options.dryRun });
-        if (options.dryRun)
-            console.log(`\n-------- DRY RUN refresh ${slug} --------\n${markdown}\n-------- END --------\n`);
-        else
-            refreshed.push(slug);
+    try {
+        for (const slug of slugs) {
+            const c = byslug.get(slug);
+            console.log(`${logPrefix} refreshing ${slug}${c ? ` (pos ${c.position}, ${c.impressions} impr, score ${c.score})` : ''}`);
+            const { markdown } = await refreshBlogPost(root, slug, { queries: c?.queries, dryRun: options.dryRun });
+            if (options.dryRun)
+                console.log(`\n-------- DRY RUN refresh ${slug} --------\n${markdown}\n-------- END --------\n`);
+            else
+                refreshed.push(slug);
+        }
+        return { refreshed, candidates };
     }
-    return { refreshed, candidates };
+    catch (error) {
+        throw new BlogRunError('refresh', refreshed, error);
+    }
 }
 //# sourceMappingURL=refresh.js.map

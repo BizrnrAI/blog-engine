@@ -55,8 +55,7 @@ it, never as an SEO tactic — Google Search ignores it.
 
 ## 10. Publish less than you think
 
-The ASEO cadence policy caps search-led autonomous posts at two per rolling seven days until
-reviewed evidence supports more (`content.maxPostsPerWeek`). Volume without evidence is how a
+Each website owns its publication cadence and volume limits; the shared engine imposes no weekly cap. Volume without evidence is how a
 corpus becomes scaled thin content.
 
 ## What the engine cannot do for you

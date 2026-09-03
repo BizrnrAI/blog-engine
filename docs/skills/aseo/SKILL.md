@@ -153,7 +153,7 @@ Audit every article for owner, intent, useful word count, author, dates, sources
 
 Keep blocked legacy pages `noindex` when reachability is needed; remove them from sitemaps, feeds, taxonomies, recommendations, and auto-links. Do not disguise automated rewrites as human review.
 
-Default autonomous publishing requires two independent demand signals, revenue intent ≥1, no owner, `SHIP`, trusted sources, claim-level evidence, accountable author/reviewer, and original contribution. Cap new search-led posts at two per rolling seven days until reviewed evidence supports more. If an owner exists, queue a refresh. Prioritize up to five weekly refreshes using search impressions/clicks, near-page-one position, citation gaps, conversions, and stale evidence—not server views. Keep archive pagination crawlable; prevent thin tag/category proliferation.
+Default autonomous publishing requires two independent demand signals, revenue intent ≥1, no owner, `SHIP`, trusted sources, claim-level evidence, accountable author/reviewer, and original contribution. Each website owns its publication schedule and volume limits. The shared blog engine must not impose weekly caps. If an owner exists, queue a refresh. Prioritize up to five weekly refreshes using search impressions/clicks, near-page-one position, citation gaps, conversions, and stale evidence—not server views. Keep archive pagination crawlable; prevent thin tag/category proliferation.
 
 ### Query fan-out
 
