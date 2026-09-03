@@ -1,3 +1,4 @@
+import { normalizeBlogProse } from './punctuation.js';
 import { generateImage } from 'ai';
 import { createGateway } from '@ai-sdk/gateway';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -128,6 +129,7 @@ export async function writeHeroVariants(
   fullBuf: Buffer,
   fullWidth: number | undefined,
   publicPath: string,
+  fullImageUrl = publicPath,
 ): Promise<string> {
   const widths = (BLOG_CONFIG.image.variants || []).filter((w) => w > 0 && (!fullWidth || w < fullWidth)).sort((a, b) => a - b);
   if (!widths.length) return '';
@@ -138,7 +140,7 @@ export async function writeHeroVariants(
     const url = await storeAsset(root, `${dir}/${slug}-${w}.${format}`, buf, mimeTypeFor(format));
     entries.push(`${url} ${w}w`);
   }
-  if (fullWidth) entries.push(`${publicPath} ${fullWidth}w`);
+  if (fullWidth) entries.push(`${fullImageUrl} ${fullWidth}w`);
   return entries.join(', ');
 }
 
@@ -160,14 +162,14 @@ async function generateAiHero(root: string, post: GeneratedBlogPost, topic: SeoT
     const format = BLOG_CONFIG.image.format;
     const watermarked = await applyWatermark(root, raw);
     const outDir = join(root, BLOG_CONFIG.paths.heroDir);
-    ensureDir(outDir);
+    if (getStore(root).root) ensureDir(outDir);
     const outFile = join(outDir, `${post.slug}.${format}`);
     // applyWatermark returns WebP; re-encode only when the configured format differs.
     const finalBuf = format === 'webp' ? watermarked : await encodeTo(format, sharp(watermarked));
     const dims = await sharp(finalBuf).metadata();
     const key = `/${BLOG_CONFIG.paths.heroDir.replace(/^public\//, '')}/${post.slug}.${format}`;
     const publicPath = await storeAsset(root, key, finalBuf, mimeTypeFor(format));
-    const srcset = await writeHeroVariants(root, post.slug, format, finalBuf, dims.width, key);
+    const srcset = await writeHeroVariants(root, post.slug, format, finalBuf, dims.width, key, publicPath);
     return {
       image: publicPath,
       imageAlt: heroAltText(post),
@@ -266,7 +268,7 @@ export async function generateCoverImage(
   const fallback = HERO_PHOTOS[ordinal % HERO_PHOTOS.length];
   return {
     image: fallback.url,
-    imageAlt: fallback.alt,
+    imageAlt: normalizeBlogProse(fallback.alt),
     ogImage: ogCard || fallback.url,
     source: 'curated-fallback',
   };

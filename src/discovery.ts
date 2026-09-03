@@ -75,7 +75,7 @@ export function excludeBlocked<T extends { slug: string }>(posts: readonly T[], 
  * defect in the playbook's field notes.
  */
 export function blogHubSitemapEntry(posts: readonly ParsedBlogPost[], options: DiscoveryOptions = {}): SitemapEntry {
-  const newest = posts
+  const newest = excludeBlocked(posts, options.exclude)
     .map((p) => p.updatedAt || p.publishedAt)
     .filter(Boolean)
     .sort()

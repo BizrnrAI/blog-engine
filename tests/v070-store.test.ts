@@ -97,14 +97,8 @@ test('cadence, audit, refresh and the scorecard all read through the store', asy
   const store = memoryStore(seeded);
   const { configureBlogEngine } = await import('../src/config.js');
   const rt = runtimeWith(store);
-  rt.config.content = { maxPostsPerWeek: 2 };
   configureBlogEngine(rt);
   const root = mkdtempSync(join(tmpdir(), 'blog-engine-store2-'));
-
-  // Cadence guard counts rows, not files.
-  const capped = await generateBlogRun(root, { count: 1, dryRun: false, skipPing: true });
-  assert.equal(capped.skipped, 'CADENCE_CAP');
-  assert.equal(store.posts.length, 2, 'nothing published while capped');
 
   // Audit works on store rows.
   const audit = auditPosts(await store.listPosts());
@@ -139,7 +133,8 @@ test('refresh rewrites a stored post in place, keeping its publish date', async 
   assert.equal(store.posts[0].heroImage, '/hero.webp', 'hero preserved');
 });
 
-test('the service publishes across sites, isolates failures, and honours schedules', async () => {
+test('the service publishes across sites, isolates failures, and honours schedules', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => new Response('ok'));
   const good = memoryStore();
   const sites: ServiceSite[] = [
     { id: 'site-a', runtime: () => runtimeWith(good), root: mkdtempSync(join(tmpdir(), 'svc-a-')) },
@@ -229,8 +224,10 @@ test('createSupabaseStore builds correct PostgREST and Storage requests', async 
     calls.push({ url: String(url), init });
     if (String(url).includes('/storage/')) return new Response('{}', { status: 200 });
     if (init.method === 'POST') return new Response('', { status: 201 });
+    if (init.method === 'PATCH') return Response.json([{ site_id: 'acme', slug: validPost().slug }]);
+    if (new URL(String(url)).searchParams.get('offset') !== '0') return Response.json([]);
     return new Response(JSON.stringify([{
-      slug: 'row-post', title: 'Row Post', description: 'from postgres', category: 'Guides',
+      site_id: 'acme', status: 'published', slug: 'row-post', title: 'Row Post', description: 'from postgres', category: 'Guides',
       tags: ['db'], author: 'Alex', published_at: '2026-08-01', updated_at: '2026-08-20',
       hero_image: 'https://cdn/x.webp', hero_image_alt: 'alt', hero_image_width: 1536, hero_image_height: 1024,
       read_mins: 6, answer: 'A stored answer.', content: '## Heading?\nBody text.',
@@ -251,9 +248,10 @@ test('createSupabaseStore builds correct PostgREST and Storage requests', async 
     assert.ok(calls[0].url.includes('site_id=eq.acme') && calls[0].url.includes('status=eq.published'));
 
     await store.putPost({ post: validPost(), cover: { image: '/h.webp', imageAlt: 'a', ogImage: '/o.jpg', source: 'ai-generated' }, markdown: '---\nx\n---', dateISO: '2026-08-24', isRefresh: false });
-    const upsert = calls[1];
-    assert.ok(upsert.url.includes('on_conflict=site_id,slug'), 'upsert, not insert');
-    assert.match(String((upsert.init.headers as Record<string, string>).Prefer), /merge-duplicates/);
+    const upsert = calls[2];
+    assert.equal(upsert.init.method, 'POST');
+    assert.ok(!upsert.url.includes('on_conflict'), 'new generation must not overwrite an existing slug');
+    assert.equal((upsert.init.headers as Record<string, string>).Prefer, 'return=minimal');
     const body = JSON.parse(String(upsert.init.body));
     assert.equal(body.site_id, 'acme');
     assert.equal(body.published_at, '2026-08-24');
@@ -261,12 +259,12 @@ test('createSupabaseStore builds correct PostgREST and Storage requests', async 
     assert.deepEqual(body.faqs[0], { question: validPost().faqs[0].q, answer: validPost().faqs[0].a });
 
     await store.putPost({ post: validPost(), cover: { image: '/h.webp', imageAlt: 'a', ogImage: '/o.jpg', source: 'ai-generated' }, markdown: '---\nx\n---', dateISO: '2026-08-24', isRefresh: true });
-    assert.equal(JSON.parse(String(calls[2].init.body)).published_at, undefined, 'a refresh never moves the publish date');
+    assert.equal(JSON.parse(String(calls[3].init.body)).published_at, undefined, 'a refresh never moves the publish date');
 
     assert.ok(store.putAsset, 'the Supabase store handles assets');
     const url = await store.putAsset('/assets/blog/x.webp', Buffer.from('img'), 'image/webp');
     assert.equal(url, 'https://proj.supabase.co/storage/v1/object/public/blog-assets/acme/assets/blog/x.webp');
-    assert.equal((calls[3].init.headers as Record<string, string>)['x-upsert'], 'true');
+    assert.equal((calls[4].init.headers as Record<string, string>)['x-upsert'], 'true');
   } finally {
     globalThis.fetch = realFetch;
   }

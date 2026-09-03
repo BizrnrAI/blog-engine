@@ -72,7 +72,7 @@ export function createAllWebBlogReader(options: AllWebBlogReaderOptions): AllWeb
         include_content: includeContent,
       });
       const rows = Array.isArray(result.posts) ? result.posts : [];
-      posts.push(...rows.map((row) => checkedPost(row)));
+      posts.push(...rows.map((row) => checkedPost(row)).filter((post) => post.status === 'published' && (!post.publishedAt || post.publishedAt <= new Date().toISOString().slice(0, 10))));
       const pagination = result.pagination && typeof result.pagination === 'object' ? result.pagination : null;
       const hasMore = pagination ? pagination.has_more === true : rows.length === pageSize;
       if (!hasMore || rows.length === 0) break;

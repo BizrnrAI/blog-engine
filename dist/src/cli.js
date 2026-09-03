@@ -1,8 +1,10 @@
+import { BlogRunError } from './run-error.js';
 import { writeFileSync } from 'node:fs';
 import { blogPostUrl, configureBlogEngine, getBlogHooks } from './config.js';
 import { generateBlogRun } from './publisher.js';
 import { refreshBlogRun } from './refresh.js';
-import { auditBlogCorpus, formatAuditReport } from './audit.js';
+import { getStore } from './store.js';
+import { auditPosts, formatAuditReport } from './audit.js';
 import { generateFanoutPassages } from './fanout.js';
 import { formatScorecard, postScorecard, runScorecard } from './scorecard.js';
 import { mkdirSync } from 'node:fs';
@@ -20,38 +22,32 @@ export function cleanBlogSlugs(raw) {
         .filter(Boolean)
         .filter((slug) => /^[a-z0-9-]+$/.test(slug))));
 }
-function sleep(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-}
-export async function waitUntilBlogUrlsLive(urls, timeoutMs = 10 * 60 * 1000) {
-    const deadline = Date.now() + timeoutMs;
-    const pending = new Set(urls);
-    while (pending.size && Date.now() < deadline) {
-        await Promise.all(Array.from(pending).map(async (url) => {
-            try {
-                const response = await fetch(url, { redirect: 'follow' });
-                if (response.ok)
-                    pending.delete(url);
-            }
-            catch {
-                // Deploys may still be promoting. Retry until deadline.
-            }
-        }));
-        if (pending.size) {
-            console.log(`[blog-indexing] Waiting for ${pending.size} URL(s) to go live...`);
-            await sleep(15000);
-        }
+export { waitUntilBlogUrlsLive } from './indexing.js';
+import { waitUntilBlogUrlsLive } from './indexing.js';
+function requireRemoteStore(runtime) {
+    if (process.env.BLOG_REQUIRE_REMOTE_STORE !== '1')
+        return;
+    if (!runtime.hooks?.store || runtime.hooks.store.root || runtime.hooks.persistPost) {
+        throw new Error('Direct publishing requires a remote BlogStore, with no filesystem or persistPost fallback');
     }
-    if (pending.size) {
-        throw new Error(`Timed out waiting for live blog URL(s): ${Array.from(pending).join(', ')}`);
-    }
+    if (runtime.hooks.store.publicationStatus !== 'published')
+        throw new Error('Direct publishing requires store publicationStatus=published');
 }
 export async function runBlogGenerateCli(runtime, root = process.cwd()) {
     const dryRun = process.argv.includes('--dry-run') || process.env.DRY_RUN === '1';
     const count = Math.max(1, Number(parseArg('count') || '1') || 1);
     const skipPing = process.argv.includes('--skip-ping') || process.env.SKIP_PING === '1';
     configureBlogEngine(runtime);
-    const result = await generateBlogRun(root, { count, dryRun, skipPing });
+    requireRemoteStore(runtime);
+    let result;
+    try {
+        result = await generateBlogRun(root, { count, dryRun, skipPing });
+    }
+    catch (error) {
+        if (error instanceof BlogRunError && process.env.GITHUB_OUTPUT && error.written.length)
+            writeFileSync(process.env.GITHUB_OUTPUT, `slugs=${error.written.join(',')}\n`, { flag: 'a' });
+        throw error;
+    }
     if (process.env.GITHUB_OUTPUT && result.written.length) {
         writeFileSync(process.env.GITHUB_OUTPUT, `slugs=${result.written.join(',')}\n`, { flag: 'a' });
     }
@@ -62,9 +58,9 @@ export async function runBlogGenerateCli(runtime, root = process.cwd()) {
 }
 export async function runBlogIndexPublishedCli(runtime) {
     configureBlogEngine(runtime);
+    requireRemoteStore(runtime);
     const slugs = cleanBlogSlugs(parseArg('slugs') || process.env.BLOG_SLUGS);
     const dryRun = process.argv.includes('--dry-run') || process.env.DRY_RUN === '1';
-    const waitForLive = process.argv.includes('--wait-live') || process.env.WAIT_FOR_LIVE === '1';
     if (process.env.BLOG_ENGINE_DISABLED === '1') {
         console.log('[blog-indexing] BLOG_ENGINE_DISABLED=1 - exiting.');
         return;
@@ -78,8 +74,7 @@ export async function runBlogIndexPublishedCli(runtime) {
         console.log(`[blog-indexing] Dry run: would submit ${urls.length} live URL(s): ${urls.join(', ')}`);
         return;
     }
-    if (waitForLive)
-        await waitUntilBlogUrlsLive(urls);
+    await waitUntilBlogUrlsLive(urls);
     await pingIndexNow(urls);
     // A submitSitemap hook owns its own auth, so it needs no OAuth token (pingGscSitemap routes to it).
     if (getBlogHooks().submitSitemap) {
@@ -113,10 +108,19 @@ export async function runBlogIndexPublishedCli(runtime) {
  */
 export async function runBlogRefreshCli(runtime, root = process.cwd()) {
     configureBlogEngine(runtime);
+    requireRemoteStore(runtime);
     const dryRun = process.argv.includes('--dry-run') || process.env.DRY_RUN === '1';
     const slugs = cleanBlogSlugs(parseArg('slugs') || process.env.BLOG_SLUGS);
     const max = Math.max(1, Number(parseArg('max') || '1') || 1);
-    const result = await refreshBlogRun(root, { slugs, max, dryRun });
+    let result;
+    try {
+        result = await refreshBlogRun(root, { slugs, max, dryRun });
+    }
+    catch (error) {
+        if (error instanceof BlogRunError && process.env.GITHUB_OUTPUT && error.written.length)
+            writeFileSync(process.env.GITHUB_OUTPUT, `slugs=${error.written.join(',')}\n`, { flag: 'a' });
+        throw error;
+    }
     if (result.candidates.length) {
         console.log('[blog-refresh] rank-rescue candidates (top 10):');
         for (const c of result.candidates.slice(0, 10)) {
@@ -133,6 +137,7 @@ export async function runBlogRefreshCli(runtime, root = process.cwd()) {
  */
 export async function runBlogFanoutCli(runtime, root = process.cwd()) {
     configureBlogEngine(runtime);
+    requireRemoteStore(runtime);
     const owner = parseArg('owner');
     if (!owner)
         throw new Error('--owner=/path is required');
@@ -155,6 +160,7 @@ export async function runBlogFanoutCli(runtime, root = process.cwd()) {
  */
 export async function runBlogScorecardCli(runtime, root = process.cwd()) {
     configureBlogEngine(runtime);
+    requireRemoteStore(runtime);
     const card = await runScorecard(root, {
         repo: parseArg('repo') || process.env.GITHUB_REPOSITORY,
         workflows: (parseArg('workflows') || '').split(',').map((s) => s.trim()).filter(Boolean),
@@ -171,7 +177,8 @@ export async function runBlogScorecardCli(runtime, root = process.cwd()) {
 /** Corpus audit CLI: prints SHIP/FIX/BLOCK per post; `--json` for machine output; `--strict` exits 1 on any BLOCK. */
 export async function runBlogAuditCli(runtime, root = process.cwd()) {
     configureBlogEngine(runtime);
-    const entries = auditBlogCorpus(root, { staleAfterDays: Number(parseArg('stale-days') || '365') || 365 });
+    requireRemoteStore(runtime);
+    const entries = auditPosts(await getStore(root).listPosts(), { staleAfterDays: Number(parseArg('stale-days') || '365') || 365 });
     if (process.argv.includes('--json'))
         console.log(JSON.stringify(entries, null, 2));
     else

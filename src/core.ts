@@ -49,3 +49,8 @@ export type {
   RenderMarkdownArgs, SubmitSitemapArgs, ParsedBlogFaq, ParsedBlogPost, ReadGeneratedPostsOptions,
   SeedBlogPost, SeoTopic, TemplateRuntimeOptions, TemplateSiteProfile, TopicCategory, ValidatePostArgs,
 } from './types.js';
+
+export { hasEmDash, normalizeBlogProse, assertNoEmDashes } from './punctuation.js';
+export { withBlogEngineRuntime } from './config.js';
+export { serializeBlogJsonLd } from './schema.js';
+export { BlogRunError } from './run-error.js';

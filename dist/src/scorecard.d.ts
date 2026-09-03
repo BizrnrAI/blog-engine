@@ -4,7 +4,7 @@ import type { Scorecard } from './types.js';
  * opposed to training crawlers. Blocking one of these is a silent, total loss of AI citation
  * for that provider, and nothing in a build ever notices.
  */
-export declare const RETRIEVAL_CRAWLERS: readonly ["OAI-SearchBot", "ChatGPT-User", "PerplexityBot", "Claude-SearchBot", "Claude-User", "Google-Extended"];
+export declare const RETRIEVAL_CRAWLERS: readonly ["OAI-SearchBot", "ChatGPT-User", "PerplexityBot", "Claude-SearchBot", "Claude-User", "Googlebot"];
 /** Is this user agent disallowed from the blog path by robots.txt? */
 export declare function crawlerBlocked(robotsTxt: string, userAgent: string, path: string): boolean;
 /**

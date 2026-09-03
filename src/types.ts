@@ -360,12 +360,6 @@ export interface BlogContentRules {
    */
   minDaysBetweenRefresh?: number;
   /**
-   * Cadence cap: skip the run when this many posts were already published in the trailing 7 days.
-   * The ASEO skill's default for search-led autonomous posts is 2 per rolling week until reviewed
-   * evidence supports more. Unset = no cap (existing behaviour).
-   */
-  maxPostsPerWeek?: number;
-  /**
    * Require a second, independent demand signal (autocomplete or a fetchDemandSignals hook)
    * before a Search-Console-led topic may become a new post. Default false.
    */
@@ -508,6 +502,8 @@ export interface BlogStore {
   name: string;
   /** Persistence status, exposed so the service can verify review policy. */
   publicationStatus?: BlogPublicationStatus;
+  /** Origins owned by this store, used by the corpus audit to recognize hosted assets. */
+  assetOrigins?: readonly string[];
   /** Repository root, when the store is filesystem-backed. */
   root?: string;
   /** Every post the site has published, newest first is not required. */
@@ -560,6 +556,10 @@ export interface ServiceRunResult {
 }
 
 export interface SupabaseStoreOptions {
+  /** Bounded network requests, default 15000ms. */
+  timeoutMs?: number;
+  /** Rows per corpus page, default 200. */
+  pageSize?: number;
   /** Project URL; defaults to SUPABASE_URL. */
   url?: string;
   /** Service-role key; defaults to SUPABASE_SERVICE_ROLE_KEY. Never ship this to a browser. */
@@ -583,6 +583,8 @@ export interface SupabaseStoreOptions {
 }
 
 export interface AllWebStoreOptions {
+  /** Additional owned CDN origins for corpus image audits. */
+  assetOrigins?: readonly string[];
   /** Site-agent Edge Function URL; defaults to ALLWEB_SITE_AGENT_URL. */
   apiUrl?: string;
   /** Exact site-scoped token; defaults to ALLWEB_SITE_TOKEN. Never use a Supabase service role. */

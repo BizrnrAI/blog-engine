@@ -154,8 +154,8 @@ test('schema: inLanguage/wordCount/isPartOf on posts; Blog + ProfilePage builder
 
 // ---------- workflows ----------
 test('blogRefreshWorkflow emits a scheduled PR-safe refresh job', () => {
-  const y = blogRefreshWorkflow();
-  assert.ok(y.includes('schedule:') && y.includes('peter-evans/create-pull-request@v8') && y.includes('blog:refresh'));
+  const y = blogRefreshWorkflow({ refreshCron: '0 14 * * 2' });
+  assert.ok(y.includes('schedule:') && !y.includes('create-pull-request') && y.includes('blog:refresh'));
 });
 
 test('refresh prompt carries owner pages and existing-post link targets (parity with generate)', async () => {

@@ -102,3 +102,8 @@ export type {
   TopicCategory,
   ValidatePostArgs,
 } from './types.js';
+
+export { hasEmDash, normalizeBlogProse, assertNoEmDashes } from './punctuation.js';
+export { withBlogEngineRuntime } from './config.js';
+export { serializeBlogJsonLd } from './schema.js';
+export { BlogRunError } from './run-error.js';

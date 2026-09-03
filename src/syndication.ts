@@ -1,4 +1,4 @@
-import { readGeneratedBlogPosts } from './content-reader.js';
+import { getStore } from './store.js';
 import type { AfterIndexedArgs, BlogEngineHooks, ParsedBlogPost } from './types.js';
 
 /**
@@ -35,6 +35,7 @@ export function webhookAdapter(options: { url?: string; urlEnv?: string; headers
       const url = options.url || envOrThrow(options.urlEnv || 'SYNDICATION_WEBHOOK_URL');
       const r = await fetch(url, {
         method: 'POST',
+        signal: AbortSignal.timeout(10_000),
         headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
         body: JSON.stringify({ event: 'blog.published', ...item }),
       });
@@ -51,6 +52,7 @@ export function slackAdapter(options: { webhookUrlEnv?: string; prefix?: string 
       const url = envOrThrow(options.webhookUrlEnv || 'SLACK_WEBHOOK_URL');
       const r = await fetch(url, {
         method: 'POST',
+        signal: AbortSignal.timeout(10_000),
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: `${options.prefix || 'New post:'} <${item.url}|${item.title}> — ${item.description}` }),
       });
@@ -72,6 +74,7 @@ export function linkedinAdapter(options: { authorUrn: string; accessTokenEnv?: s
       const text = options.commentary ? options.commentary(item) : `${item.title}\n\n${item.description}`;
       const r = await fetch('https://api.linkedin.com/v2/ugcPosts', {
         method: 'POST',
+        signal: AbortSignal.timeout(10_000),
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-Restli-Protocol-Version': '2.0.0' },
         body: JSON.stringify({
           author: options.authorUrn,
@@ -97,12 +100,12 @@ export function linkedinAdapter(options: { authorUrn: string; accessTokenEnv?: s
  */
 export function createAfterIndexedHook(
   adapters: readonly SyndicationAdapter[],
-  options: { root?: string; blogDir?: string; siteUrl?: string; loadPosts?: () => ParsedBlogPost[] } = {},
+  options: { root?: string; blogDir?: string; siteUrl?: string; loadPosts?: () => ParsedBlogPost[] | Promise<ParsedBlogPost[]> } = {},
 ): NonNullable<BlogEngineHooks['afterIndexed']> {
   return async ({ urls, slugs }: AfterIndexedArgs) => {
     const posts = options.loadPosts
-      ? options.loadPosts()
-      : readGeneratedBlogPosts({ root: options.root, blogDir: options.blogDir, fallback: { description: '', author: '', heroImage: '', heroImageAltPrefix: '' } });
+      ? await options.loadPosts()
+      : await getStore(options.root || process.cwd()).listPosts();
     const bySlug = new Map(posts.map((p) => [p.slug, p]));
     for (let i = 0; i < slugs.length; i++) {
       const slug = slugs[i];

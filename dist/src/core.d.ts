@@ -38,4 +38,8 @@ export { pingIndexNow } from './indexing.js';
 export { clampText, mimeTypeFor, norm, slugify, wordCount, xmlEscape } from './utils.js';
 export { toMarkdown } from './markdown.js';
 export type { BlogAnswerSection, BlogContentRules, BlogEngineConfig, BlogEngineHooks, BlogEngineRuntime, BlogEngineTopics, CoverImage, CrossPromoTopic, EditorialTopic, ExistingPost, FetchGscQueriesArgs, GeneratedBlogPost, GenerateHeroImageArgs, GenerateRunOptions, GenerateRunResult, GenerateTextArgs, GscPageQuery, GscQuery, RankRescueAction, RankRescueCandidate, RefreshRunOptions, RefreshRunResult, BlogStore, CorpusVerdict, CorpusAuditEntry, PutPostArgs, ServiceRunResult, ServiceRuntimeContext, ServiceSite, BlogPublicationStatus, DeriveTopicArgs, ParseFrontmatterArgs, ParsedFrontmatterResult, CannibalizationPair, PersistPostArgs, PickTopicArgs, QueryIntent, UrlInspection, BlogSource, CitationProbe, Scorecard, ScorecardCheck, FetchGscPageQueriesArgs, AfterIndexedArgs, RenderMarkdownArgs, SubmitSitemapArgs, ParsedBlogFaq, ParsedBlogPost, ReadGeneratedPostsOptions, SeedBlogPost, SeoTopic, TemplateRuntimeOptions, TemplateSiteProfile, TopicCategory, ValidatePostArgs, } from './types.js';
+export { hasEmDash, normalizeBlogProse, assertNoEmDashes } from './punctuation.js';
+export { withBlogEngineRuntime } from './config.js';
+export { serializeBlogJsonLd } from './schema.js';
+export { BlogRunError } from './run-error.js';
 //# sourceMappingURL=core.d.ts.map

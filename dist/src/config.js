@@ -1,4 +1,10 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { assertBlogEngineRuntime } from './validate-runtime.js';
+const scopedRuntime = new AsyncLocalStorage();
+export function withBlogEngineRuntime(runtime, fn) {
+    assertBlogEngineRuntime(runtime);
+    return scopedRuntime.run(runtime, fn);
+}
 let runtime = null;
 /**
  * Install the adapter. The runtime is validated here so a malformed adapter fails immediately with
@@ -11,10 +17,11 @@ export function configureBlogEngine(nextRuntime, options = {}) {
     runtime = nextRuntime;
 }
 export function getBlogRuntime() {
-    if (!runtime) {
+    const active = scopedRuntime.getStore() || runtime;
+    if (!active) {
         throw new Error('Blog engine runtime has not been configured. Call configureBlogEngine({ config, topics, brandPersona }) before using the engine.');
     }
-    return runtime;
+    return active;
 }
 export function getBlogConfig() {
     return getBlogRuntime().config;

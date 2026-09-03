@@ -3,7 +3,7 @@
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 const errors = [];
 
-const docs = ['README.md','AGENTS.md','docs/ADOPTION.md','docs/SERVICE.md','docs/CONTENT-SPEC.md','docs/PROVIDERS.md','docs/WORKFLOWS.md','docs/TRAFFIC.md','docs/ROADMAP.md'];
+const docs = ['README.md','AGENTS.md','docs/ADOPTION.md','docs/SERVICE.md','docs/CONTENT-SPEC.md','docs/PROVIDERS.md','docs/WORKFLOWS.md','docs/TRAFFIC.md','docs/ROADMAP.md','docs/UPGRADE-V2.md','docs/AUDIT-2026-09.md'];
 const text = Object.fromEntries(docs.map(d => [d, readFileSync(d,'utf8')]));
 
 // 1. README module table → src files exist

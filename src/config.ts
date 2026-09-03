@@ -1,5 +1,13 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import type { BlogEngineConfig, BlogEngineHooks, BlogEngineRuntime, BlogEngineTopics } from './types.js';
 import { assertBlogEngineRuntime } from './validate-runtime.js';
+
+const scopedRuntime = new AsyncLocalStorage<BlogEngineRuntime>();
+
+export function withBlogEngineRuntime<T>(runtime: BlogEngineRuntime, fn: () => T): T {
+  assertBlogEngineRuntime(runtime);
+  return scopedRuntime.run(runtime, fn);
+}
 
 let runtime: BlogEngineRuntime | null = null;
 
@@ -14,12 +22,13 @@ export function configureBlogEngine(nextRuntime: BlogEngineRuntime, options: { v
 }
 
 export function getBlogRuntime(): BlogEngineRuntime {
-  if (!runtime) {
+  const active = scopedRuntime.getStore() || runtime;
+  if (!active) {
     throw new Error(
       'Blog engine runtime has not been configured. Call configureBlogEngine({ config, topics, brandPersona }) before using the engine.',
     );
   }
-  return runtime;
+  return active;
 }
 
 export function getBlogConfig(): BlogEngineConfig {

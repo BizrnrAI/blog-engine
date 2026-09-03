@@ -21,5 +21,6 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      - run: npm run verify:docs
       - name: Ensure committed dist is current
         run: git diff --exit-code -- dist || (echo "dist/ is stale — run 'npm run build' and commit it" && exit 1)

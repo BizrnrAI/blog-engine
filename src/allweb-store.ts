@@ -1,3 +1,4 @@
+import { assertNoEmDashes } from './punctuation.js';
 import type { AllWebStoreOptions, BlogStore, ParsedBlogPost, PutPostArgs } from './types.js';
 import { storedRowToPost } from './stored-row.js';
 
@@ -44,6 +45,7 @@ export function createAllWebStore(options: AllWebStoreOptions): BlogStore {
 
   return {
     name: `allweb:${siteId}`,
+    assetOrigins: [new URL(apiUrl).origin, ...(options.assetOrigins || [])],
     publicationStatus: options.publishStatus || 'published',
 
     async listPosts(): Promise<ParsedBlogPost[]> {
@@ -74,6 +76,7 @@ export function createAllWebStore(options: AllWebStoreOptions): BlogStore {
     },
 
     async putPost({ post, cover, markdown, dateISO, isRefresh }: PutPostArgs): Promise<string> {
+      assertNoEmDashes({ post, cover, markdown, author: options.author });
       let expectedRevision: number | undefined;
       try {
         const current = await call({ action: 'blog_get', slug: post.slug });
@@ -93,7 +96,7 @@ export function createAllWebStore(options: AllWebStoreOptions): BlogStore {
         content: post.body,
         markdown,
         read_mins: post.readMins,
-        author: options.author || null,
+        ...(isRefresh && options.author === undefined ? {} : { author: options.author || null }),
         faqs: post.faqs.map((faq) => ({ question: faq.q, answer: faq.a })),
         sources: post.sources || [],
         hero_image: cover.image || null,

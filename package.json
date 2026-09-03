@@ -1,6 +1,6 @@
 {
   "name": "@bizrnr/blog-engine",
-  "version": "1.3.2",
+  "version": "2.0.0",
   "description": "Provider-neutral autonomous blog engine with optional storage and control-plane adapters.",
   "type": "module",
   "main": "./dist/src/index.js",

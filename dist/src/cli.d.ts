@@ -1,6 +1,6 @@
 import type { BlogEngineRuntime, GenerateRunResult } from './types.js';
 export declare function cleanBlogSlugs(raw: string | undefined): string[];
-export declare function waitUntilBlogUrlsLive(urls: string[], timeoutMs?: number): Promise<void>;
+export { waitUntilBlogUrlsLive } from './indexing.js';
 export declare function runBlogGenerateCli(runtime: BlogEngineRuntime, root?: string): Promise<GenerateRunResult>;
 export declare function runBlogIndexPublishedCli(runtime: BlogEngineRuntime): Promise<void>;
 /**

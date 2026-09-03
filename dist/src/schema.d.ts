@@ -51,6 +51,8 @@ export declare function authorProfileSchema(args: {
     worksForId?: string;
 }): JsonLd;
 type JsonLd = Record<string, unknown>;
+/** Safe text for a script[type=application/ld+json], including model-authored strings. */
+export declare function serializeBlogJsonLd(graph: JsonLd): string;
 export declare function blogPostingSchema(post: ParsedBlogPost, options?: BlogSchemaOptions): JsonLd;
 export declare function faqPageSchema(postUrl: string, faqs: readonly ParsedBlogFaq[]): JsonLd;
 export declare function breadcrumbSchema(items: readonly {

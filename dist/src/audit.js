@@ -1,4 +1,5 @@
-import { BLOG_CONFIG, blogBasePath, getBlogTopics } from './config.js';
+import { hasEmDash } from './punctuation.js';
+import { BLOG_CONFIG, blogBasePath, blogPostPath, getBlogTopics, getBlogHooks } from './config.js';
 import { readGeneratedBlogPosts } from './content-reader.js';
 import { contentRules } from './generate-post.js';
 import { wordCount } from './utils.js';
@@ -14,9 +15,11 @@ function blockquoteWords(content) {
 }
 export function auditPost(post, context) {
     const rules = contentRules();
-    const internal = new Set([...getBlogTopics().internalLinks, ...[...context.allSlugs].map((s) => `${blogBasePath()}/${s}`)]);
+    const internal = new Set([...getBlogTopics().internalLinks, ...[...context.allSlugs].map(blogPostPath)]);
     const fix = [];
     const block = [];
+    if (hasEmDash(post))
+        fix.push('em dashes are forbidden; normalize prose before republishing');
     if (!post.title)
         block.push('missing title');
     const bodyWords = wordCount(post.content);
@@ -56,8 +59,11 @@ export function auditPost(post, context) {
             fix.push('no hero alt text');
         else if ((context.altCounts.get(post.heroImageAlt) || 0) > 1)
             fix.push('hero alt duplicated across posts');
-        if (/^https?:\/\//.test(post.heroImage) && !post.heroImage.startsWith(BLOG_CONFIG.identity.siteUrl))
-            fix.push('hero is hotlinked (not local)');
+        if (/^https?:\/\//.test(post.heroImage)) {
+            const owned = new Set([new URL(BLOG_CONFIG.identity.siteUrl).origin, ...(getBlogHooks().store?.assetOrigins || [])]);
+            if (!owned.has(new URL(post.heroImage).origin))
+                fix.push('hero is hotlinked (not an owned asset origin)');
+        }
         if (!post.heroImageWidth || !post.heroImageHeight)
             fix.push('no image dimensions (CLS)');
     }
@@ -98,7 +104,7 @@ export function auditPosts(posts, options = {}) {
             const path = m[1].split('#')[0].split('?')[0];
             if (!path.startsWith(`${base}/`))
                 continue;
-            const target = path.slice(base.length + 1);
+            const target = path.slice(base.length + 1).replace(/\/$/, '');
             if (target && target !== post.slug && inboundCounts.has(target))
                 inboundCounts.set(target, (inboundCounts.get(target) || 0) + 1);
         }

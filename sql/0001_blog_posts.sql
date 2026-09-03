@@ -50,7 +50,7 @@ alter table public.blog_posts enable row level security;
 drop policy if exists blog_posts_public_read on public.blog_posts;
 create policy blog_posts_public_read
   on public.blog_posts for select
-  using (status = 'published');
+  using (status = 'published' and published_at <= current_date);
 
 -- Assets bucket (heroes, OG cards, responsive variants). Public read, service-role write.
 insert into storage.buckets (id, name, public)

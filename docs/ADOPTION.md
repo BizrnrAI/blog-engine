@@ -1,3 +1,6 @@
+> v2: use a Supabase-backed store and the direct workflows in [WORKFLOWS.md](WORKFLOWS.md).
+> Website code owns publishing schedules and limits. See [UPGRADE-V2.md](UPGRADE-V2.md).
+
 # Adopting the engine on a site
 
 From nothing to an autonomous, quality-gated blog. Follow the steps in order; each one is
@@ -65,7 +68,6 @@ export const config: BlogEngineConfig = {
   rss: { title: 'Acme Insights', description: 'Answer-first plumbing guides.',
          path: '/blog/feed.xml', limit: 20 },
   content: {
-    maxPostsPerWeek: 2,                        // ASEO cadence policy
     blockedPhrases: ['guaranteed savings'],    // your claims discipline
   },
 };

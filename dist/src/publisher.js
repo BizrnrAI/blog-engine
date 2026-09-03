@@ -1,3 +1,4 @@
+import { BlogRunError } from './run-error.js';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { BLOG_CONFIG, blogPostUrl, getBlogHooks } from './config.js';
@@ -6,12 +7,14 @@ import { getStore } from './store.js';
 import { generateBlogPost } from './generate-post.js';
 import { getGscQueries, pingGscSitemap } from './gsc.js';
 import { generateCoverImage, gradientForOrdinal } from './images.js';
+import { waitUntilBlogUrlsLive } from './indexing.js';
 import { pingIndexNow } from './indexing.js';
 import { toMarkdown } from './markdown.js';
 import { contentRules } from './generate-post.js';
 import { contentExtensions } from './content-reader.js';
 import { hasSecondDemandSignal } from './demand.js';
 import { describeTopic, resolveTopic } from './topic-rotation.js';
+import { assertNoEmDashes } from './punctuation.js';
 import { wordCount } from './utils.js';
 export function countPostsSince(existing, days, now = new Date()) {
     const cutoff = now.getTime() - days * 864e5;
@@ -22,6 +25,8 @@ function ensureDir(path) {
         mkdirSync(path, { recursive: true });
 }
 export async function generateBlogRun(root, options) {
+    if (!Number.isSafeInteger(options.count) || options.count < 1)
+        throw new Error('count must be a positive safe integer');
     const logPrefix = BLOG_CONFIG.logPrefix || '[blog-engine]';
     if (process.env.BLOG_ENGINE_DISABLED === '1') {
         console.log(`${logPrefix} BLOG_ENGINE_DISABLED=1 - exiting without generating.`);
@@ -49,59 +54,59 @@ export async function generateBlogRun(root, options) {
         ensureDir(blogDir);
     const existing = await listExistingPosts(root);
     console.log(`${logPrefix} existing posts: ${existing.length}`);
-    // Cadence guard (ASEO: cap search-led autonomous posts until reviewed evidence supports more).
-    const maxPerWeek = contentRules().maxPostsPerWeek;
-    if (maxPerWeek && maxPerWeek > 0) {
-        const recent = countPostsSince(existing, 7);
-        if (recent >= maxPerWeek) {
-            console.log(`${logPrefix} cadence cap reached (${recent}/${maxPerWeek} posts in the last 7 days) - skipping run.`);
-            return { written: [], skipped: 'CADENCE_CAP' };
-        }
-    }
     const written = [];
-    for (let i = 0; i < options.count; i++) {
-        const topic = await resolveTopic(existing, queries, i);
-        console.log(`${logPrefix} topic #${existing.length + i}: ${describeTopic(topic)}`);
-        const post = await generateBlogPost(topic, existing);
-        const ordinal = existing.length + i;
-        const cover = await generateCoverImage(root, post, topic, ordinal, options.dryRun);
-        const gradient = gradientForOrdinal(ordinal);
-        const dateISO = new Date().toISOString().slice(0, 10);
-        // The consuming site may own its own frontmatter shape; the engine still owns everything
-        // around it (generation, validation, watermarking, encoding, the write).
-        const author = BLOG_CONFIG.identity.author?.name;
-        const renderMarkdown = getBlogHooks().renderMarkdown;
-        const md = renderMarkdown
-            ? renderMarkdown({ post, cover, gradient, dateISO, author })
-            : toMarkdown(post, { gradient, cover, dateISO, author });
-        const file = join(blogDir, `${post.slug}${contentExtensions()[0]}`);
-        if (options.dryRun) {
-            console.log(`\n-------- DRY RUN ${file} (${wordCount(post.body)} body words, image: ${cover.source}) --------\n${md}\n-------- END DRY RUN --------\n`);
-        }
-        else {
-            // Persistence order: an explicit persistPost hook wins, then the configured store
-            // (filesystem by default). Both paths log the same way so a run reads identically
-            // whether the post landed as a file or a row.
-            const persist = getBlogHooks().persistPost;
-            let target;
-            if (persist) {
-                const alsoWriteFile = (await persist({ post, cover, markdown: md, file, root, isRefresh: false })) === true;
-                if (alsoWriteFile)
-                    writeFileSync(file, md, 'utf8');
-                target = alsoWriteFile ? file : post.slug;
+    try {
+        for (let i = 0; i < options.count; i++) {
+            const topic = await resolveTopic(existing, queries, 0);
+            console.log(`${logPrefix} topic #${existing.length}: ${describeTopic(topic)}`);
+            const post = await generateBlogPost(topic, existing);
+            const ordinal = existing.length;
+            const cover = await generateCoverImage(root, post, topic, ordinal, options.dryRun);
+            const gradient = gradientForOrdinal(ordinal);
+            const dateISO = new Date().toISOString().slice(0, 10);
+            // The consuming site may own its own frontmatter shape; the engine still owns everything
+            // around it (generation, validation, watermarking, encoding, the write).
+            const author = BLOG_CONFIG.identity.author?.name;
+            const renderMarkdown = getBlogHooks().renderMarkdown;
+            const md = renderMarkdown
+                ? renderMarkdown({ post, cover, gradient, dateISO, author })
+                : toMarkdown(post, { gradient, cover, dateISO, author });
+            const file = join(blogDir, `${post.slug}${contentExtensions()[0]}`);
+            assertNoEmDashes({ post, cover, markdown: md });
+            if (options.dryRun) {
+                console.log(`\n-------- DRY RUN ${file} (${wordCount(post.body)} body words, image: ${cover.source}) --------\n${md}\n-------- END DRY RUN --------\n`);
             }
             else {
-                target = await getStore(root).putPost({ post, cover, markdown: md, dateISO, isRefresh: false });
+                // Persistence order: an explicit persistPost hook wins, then the configured store
+                // (filesystem by default). Both paths log the same way so a run reads identically
+                // whether the post landed as a file or a row.
+                const persist = getBlogHooks().persistPost;
+                let target;
+                if (persist) {
+                    const alsoWriteFile = (await persist({ post, cover, markdown: md, file, root, isRefresh: false })) === true;
+                    if (alsoWriteFile)
+                        writeFileSync(file, md, 'utf8');
+                    target = alsoWriteFile ? file : post.slug;
+                }
+                else {
+                    target = await getStore(root).putPost({ post, cover, markdown: md, dateISO, isRefresh: false });
+                }
+                console.log(`${logPrefix} published ${target} (image: ${cover.source}, og: ${cover.ogImage})`);
+                written.push(post.slug);
+                existing.push({ slug: post.slug, title: post.title, date: dateISO });
             }
-            console.log(`${logPrefix} published ${target} (image: ${cover.source}, og: ${cover.ogImage})`);
-            written.push(post.slug);
-            existing.push({ slug: post.slug, title: post.title });
         }
+        if (!options.dryRun && !options.skipPing && written.length) {
+            if (getStore(root).publicationStatus && getStore(root).publicationStatus !== 'published')
+                return { written };
+            await waitUntilBlogUrlsLive(written.map(blogPostUrl));
+            await pingIndexNow(written.map(blogPostUrl));
+            await pingGscSitemap(token);
+        }
+        return { written };
     }
-    if (!options.dryRun && !options.skipPing && written.length) {
-        await pingIndexNow(written.map(blogPostUrl));
-        await pingGscSitemap(token);
+    catch (error) {
+        throw new BlogRunError('generate', written, error);
     }
-    return { written };
 }
 //# sourceMappingURL=publisher.js.map

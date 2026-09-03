@@ -1,3 +1,4 @@
+import { hasEmDash, normalizeBlogProse } from './punctuation.js';
 import { BLOG_CONFIG, brandPersona, getBlogHooks } from './config.js';
 import { contentRules, parseModelJson } from './generate-post.js';
 import { getGscPageQueries } from './gsc.js';
@@ -29,6 +30,8 @@ async function callLLM(messages) {
 export function validateFanout(passages, expected) {
     const rules = contentRules();
     const errs = [];
+    if (hasEmDash(passages))
+        errs.push('em dashes are forbidden');
     if (passages.length < Math.min(expected, 2))
         errs.push(`need >= ${Math.min(expected, 2)} passages (got ${passages.length})`);
     passages.forEach((p, i) => {
@@ -56,6 +59,7 @@ export async function generateFanoutPassages(ownerPath, options = {}) {
         throw new Error(`fanout: no question-like queries for ${ownerPath} (pass --queries or configure Search Console)`);
     const system = [
         brandPersona(),
+        'Never use em dashes in any field. Use commas, parentheses, periods, or a simple hyphen.',
         '',
         `You are adding answer passages to the page ${BLOG_CONFIG.identity.siteUrl}${ownerPath} — the canonical owner of its topic. Return STRICT JSON only.`,
         'HARD RULES: never fabricate prices, percentages, statistics, dates, awards, or named sources; no legal/tax/medical/financial guarantees or advice; ' + `${rules.tone}; American English.`,
@@ -78,8 +82,8 @@ export async function generateFanoutPassages(ownerPath, options = {}) {
             raw = await callLLM(messages);
             const j = parseModelJson(raw);
             const passages = (Array.isArray(j.passages) ? j.passages : []).map((p) => ({
-                question: String(p?.question || '').trim(),
-                answer: String(p?.answer || '').trim(),
+                question: normalizeBlogProse(String(p?.question || '')).trim(),
+                answer: normalizeBlogProse(String(p?.answer || '')).trim(),
             }));
             errs = validateFanout(passages, count);
             if (!errs.length)

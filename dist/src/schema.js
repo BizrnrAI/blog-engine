@@ -43,6 +43,10 @@ export function authorProfileSchema(args) {
         ],
     };
 }
+/** Safe text for a script[type=application/ld+json], including model-authored strings. */
+export function serializeBlogJsonLd(graph) {
+    return JSON.stringify(graph).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+}
 function resolveSiteUrl(options) {
     if (options.siteUrl)
         return options.siteUrl.replace(/\/$/, '');

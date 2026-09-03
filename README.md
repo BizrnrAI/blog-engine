@@ -1,186 +1,118 @@
 # BizRnR Blog Engine
 
-Provider-neutral, answer-first blog publishing for any website or platform. One shared engine writes the post,
-validates it against a strict content contract, generates and watermarks the imagery, stores it,
-submits it to search engines, then keeps improving what already ranks.
-
-**New here? Read [Start here](#start-here) — it's three questions and a path.**
-
-- Package: `@bizrnr/blog-engine` · install `github:BizrnrAI/blog-engine#v1.2.0` (public, no build step)
-- Agents: [AGENTS.md](AGENTS.md) is the entry point for working *on* this repo
-- Everything is self-contained: no BizRnR, AllWeb, Supabase, or other external system is required
-
-The canonical API is `@bizrnr/blog-engine/core`. It imports no database or control-plane adapter.
-Optional integrations are explicit subpaths under `@bizrnr/blog-engine/adapters/*`; the legacy
-top-level exports remain temporarily for v1 compatibility.
+Autonomous, answer-first blog generation with direct Supabase publishing. Websites own their
+schedules, post counts, and publishing limits. The engine owns generation, validation, image
+processing, persistence, refresh, and discovery signals. Blog content never needs a pull request.
 
 ## Start here
 
-**1. Where should posts live?**
-
-| | Choose | Read |
-|---|---|---|
-| **Your platform store** | Implement `BlogStore` for SQL, a CMS, an API, object storage, or another backend | [docs/PROVIDERS.md](docs/PROVIDERS.md) |
-| **Maintained optional adapter** | Filesystem, Supabase, and AllWeb adapters are available as explicit subpath imports | [docs/SERVICE.md](docs/SERVICE.md) |
-
-Both run the same engine, the same content contract, the same validators and the same scorecard.
-The only difference is one line of adapter config, and you can switch later.
-
-**2. How much do you need to write?** A site supplies an *adapter*: who the brand is, which pages
-posts may link to, and the topic pool. That's it — roughly 80 lines. The engine owns everything
-else. See [docs/ADOPTION.md](docs/ADOPTION.md#2-write-the-adapter).
-
-**3. Running many sites?** One service publishes for all of them from a single process. See
-[docs/SERVICE.md](docs/SERVICE.md#the-service).
-
-## Sixty-second version
+Install the reviewed v2 release or its exact commit:
 
 ```bash
-npm install github:BizrnrAI/blog-engine#v1.2.0
+npm install github:BizrnrAI/blog-engine#v2.0.0
 ```
 
+A website supplies its existing brand configuration, editorial topics, and persona:
+
 ```ts
-import { configureBlogEngine, generateBlogRun } from '@bizrnr/blog-engine/core';
+import { runBlogService, formatServiceReport } from '@bizrnr/blog-engine/core';
+import { createSupabaseStore } from '@bizrnr/blog-engine/adapters/supabase';
 import { config, topics, brandPersona } from './blog/adapter';
 
-configureBlogEngine({
-  config, topics, brandPersona,
-});
-
-await generateBlogRun(process.cwd(), { count: 1, dryRun: false, skipPing: false });
-```
-
-That uses the filesystem default. To use any other platform, supply a `BlogStore` implementation;
-the generation pipeline does not change. Maintained adapters are opt-in subpath imports.
-
-AllWeb-managed repositories use the same engine with a least-privilege adapter,
-not a Supabase service role:
-
-```ts
-import { createAllWebStore } from '@bizrnr/blog-engine/adapters/allweb';
-
-hooks: {
-  store: createAllWebStore({
-    siteId: websiteManifest.site_id,
-    apiUrl: websiteManifest.allweb.api_url,
+const results = await runBlogService([{
+  id: 'your-site',
+  count: 1, // supplied by the website after its own scheduling/volume checks
+  runtime: () => ({
+    config, topics, brandPersona,
+    hooks: {
+      store: createSupabaseStore({ siteId: 'your-site', author: config.identity.author?.name }),
+    },
   }),
-}
+}], { refresh: true });
+console.log(formatServiceReport(results));
+if (results.some((result) => result.status === 'failed')) process.exitCode = 1;
 ```
 
-The adapter reads `ALLWEB_SITE_TOKEN`; AllWeb binds that token to exactly one
-immutable website tenant.
+Apply [sql/0001_blog_posts.sql](sql/0001_blog_posts.sql) and then
+[sql/0002_post_punctuation.sql](sql/0002_post_punctuation.sql) to the intended Supabase project.
+The second migration repairs existing prose and normalizes future writes without moving URLs,
+publication dates, or editorial status. The publisher needs `SUPABASE_URL` and
+`SUPABASE_SERVICE_ROLE_KEY`; the website reader uses only its public anon/publishable key.
 
-Website rendering uses the matching read-only surface rather than copied fetch
-logic:
+AllWeb-managed websites can keep `createAllWebStore` through their authorized, site-scoped gateway.
+That gateway writes the platform's Supabase rows. Never put a broad service-role credential into
+an AllWeb website or bypass a gateway's publication permissions.
+
+The canonical `@bizrnr/blog-engine/core` API stays independent of provider adapters. The filesystem
+adapter remains available for offline compatibility and exports, but `runBlogService` and the
+stamped publishing workflows reject filesystem fallback by default.
+
+## Render current database content
 
 ```ts
-import { createAllWebBlogReader } from '@bizrnr/blog-engine/adapters/allweb';
+import { createSupabaseBlogReader } from '@bizrnr/blog-engine/adapters/supabase';
+import { blogPostGraph, serializeBlogJsonLd } from '@bizrnr/blog-engine/core';
 
-const blog = createAllWebBlogReader({
-  siteId: websiteManifest.site_id,
-  apiUrl: websiteManifest.allweb.api_url,
+const reader = createSupabaseBlogReader({
+  url: process.env.SUPABASE_URL!,
+  anonKey: process.env.SUPABASE_ANON_KEY!,
+  siteId: 'your-site',
 });
-
-const posts = await blog.listPublishedPosts({ includeContent: false });
-const post = await blog.getPublishedPost('canonical-slug');
+const posts = await reader.listPublishedPosts();
+const post = await reader.getPublishedPost('canonical-slug');
+const jsonLd = post ? serializeBlogJsonLd(blogPostGraph(post, { siteUrl: 'https://example.com' })) : null;
 ```
 
-The reader follows pagination, verifies every returned tenant UUID, rejects
-non-published rows, bounds network waits, and uses a short invalidatable cache.
-It exposes no mutation method. Dynamic public routes should wrap it with
-`createResilientAllWebBlogReader()` so a store outage becomes a retryable 503
-rather than an empty 200 or a false 404.
+Render the answer, article, FAQs, sources, and author in the initial HTML. Derive the blog hub,
+sitemap, feed, and related posts from these same published rows. Read failures throw: return a
+retryable 503, not an empty successful blog or a false 404. Static-export sites need a database
+snapshot/rebuild path or server-rendered blog routes before direct publishing becomes visible.
 
-## What you get in every post
+## Quality and reliability
 
-- An answer-first lede and a 40–60-word quick answer, server-rendered for answer engines
-- 4–6 sections, at least two phrased as real search questions, each opening with a direct answer
-- One self-contained citable passage (134–167 words, scoped and dated) — the paragraph an
-  assistant can quote verbatim
-- Three FAQs, rendered on-page and as `FAQPage` schema
-- Internal links validated against a real allowlist, plus links to related existing posts
-- A photographic hero, watermarked with your logo, plus a branded OG card, descriptive alt text,
-  intrinsic dimensions and responsive variants
-- `BlogPosting` + `Breadcrumb` + `FAQPage` JSON-LD with stable entity ids
-- Zero fabricated statistics, prices, or sources — enforced, not hoped for
-- One canonical slash policy across HTML, JSON-LD, RSS, sitemaps, and `llms.txt`
-- Every configured sitemap is submitted after a verified live release
+- Em dashes are forbidden in every post field, including HTML entity spellings. Generated prose
+  is repaired deterministically; final persistence checks catch custom-renderer regressions.
+- Answer-first prose, question headings, FAQs, allowlisted internal links, and optional verified
+  source URLs support useful, accessible articles. Supplied source URLs are verified on generation
+  and refresh. URL availability is not proof that a source supports a claim.
+- New Supabase posts insert uniquely. Duplicate slugs fail instead of overwriting an article.
+  Refresh updates only an existing published row and preserves the original publication date.
+- Supabase readers paginate the full corpus, enforce tenant/status boundaries, hide future-dated
+  public rows, and bound network waits.
+- Concurrent services isolate each website's runtime. A failure in one site does not stop others.
+- Public URLs must return HTTP 200 at their canonical path before indexing. A redirect is not
+  accepted as proof of publication. Syndication reads metadata from the configured store.
+- Website-owned schedules and limits are the only publishing throttle. There is no engine weekly
+  cap, default publication cron, or `maxPostsPerWeek` setting.
 
-## What the engine owns
+ASEO improvements follow ordinary search fundamentals: useful evidence, crawlable content,
+internal discovery, accurate dates, and visible-content/schema parity. Exact passage lengths,
+FAQ markup, and `llms.txt` do not guarantee rankings or AI citations.
+[Google Search Central](https://developers.google.com/search/docs/appearance/ai-features).
 
-| Concern | Module | Notes |
-|---|---|---|
-| **Content store** | `store.ts` | The engine's only route to posts and assets. Filesystem by default, swappable in one line |
-| **Provider-neutral core** | `core.ts` | Generation, validation, scheduling, rendering contracts, indexing, audit, and `BlogStore`; imports no database/control plane |
-| **Optional Supabase adapter** | `adapters/supabase.ts` | Explicit subpath; posts as rows and assets in Storage via plain `fetch` |
-| **Optional AllWeb adapter** | `adapters/allweb.ts` | Explicit subpath; tenant-bound reader/store and site-scoped GSC hooks |
-| **Blog service** | `service.ts` | One process publishes for many sites; per-site schedules and failure isolation |
-| Post generation | `generate-post.ts` | The content contract, strict-JSON prompting, tolerant parsing, 3-attempt validate-and-retry |
-| Topic selection | `topic-rotation.ts`, `demand.ts` | Search Console demand → editorial pool → cross-promo, with a two-signal demand gate |
-| Refresh / rank rescue | `refresh.ts`, `rank-rescue.ts` | Re-optimize posts already ranking 8–30; heal the audit backlog when demand data is quiet |
-| Corpus audit | `audit.ts` | SHIP / FIX / BLOCK verdicts for every published post |
-| Scorecard | `scorecard.ts` | Live probes, retrieval-crawler access, index coverage, cannibalization, review-queue age |
-| Imagery | `images.ts` | AI hero (pluggable), Sharp watermarking, branded OG card, responsive variants |
-| Structured data | `schema.ts` | `BlogPosting`, `FAQPage`, `Breadcrumb`, `Blog`, author `ProfilePage` |
-| Discovery | `discovery.ts` | Sitemap entries, hub `lastmod`, `llms.txt`, related posts, one shared exclude list |
-| Feed | `rss.ts` | RSS 2.0 with `media:content` and real enclosure byte lengths |
-| Indexing | `indexing.ts`, `gsc.ts` | IndexNow after URLs are live; Search Console demand and sitemap submission |
-| Evidence | `sources.ts`, `fanout.ts` | Verified external sources; answer passages for owner pages |
-| Distribution | `syndication.ts` | Webhook / Slack / LinkedIn adapters behind `afterIndexed` |
-| Frontmatter | `frontmatter.ts` | Key aliases so a site can keep its own shape |
-| CLI + workflows | `cli.ts`, `workflows.ts` | Generate/index/refresh/audit/scorecard runners and GitHub Actions builders |
-| Template runtime | `template-runtime.ts` | A complete runtime derived from a generic site profile |
+## Documentation and modules
 
-## Documentation
-
-| Doc | When to read it |
+| Read | Purpose |
 |---|---|
-| [docs/SERVICE.md](docs/SERVICE.md) | Running a multi-site service with your chosen store adapter |
-| [docs/ADOPTION.md](docs/ADOPTION.md) | Wiring the engine into one site, step by step |
-| [docs/CONTENT-SPEC.md](docs/CONTENT-SPEC.md) | Exactly what every post must contain, and why |
-| [docs/PROVIDERS.md](docs/PROVIDERS.md) | Models, env vars, and the hooks for your own infrastructure |
-| [docs/WORKFLOWS.md](docs/WORKFLOWS.md) | PR-safe publishing, and the production gotchas that cost real outages |
-| [docs/TRAFFIC.md](docs/TRAFFIC.md) | What actually moves traffic, ranked by measured return |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | What's next and what's deliberately out of scope |
-| [AGENTS.md](AGENTS.md) | Working *on* the engine: invariants, seams, upkeep |
-| [CHANGELOG.md](CHANGELOG.md) | Release history |
-| [docs/skills/aseo/SKILL.md](docs/skills/aseo/SKILL.md) | The full ASEO operating skill this engine implements |
+| [AGENTS.md](AGENTS.md) | Repository invariants and verification |
+| [docs/ADOPTION.md](docs/ADOPTION.md) | Brand adapter and hooks |
+| [docs/SERVICE.md](docs/SERVICE.md) | Service and website-owned scheduling |
+| [docs/WORKFLOWS.md](docs/WORKFLOWS.md) | Direct publishing and indexing retry workflows |
+| [docs/CONTENT-SPEC.md](docs/CONTENT-SPEC.md) | Prompt and validation contract |
+| [docs/PROVIDERS.md](docs/PROVIDERS.md) | Provider configuration |
+| [docs/TRAFFIC.md](docs/TRAFFIC.md) | Measurement and content improvement |
+| [docs/UPGRADE-V2.md](docs/UPGRADE-V2.md) | Cutover, existing-post repair, and deployment limits |
+| [docs/AUDIT-2026-09.md](docs/AUDIT-2026-09.md) | Repository review findings and verification |
+| [CHANGELOG.md](CHANGELOG.md) | Release changes |
 
-Runnable adapters live in `examples/`: `minimal` (smallest possible), `service` (multi-site
-Supabase service), `sdbg` (full brand adapter), `template` (generic site profile).
-
-## Non-negotiables
-
-These hold regardless of how you run it:
-
-- Search engines are pinged only after a URL is live and returns 200.
-- Every hero is stored by the engine and watermarked with the site's own logo; no hotlinked stock.
-- Every image ships descriptive, non-identical alt text and intrinsic dimensions.
-- Frontmatter and row dates are honest — never backdated, never fake-freshened.
-- Posts support the site's canonical owner pages; they never compete with them for a query.
-- No fabricated statistics, prices, awards, or sources. Sites can add their own blocked phrases.
-- Sitemap, feed, `llms.txt` and related posts all take the same exclude list, so public surfaces
-  cannot contradict each other.
-
-## Develop
+`src/` contains the portable pipeline, explicit provider adapters, schema/discovery/feed helpers,
+quality audit, scorecard, indexing, and workflow builders. `examples/` contains site adapters;
+`sql/` contains the Supabase schema and punctuation migration. `tests/` is the offline regression suite.
 
 ```bash
 npm ci
-npm run verify   # typecheck + tests + build
+npm run verify
 ```
 
-`dist/` is committed so consumers install straight from git with no build step. CI enforces that
-it is current. Pin a tag (`#v0.7.0`) for reproducibility, or the moving `#v0` channel to track
-patches.
-
-## Repository map
-
-```
-src/            provider-neutral engine plus explicit optional adapters
-sql/            optional Supabase adapter schema
-tests/          offline test suite — no network, no API keys
-examples/       minimal · service · sdbg · template
-docs/           SERVICE · ADOPTION · CONTENT-SPEC · PROVIDERS · WORKFLOWS · TRAFFIC · ROADMAP
-AGENTS.md       entry point for agents working on the engine
-.env.example    every environment variable the engine reads
-```
+`dist/` is committed for git-based installs. CI checks it against source. Updating the package does
+not rewrite workflows already copied into website repositories; apply the v2 cutover there too.

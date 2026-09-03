@@ -47,6 +47,6 @@ export declare function createAfterIndexedHook(adapters: readonly SyndicationAda
     root?: string;
     blogDir?: string;
     siteUrl?: string;
-    loadPosts?: () => ParsedBlogPost[];
+    loadPosts?: () => ParsedBlogPost[] | Promise<ParsedBlogPost[]>;
 }): NonNullable<BlogEngineHooks['afterIndexed']>;
 //# sourceMappingURL=syndication.d.ts.map

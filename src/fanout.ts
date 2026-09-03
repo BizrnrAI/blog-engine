@@ -1,3 +1,4 @@
+import { hasEmDash, normalizeBlogProse } from './punctuation.js';
 import { BLOG_CONFIG, brandPersona, getBlogHooks } from './config.js';
 import { contentRules, parseModelJson } from './generate-post.js';
 import { getGscPageQueries } from './gsc.js';
@@ -50,6 +51,7 @@ async function callLLM(messages: Array<{ role: string; content: string }>): Prom
 export function validateFanout(passages: FanoutPassage[], expected: number): string[] {
   const rules = contentRules();
   const errs: string[] = [];
+  if (hasEmDash(passages)) errs.push('em dashes are forbidden');
   if (passages.length < Math.min(expected, 2)) errs.push(`need >= ${Math.min(expected, 2)} passages (got ${passages.length})`);
   passages.forEach((p, i) => {
     if (!p.question || !/\?$/.test(p.question.trim())) errs.push(`passage ${i + 1}: question must end with "?"`);
@@ -77,6 +79,7 @@ export async function generateFanoutPassages(
 
   const system = [
     brandPersona(),
+    'Never use em dashes in any field. Use commas, parentheses, periods, or a simple hyphen.',
     '',
     `You are adding answer passages to the page ${BLOG_CONFIG.identity.siteUrl}${ownerPath} — the canonical owner of its topic. Return STRICT JSON only.`,
     'HARD RULES: never fabricate prices, percentages, statistics, dates, awards, or named sources; no legal/tax/medical/financial guarantees or advice; ' + `${rules.tone}; American English.`,
@@ -100,8 +103,8 @@ export async function generateFanoutPassages(
       raw = await callLLM(messages);
       const j = parseModelJson(raw);
       const passages: FanoutPassage[] = (Array.isArray(j.passages) ? j.passages : []).map((p: any) => ({
-        question: String(p?.question || '').trim(),
-        answer: String(p?.answer || '').trim(),
+        question: normalizeBlogProse(String(p?.question || '')).trim(),
+        answer: normalizeBlogProse(String(p?.answer || '')).trim(),
       }));
       errs = validateFanout(passages, count);
       if (!errs.length) return { ownerPath, generatedAt: new Date().toISOString(), sourceQueries: queries, passages };

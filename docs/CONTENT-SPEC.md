@@ -17,7 +17,7 @@ transparent scoping, disclosed authorship).
 | `slug` | kebab-case, ≤ 70 chars, unique vs existing posts | Stable canonical URLs |
 | `description` | Model aims 120–158 chars; engine **clamps deterministically** to 158 on a word boundary | Models cannot count characters — hard char limits caused 3/3 retry failures in production. Clamp, don't reject |
 | `answer` | 40–55 words (accepts 30–70), subject-verb-object, direct | The quick-answer block answer engines extract; render it server-side near the top |
-| `readMins` | 5–9 (clamped 3–15) | Honest read-time signal |
+| `readMins` | Calculated from body word count at 220 words/minute, minimum 1 | Honest read-time signal |
 | `tags` | 3–6 lowercase topical tags, deduped, no brand names | Related-post linking, keywords in JSON-LD |
 | `heroImageAlt` | 8–16 words literally describing the photographic scene | Descriptive alt beats keyword stuffing; engine prefixes the brand (`Brand – scene`) so alts are branded but never identical across posts |
 | `faqs` | exactly 3, each question phrased as a real user search, answers 2–4 factual sentences | On-page `<details>` + `FAQPage` JSON-LD; captures long-tail question queries |
@@ -62,11 +62,8 @@ transparent scoping, disclosed authorship).
   `author:` frontmatter and becomes the default BlogPosting author entity
   (`@id` reference when you give the stable Person id your site already
   publishes). Accountable authorship is an E-E-A-T and AI-visibility signal.
-- **Cadence cap** — `content.maxPostsPerWeek` makes `generateBlogRun` skip with
-  `skipped: 'CADENCE_CAP'` when that many posts already carry a `date` in the
-  trailing 7 days. The ASEO default for search-led autonomous posts is 2 per
-  rolling week until reviewed evidence supports more; unset keeps today's
-  uncapped behaviour.
+- **Website-owned publication policy**: schedules, requested counts, and any weekly limits live
+  in each website. The engine does not enforce a weekly cap.
 - **Image dimensions** — AI heroes record `imageWidth`/`imageHeight` so pages
   can render CLS-safe `<img>` tags and schema can emit an `ImageObject`.
 - **Speakable** — pass `speakableSelectors` to the schema builders only for
@@ -81,6 +78,21 @@ transparent scoping, disclosed authorship).
   real sources; each is host-checked against `topics.trustedSourceDomains` and
   fetched live before publication. A dead or off-list URL fails validation and
   feeds the retry loop. Sources land in frontmatter and as schema `citation`.
+
+## Punctuation and safe rendering
+
+Em dashes are forbidden in every post field, including `&mdash;`, decimal, and hexadecimal
+entities. Model prose is normalized to spaced hyphens before validation. Pinned titles must
+already satisfy the policy. Generation, refresh, and direct store writes check the final output,
+including custom Markdown and image alt text. The Supabase punctuation migration also repairs
+legacy rows and future writes by other producers. Plain Markdown is required; embedded HTML
+and executable links are rejected. Websites still need a safe Markdown renderer and should use
+`serializeBlogJsonLd` for script-tag JSON-LD.
+
+These editorial conventions improve readability and consistency, but exact passage lengths and
+FAQ markup are not special Google AI eligibility requirements. URL checks prove availability,
+not factual support. The website must verify material claims against the cited source content.
+[Google Search Central](https://developers.google.com/search/docs/appearance/ai-features).
 
 ## Claims discipline (non-negotiable)
 

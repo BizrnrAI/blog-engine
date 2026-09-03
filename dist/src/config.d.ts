@@ -1,4 +1,5 @@
 import type { BlogEngineConfig, BlogEngineHooks, BlogEngineRuntime, BlogEngineTopics } from './types.js';
+export declare function withBlogEngineRuntime<T>(runtime: BlogEngineRuntime, fn: () => T): T;
 /**
  * Install the adapter. The runtime is validated here so a malformed adapter fails immediately with
  * a list of what to fix, rather than deep inside the image pipeline or after a paid model call.
