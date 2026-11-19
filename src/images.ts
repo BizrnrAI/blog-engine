@@ -37,35 +37,30 @@ function wrap(title: string, maxChars: number, maxLines: number): string[] {
 
 export async function applyWatermark(root: string, imageBuffer: Buffer): Promise<Buffer> {
   const { width, opacity, margin } = BLOG_CONFIG.image.watermark;
-  try {
-    const logo = readFileSync(join(root, BLOG_CONFIG.paths.watermarkLogo));
-    const watermark = await sharp(logo)
-      .resize(width, null, { fit: 'inside' })
-      .ensureAlpha()
-      .composite([{
-        input: Buffer.from([0, 0, 0, Math.round(255 * opacity)]),
-        raw: { width: 1, height: 1, channels: 4 },
-        tile: true,
-        blend: 'dest-in',
-      }])
-      .toBuffer();
+  const logo = readFileSync(join(root, BLOG_CONFIG.paths.watermarkLogo));
+  const watermark = await sharp(logo)
+    .resize(width, null, { fit: 'inside' })
+    .ensureAlpha()
+    .composite([{
+      input: Buffer.from([0, 0, 0, Math.round(255 * opacity)]),
+      raw: { width: 1, height: 1, channels: 4 },
+      tile: true,
+      blend: 'dest-in',
+    }])
+    .toBuffer();
 
-    const base = sharp(imageBuffer);
-    const baseMeta = await base.metadata();
-    const baseWidth = baseMeta.width ?? 1536;
-    const baseHeight = baseMeta.height ?? 1024;
-    const wmMeta = await sharp(watermark).metadata();
-    const wmWidth = wmMeta.width ?? width;
-    const wmHeight = wmMeta.height ?? width;
+  const base = sharp(imageBuffer);
+  const baseMeta = await base.metadata();
+  const baseWidth = baseMeta.width ?? 1536;
+  const baseHeight = baseMeta.height ?? 1024;
+  const wmMeta = await sharp(watermark).metadata();
+  const wmWidth = wmMeta.width ?? width;
+  const wmHeight = wmMeta.height ?? width;
 
-    return await sharp(imageBuffer)
-      .composite([{ input: watermark, top: baseHeight - wmHeight - margin, left: baseWidth - wmWidth - margin }])
-      .webp({ quality: 86 })
-      .toBuffer();
-  } catch (err) {
-    console.warn('[blog-watermark] failed, returning WebP without watermark:', err instanceof Error ? err.message : String(err));
-    return sharp(imageBuffer).webp({ quality: 86 }).toBuffer();
-  }
+  return await sharp(imageBuffer)
+    .composite([{ input: watermark, top: baseHeight - wmHeight - margin, left: baseWidth - wmWidth - margin }])
+    .webp({ quality: 86 })
+    .toBuffer();
 }
 
 function buildAiPrompt(post: GeneratedBlogPost, topic: SeoTopic): string {
@@ -154,7 +149,7 @@ async function storeAsset(root: string, key: string, data: Buffer, contentType: 
   return store.putAsset(key, data, contentType);
 }
 
-async function generateAiHero(root: string, post: GeneratedBlogPost, topic: SeoTopic): Promise<{ image: string; imageAlt: string } | null> {
+async function generateAiHero(root: string, post: GeneratedBlogPost, topic: SeoTopic): Promise<Omit<CoverImage, 'source' | 'ogImage'> | null> {
   try {
     const raw = await fetchRawHero(post, topic);
     if (!raw) return null;
@@ -163,7 +158,6 @@ async function generateAiHero(root: string, post: GeneratedBlogPost, topic: SeoT
     const watermarked = await applyWatermark(root, raw);
     const outDir = join(root, BLOG_CONFIG.paths.heroDir);
     if (getStore(root).root) ensureDir(outDir);
-    const outFile = join(outDir, `${post.slug}.${format}`);
     // applyWatermark returns WebP; re-encode only when the configured format differs.
     const finalBuf = format === 'webp' ? watermarked : await encodeTo(format, sharp(watermarked));
     const dims = await sharp(finalBuf).metadata();

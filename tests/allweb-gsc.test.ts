@@ -38,3 +38,17 @@ test('AllWeb GSC hooks send only site-bound actions and reject foreign responses
     /crossed the configured site boundary/,
   );
 });
+
+test('AllWeb inspection verifies the site and exact URL before consuming index state', async (t) => {
+  const url = 'https://example.test/blog/x/';
+  const hooks = createAllWebGscHooks({ apiUrl: 'https://allweb.test/site-agent', token: 'site-token', siteId: 'site-1' });
+  const request = t.mock.method(globalThis, 'fetch', async (_input: string, init: RequestInit) => {
+    assert.deepEqual(JSON.parse(String(init.body)), { action: 'gsc_inspect_url', site_id: 'site-1', url });
+    return Response.json({ ok: true, site_id: 'site-1', url, inspection: { indexStatusResult: {
+      coverageState: 'Submitted and indexed', verdict: 'PASS', googleCanonical: url,
+    } } });
+  });
+  assert.deepEqual(await hooks.inspectUrl!({ url }), { coverageState: 'Submitted and indexed', verdict: 'PASS', googleCanonical: url });
+  request.mock.mockImplementation(async () => Response.json({ ok: true, site_id: 'site-1', url: 'https://example.test/' }));
+  await assert.rejects(hooks.inspectUrl!({ url }), /requested site and URL/);
+});

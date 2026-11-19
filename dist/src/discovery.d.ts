@@ -14,10 +14,12 @@ export interface DiscoveryOptions {
     trailingSlash?: boolean;
     /** Slugs to omit from every public surface (e.g. corpus-audit BLOCK verdicts). */
     exclude?: readonly string[];
+    /** Clock for public date filtering. Defaults to the current time. */
+    now?: Date;
 }
 export interface SitemapEntry {
     loc: string;
-    lastmod: string;
+    lastmod?: string;
     priority?: number;
 }
 /**
@@ -28,15 +30,9 @@ export interface SitemapEntry {
 export declare function excludeBlocked<T extends {
     slug: string;
 }>(posts: readonly T[], exclude?: readonly string[]): T[];
-/**
- * The hub's own sitemap entry, with lastmod = the newest post's date.
- *
- * Without it a crawler has no signal that the index page changed, so newly linked posts can sit
- * undiscovered for days even though the sitemap lists them — the single most expensive discovery
- * defect in the playbook's field notes.
- */
+/** Include lastmod for the hub when the public corpus contains a known modification date. */
 export declare function blogHubSitemapEntry(posts: readonly ParsedBlogPost[], options?: DiscoveryOptions): SitemapEntry;
-/** One <url> entry per post with lastmod = updatedAt (honest dates only). */
+/** One canonical entry per public post. Omit unknown dates and ignore invalid refresh dates. */
 export declare function blogSitemapEntries(posts: readonly ParsedBlogPost[], options?: DiscoveryOptions): SitemapEntry[];
 export interface LlmsTxtOptions extends DiscoveryOptions {
     /** Section heading (default 'Blog'). */

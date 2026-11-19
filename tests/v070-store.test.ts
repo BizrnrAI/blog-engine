@@ -300,7 +300,7 @@ test('createAllWebStore uses only the site-agent gateway and preserves optimisti
       author: 'Alex', published_at: '2026-08-26', updated_at: '2026-08-26', answer: 'Answer',
       content: '## Heading\nBody', faqs: [], sources: [], status: 'archived',
     }], pagination: { has_more: false, next_offset: null } });
-    if (body.action === 'blog_get') return Response.json({ ok: true, post: { slug: body.slug, revision: 7 } });
+    if (body.action === 'blog_get') return Response.json({ ok: true, post: { slug: body.slug, revision: 7, status: 'published', site_id: '6b053b68-51a0-4cfd-98e3-835e584f995e' } });
     if (body.action === 'blog_asset_upload') return Response.json({ ok: true, asset: { public_url: 'https://cdn.example/x.webp' } });
     return Response.json({ ok: true, post: { slug: body.slug, revision: 8 } });
   }) as typeof fetch;

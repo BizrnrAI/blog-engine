@@ -1,65 +1,38 @@
-# What actually moves traffic
+# How to measure blog search and citation performance
 
-Ranked by measured return, not by how satisfying it is to build. Every claim here comes from
-production measurement on a reference property, not from theory.
+## Verify delivery and discovery
 
-## 1. Get indexed, then get cited
+- Track the number of UTC dates with a new published article. The scorecard's
+  `--cadence-days=1 --strict` check reports gaps across the last seven complete UTC dates.
+- Verify the newest article renders its answer in readable HTML, links to its own canonical URL,
+  and appears in a configured sitemap. Check robots rules against the actual article paths and
+  confirm the CDN permits the search crawlers your site intends to serve.
+- Compare index coverage over a pinned URL group with `--index-slugs=a,b,c`. Use the site's Search
+  Console OAuth credentials or `hooks.inspectUrl`. A sitemap receipt and IndexNow acceptance
+  describe submission. URL Inspection describes observed Google index state.
+  [Google recrawling guidance](https://developers.google.com/search/docs/crawling-indexing/ask-google-to-recrawl).
 
-Indexing — not ranking — is usually the binding constraint. The scorecard probes live URLs and,
-with `hooks.inspectUrl`, reports coverage over a **fixed** post cohort so "not indexed" and
-"not checked" never look the same.
+## Develop topics and improve existing pages
 
-## 2. The citable passage must survive without JavaScript
+- Use nonbrand search and site data to find specific reader questions. Publish original evidence
+  and clear practical guidance. Link from the blog hub, relevant articles, and owner pages using
+  descriptive anchors. Keep a varied editorial queue and enable `content.requireFreshTopic`.
+  [Google people-first content guidance](https://developers.google.com/search/docs/fundamentals/creating-helpful-content).
+- Compare finalized Search Console windows and measure impressions, clicks, and conversions.
+  Rank rescue surfaces URLs at positions 8–30 as candidates. Review overlapping queries when two
+  pages earn impressions. Decide whether to consolidate or sharpen their distinct intent.
+- Record accurate public dates. Reserve `lastmod` for substantive edits and leave it unset when
+  unknown. Old evergreen articles can remain useful without rewriting.
+  [Google sitemap guidance](https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap).
 
-The scorecard's `answer-pre-js` check fetches the newest post and asserts the quick answer is in
-the raw HTML. A build gate proves a page compiles; only this proves it can be quoted.
+## Measure citations
 
-## 3. Keep retrieval crawlers allowed
+- Use stable grounded prompts and record the provider, model, time, and exact cited URL. The
+  scorecard reports links to known blog pages and brand mentions separately.
+- Compare these samples with actual citations in Bing Webmaster Tools and with referral traffic in
+  analytics. Use the available source or referral attribution for ChatGPT.
+  [Bing AI Performance](https://blogs.bing.com/webmaster/2026/2/Introducing-AI-Performance-in-Bing-Webmaster-Tools-Public-Preview/),
+  [ChatGPT Search](https://help.openai.com/en/articles/9237897-searching-the-web-with-chatgpt).
 
-A robots rule blocking `PerplexityBot` or `OAI-SearchBot` is a total citation loss for that
-provider, and nothing else in a normal pipeline notices. The scorecard fails on it.
-
-## 4. Refresh what is already on page two
-
-Rank rescue targets positions 8–30 and reports the 11–20 cohort separately. A healthy top-3
-result is classified `leave-alone` — not every ranking is a problem to solve. Give a change
-45 days to surface before rewriting it again (`content.minDaysBetweenRefresh`).
-
-## 5. Answer verification questions, not head commercial terms
-
-Opt into `topics.preferVerificationIntent`. On the reference property the head commercial term
-earned 338 impressions and **zero clicks** at position 24.8, while long-tail verification
-questions ("is X legit", "X vs Y") produced both clicks and every observed AI citation.
-
-## 6. Never let two of your own URLs fight
-
-The scorecard flags any query earning ≥10 impressions on two or more pages. The fix is
-consolidation or differentiation — never a third page.
-
-## 7. Give the hub an honest lastmod
-
-`blogHubSitemapEntry()` sets the hub's `lastmod` from the newest post. Without it a crawler has
-no signal that the index changed; on the reference property that left 880 pages undiscovered for
-twelve days.
-
-## 8. Link internally, and never orphan a post
-
-Internal links are the only backlinks you fully control. The corpus audit flags any post nothing
-else links to, and every new post is offered the existing corpus as link targets.
-
-## 9. Structured data is hygiene, not a ranking lever
-
-Emit it correctly and move on. Measured `searchAppearance` return on a comparable property was
-zero rows over ninety days. The same applies to `llms.txt`: ship it for the assistants that read
-it, never as an SEO tactic — Google Search ignores it.
-
-## 10. Publish less than you think
-
-Each website owns its publication cadence and volume limits; the shared engine imposes no weekly cap. Volume without evidence is how a
-corpus becomes scaled thin content.
-
-## What the engine cannot do for you
-
-Outreach, digital PR, profile claims and paid placement are human work by design — the playbook's
-own rule is that you cannot un-email four hundred librarians. The engine automates discovery and
-drafting; a person presses send.
+See the [November 2026 audit](AUDIT-2026-11.md) for platform guidance, live adopter observations,
+and deployment acceptance checks.

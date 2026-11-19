@@ -9,5 +9,5 @@ export interface AllWebGscOptions {
  * Site-scoped Search Console hooks. Google credentials remain in AllWeb's
  * server environment; the repository receives only its delegated site token.
  */
-export declare function createAllWebGscHooks(options: AllWebGscOptions): Pick<BlogEngineHooks, 'fetchGscQueries' | 'fetchGscPageQueries' | 'submitSitemap'>;
+export declare function createAllWebGscHooks(options: AllWebGscOptions): Pick<BlogEngineHooks, 'fetchGscQueries' | 'fetchGscPageQueries' | 'submitSitemap' | 'inspectUrl'>;
 //# sourceMappingURL=allweb-gsc.d.ts.map

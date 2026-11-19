@@ -69,10 +69,9 @@ export function cannibalizationPairs(rows, minImpressions = 10) {
 export function slugFromPage(page, pathPrefix = '/blog/') {
     try {
         const path = new URL(page).pathname.replace(/\/$/, '');
-        const i = path.indexOf(pathPrefix);
-        if (i === -1)
+        if (!path.startsWith(pathPrefix))
             return null;
-        const slug = path.slice(i + pathPrefix.length);
+        const slug = path.slice(pathPrefix.length);
         return /^[a-z0-9-]+$/.test(slug) ? slug : null;
     }
     catch {

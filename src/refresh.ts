@@ -4,7 +4,7 @@ import sharp from 'sharp';
 import { join } from 'node:path';
 import { BLOG_CONFIG, blogBasePath, brandPersona, getBlogHooks, getBlogTopics } from './config.js';
 import { contentExtensions, parseBlogFrontmatter } from './content-reader.js';
-import { getStore, listExistingPosts } from './store.js';
+import { getStore } from './store.js';
 import { contentRules, normalizeGeneratedPost, parseModelJson, relatedLinkTargets, validateGeneratedPost } from './generate-post.js';
 import { getGscPageQueries } from './gsc.js';
 import { toMarkdown } from './markdown.js';
@@ -23,10 +23,6 @@ import { env } from './utils.js';
  * contract; `updated` is bumped honestly to today. This is the ASEO rank-rescue action for
  * posts at position 8–30 and the highest-ROI thing an autonomous blog can do.
  */
-
-function monthYear(): string {
-  return new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-}
 
 async function callLLM(messages: Array<{ role: string; content: string }>): Promise<string> {
   const hook = getBlogHooks().generateText;
@@ -73,7 +69,7 @@ export function buildRefreshMessages(args: {
     `- Be accurate and on-brand: ${rules.tone}. American English.`,
     '- Keep the post\'s core subject and the same slug; you may sharpen the title, but do not change what the page is about.',
     '- Keep anything in the existing body that is accurate and useful; cut filler; add the missing answers the queries below reveal.',
-    '- Update time-sensitive claims only when supported by current evidence. Do not label old facts newly verified just because this post is refreshed.',
+    '- Update time-sensitive claims only when supported by current evidence. Include an as-of date only when the evidence has a relevant date. Keep source references close to the claims they support.',
     '- Do NOT duplicate these other post titles: ' + JSON.stringify(args.otherTitles.slice(0, 40)) + '.',
     ...rules.extraRules,
     '',
@@ -81,7 +77,7 @@ export function buildRefreshMessages(args: {
     '- Answer-first lede (2-3 sentences). 4-6 "## " H2 sections, 700-1100 words, NO H1.',
     `- At least ${rules.minQuestionH2s} H2s phrased as the real search questions below, each opening with a DIRECT 40-60 word answer.`,
     rules.requireCitableBlockquote
-      ? `- Exactly ONE "> " blockquote of 120-160 words: a self-contained, citable passage with concrete scope and the timeframe "as of ${monthYear()}".`
+      ? '- Use one contiguous "> " blockquote for a practical takeaway of about 134-167 words with its scope and material limitations.'
       : '',
     '- Tables/lists over prose for comparisons. No FAQ or quick-answer section in the body.',
     '- Use plain Markdown only, without embedded HTML, scripts, or javascript/data links.',
@@ -134,7 +130,7 @@ export async function refreshBlogPost(
   root: string,
   slug: string,
   args: { queries?: RankRescueCandidate['queries']; dryRun?: boolean } = {},
-): Promise<{ post: GeneratedBlogPost; markdown: string; file: string }> {
+): Promise<{ post: GeneratedBlogPost; markdown: string; file: string; changed: boolean }> {
   const store = getStore(root);
   if (store.publicationStatus && store.publicationStatus !== 'published') throw new Error('Refresh requires a published store and must not unpublish an existing article');
   const posts = await store.listPosts();
@@ -147,7 +143,7 @@ export async function refreshBlogPost(
   const file = contentExtensions().map((ext) => join(dir, `${slug}${ext}`)).find((f) => existsSync(f)) || join(dir, `${slug}${contentExtensions()[0]}`);
   const frontmatter: Record<string, string> = store.root && existsSync(file) ? parseBlogFrontmatter(readFileSync(file, 'utf8')).frontmatter : {};
   const content = stored.content;
-  const existing = await listExistingPosts(root);
+  const existing = posts.map((p) => ({ slug: p.slug, title: p.title, date: p.publishedAt }));
   const otherTitles = existing.filter((p) => p.slug !== slug).map((p) => p.title);
   const otherSlugs = existing.filter((p) => p.slug !== slug).map((p) => p.slug);
   // The slug is the one invariant of a refresh — pin it so normalizeGeneratedPost keeps it
@@ -171,7 +167,7 @@ export async function refreshBlogPost(
     try {
       rawText = await callLLM(messages);
       const candidate = normalizeGeneratedPost(parseModelJson(rawText), topic);
-      errs = validateGeneratedPost(candidate, { existingSlugs: otherSlugs, topic });
+      errs = validateGeneratedPost(candidate, { existingSlugs: otherSlugs, existingTitles: otherTitles, topic });
       if (!errs.length && candidate.sources?.length) errs = await verifySources(candidate.sources);
       if (!errs.length && getBlogHooks().validatePost) {
         errs = await getBlogHooks().validatePost!({ post: candidate, topic, operation: 'refresh' });
@@ -213,14 +209,22 @@ export async function refreshBlogPost(
       } catch { /* unreadable image: leave dims unset */ }
     }
   }
+  const compare = (value: string) => value.trim().replace(/\r\n/g, '\n');
+  const changed = ([['title', stored.title], ['description', stored.description], ['answer', stored.answer], ['body', stored.content]] as const)
+    .some(([key, previous]) => compare(post[key]) !== compare(previous))
+    || JSON.stringify(post.tags) !== JSON.stringify(stored.tags)
+    || JSON.stringify(post.faqs.map(({ q, a }) => [q, a])) !== JSON.stringify(stored.faqs.map(({ question, answer }) => [question, answer]))
+    || JSON.stringify((post.sources || []).map(({ url, title, publisher }) => [url, title, publisher]))
+      !== JSON.stringify((stored.sources || []).map(({ url, title, publisher }) => [url, title, publisher]))
+    || Boolean(cover.width && cover.width !== stored.heroImageWidth);
   const today = new Date().toISOString().slice(0, 10);
   const renderArgs = { post, cover, gradient: frontmatter.gradient || '', dateISO: stored.publishedAt || today, author: stored.author || BLOG_CONFIG.identity.author?.name };
   const render = getBlogHooks().renderMarkdown;
   let markdown = render ? render(renderArgs) : toMarkdown(post, renderArgs);
   // toMarkdown writes updated = dateISO; a refresh must carry today's date there.
-  markdown = markdown.replace(/^updated: .*$/m, `updated: ${today}`);
+  markdown = markdown.replace(/^updated: .*$/m, `updated: ${changed ? today : stored.updatedAt || stored.publishedAt || today}`);
   assertNoEmDashes({ post, cover, markdown });
-  if (!args.dryRun) {
+  if (!args.dryRun && changed) {
     const persist = getBlogHooks().persistPost;
     if (persist) {
       const alsoWriteFile = (await persist({ post, cover, markdown, file, root, isRefresh: true })) === true;
@@ -229,7 +233,7 @@ export async function refreshBlogPost(
       await store.putPost({ post, cover, markdown, dateISO: today, isRefresh: true });
     }
   }
-  return { post, markdown, file };
+  return { post, markdown, file, changed };
 }
 
 export async function refreshBlogRun(root: string, options: RefreshRunOptions): Promise<RefreshRunResult> {
@@ -240,31 +244,29 @@ export async function refreshBlogRun(root: string, options: RefreshRunOptions): 
   const rows = await getGscPageQueries(prefix);
   const candidates = rankRescueCandidates(rows, { pathPrefix: prefix });
   const byslug = new Map(candidates.map((c) => [c.slug, c]));
-  let slugs = options.slugs && options.slugs.length ? options.slugs : candidates.filter((c) => c.action === 'refresh').slice(0, options.max ?? 1).map((c) => c.slug);
+  const posts = await getStore(root).listPosts();
+  const bySlug = new Map(posts.filter((post) => !post.status || post.status === 'published').map((post) => [post.slug, post]));
+  const explicit = Boolean(options.slugs?.length);
+  const cooldown = contentRules().minDaysBetweenRefresh;
+  const cutoff = Date.now() - cooldown * 864e5;
+  const eligible = (slug: string) => {
+    const post = bySlug.get(slug);
+    if (!post) return false;
+    const modified = Date.parse(post.updatedAt || post.publishedAt);
+    return explicit || cooldown <= 0 || !Number.isFinite(modified) || modified <= cutoff;
+  };
+  let slugs = explicit
+    ? [...new Set(options.slugs)].filter(eligible)
+    : candidates.filter((c) => c.action === 'refresh' && eligible(c.slug)).slice(0, options.max ?? 1).map((c) => c.slug);
 
-  {
-    const known = new Set((await getStore(root).listPosts()).map((p) => p.slug));
-    slugs = slugs.filter((s) => known.has(s));
-  }
-  if (!slugs.length && options.backlog !== false) {
-    // No demand-led candidate: heal the long tail — the FIX post with the most issues, oldest first.
-    const fixes = auditPosts(await getStore(root).listPosts()).filter((e) => e.verdict === 'FIX');
-    const dates = new Map((await listExistingPosts(root)).map((p) => [p.slug, p.date || '']));
-    fixes.sort((a, b) => b.issues.length - a.issues.length || (dates.get(a.slug) || '').localeCompare(dates.get(b.slug) || ''));
+  if (!explicit && !slugs.length && options.backlog !== false) {
+    const fixes = auditPosts([...bySlug.values()]).filter((e) => e.verdict === 'FIX' && eligible(e.slug));
+    fixes.sort((a, b) => b.issues.length - a.issues.length
+      || (bySlug.get(a.slug)?.publishedAt || '').localeCompare(bySlug.get(b.slug)?.publishedAt || ''));
     if (fixes.length) {
       slugs = [fixes[0].slug];
-      console.log(`${logPrefix} refresh: no Search Console candidates - backlog pick ${fixes[0].slug} (${fixes[0].issues.length} audit issues)`);
+      console.log(`${logPrefix} refresh: backlog pick ${fixes[0].slug} (${fixes[0].issues.length} audit issues)`);
     }
-  }
-  // A change needs 2-45 days to surface across search and answer engines. Rewriting a post
-  // before then destroys the evidence for whether the last rewrite worked.
-  const cooldown = contentRules().minDaysBetweenRefresh ?? 45;
-  if (cooldown > 0 && !(options.slugs && options.slugs.length)) {
-    const recent = new Map((await getStore(root).listPosts()).map((p) => [p.slug, Date.parse(p.updatedAt || p.publishedAt)]));
-    const cutoff = Date.now() - cooldown * 864e5;
-    const held = slugs.filter((s) => { const t = recent.get(s); return t !== undefined && !Number.isNaN(t) && t > cutoff; });
-    if (held.length) console.log(`${logPrefix} refresh: ${held.join(', ')} refreshed within ${cooldown}d - holding for the evidence window`);
-    slugs = slugs.filter((s) => !held.includes(s));
   }
 
   if (!slugs.length) {
@@ -276,9 +278,10 @@ export async function refreshBlogRun(root: string, options: RefreshRunOptions): 
     for (const slug of slugs) {
       const c = byslug.get(slug);
       console.log(`${logPrefix} refreshing ${slug}${c ? ` (pos ${c.position}, ${c.impressions} impr, score ${c.score})` : ''}`);
-      const { markdown } = await refreshBlogPost(root, slug, { queries: c?.queries, dryRun: options.dryRun });
+      const { markdown, changed } = await refreshBlogPost(root, slug, { queries: c?.queries, dryRun: options.dryRun });
       if (options.dryRun) console.log(`\n-------- DRY RUN refresh ${slug} --------\n${markdown}\n-------- END --------\n`);
-      else refreshed.push(slug);
+      else if (changed) refreshed.push(slug);
+      else console.log(`${logPrefix} refresh: no content change for ${slug}`);
     }
     return { refreshed, candidates };
   } catch (error) { throw new BlogRunError('refresh', refreshed, error); }

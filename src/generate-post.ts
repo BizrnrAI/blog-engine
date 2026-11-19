@@ -1,7 +1,7 @@
 import { BLOG_CONFIG, blogPostPath, brandPersona, getBlogHooks, getBlogTopics } from './config.js';
 import { ALLOWED_CATEGORIES, INTERNAL_LINKS } from './topics.js';
 import type { BlogContentRules, ExistingPost, GeneratedBlogPost, SeoTopic } from './types.js';
-import { clampText, env, slugify, wordCount } from './utils.js';
+import { clampText, env, slugify, wordCount, titleKey } from './utils.js';
 import { assertNoEmDashes, hasEmDash, normalizeBlogProse } from './punctuation.js';
 import { hostAllowed, normalizeSources, verifySources } from './sources.js';
 
@@ -15,6 +15,7 @@ const DEFAULT_RULES: Required<Omit<BlogContentRules, 'blockedPhrases' | 'extraRu
   minQuestionH2s: 2,
   requireCitableBlockquote: true,
   requireTwoDemandSignals: false,
+  requireFreshTopic: false,
   requireSources: false,
   minDaysBetweenRefresh: 45,
   blockedPhrases: [],
@@ -27,10 +28,6 @@ const DEFAULT_RULES: Required<Omit<BlogContentRules, 'blockedPhrases' | 'extraRu
 
 export function contentRules(): typeof DEFAULT_RULES {
   return { ...DEFAULT_RULES, ...(BLOG_CONFIG.content || {}) };
-}
-
-function monthYear(): string {
-  return new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 }
 
 /** Existing posts offered as link targets: the most recent 30, as { title, path }. */
@@ -46,7 +43,8 @@ function buildMessages(topic: SeoTopic, existing: readonly ExistingPost[]) {
   const identity = BLOG_CONFIG.identity;
   const rules = contentRules();
   const ownerPages = getBlogTopics().ownerPages || [];
-  const existingTitles = existing.map((p) => p.title);
+  const existingTitles = [...existing].sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+    .slice(0, 80).map((p) => p.title);
   const linkTargets = relatedLinkTargets(existing);
   const trusted = getBlogTopics().trustedSourceDomains || [];
 
@@ -70,11 +68,14 @@ function buildMessages(topic: SeoTopic, existing: readonly ExistingPost[]) {
   const system = [
     brandPersona(),
     '',
-    'Write a single, original, genuinely useful SEO + AEO optimized blog post as STRICT JSON only. No prose around it.',
+    'Write one original, useful article for the site’s audience. Return only the requested JSON.',
     '',
     'HARD RULES (this publishes automatically to a public brand site):',
     '- Never use em dashes anywhere, including titles, metadata, FAQs, sources, and image alt text. Use commas, parentheses, periods, or a simple hyphen.',
-    '- NEVER fabricate specific prices, percentages, statistics, dates, interest rates, review counts, awards, or named sources. Speak qualitatively or in general ranges.',
+    '- Never invent prices, statistics, dates, credentials, quotations, customer stories, firsthand observations, or named sources.',
+    '- Add something specific the reader can use, such as a decision criterion, worked example, or practical checklist. Label hypothetical examples plainly.',
+    '- Use supplied editorial evidence when relevant. Tie time-sensitive or material claims to evidence that supports them and omit claims you cannot substantiate.',
+    '- Keep any source references close to the claims they support. Give an as-of date only when the underlying evidence has a relevant date.',
     '- No legal, tax, medical, or financial guarantees or advice; where relevant, suggest consulting the appropriate professional.',
     `- Be accurate and on-brand: ${rules.tone}. American English.`,
     '- Do NOT duplicate any of these existing titles: ' + JSON.stringify(existingTitles) + '.',
@@ -85,10 +86,10 @@ function buildMessages(topic: SeoTopic, existing: readonly ExistingPost[]) {
     '- Then 4-6 "## " H2 sections with substantive paragraphs (700-1100 words total). NO H1; the page adds the title.',
     `- At least ${rules.minQuestionH2s} of the H2 headings must be phrased as natural questions a reader would search (e.g. "How much does ... cost?"). Open each question H2 with a DIRECT 40-60 word answer paragraph before elaborating.`,
     rules.requireCitableBlockquote
-      ? `- Include exactly ONE Markdown blockquote ("> ") of 134-167 words: a self-contained, citable passage stating the post's key takeaway with concrete scope (who/where/what conditions), units where relevant, the timeframe "as of ${monthYear()}", and a plain statement of what it does NOT cover. It must make sense with zero surrounding context (no "as above", no dangling pronouns) — this is the passage an AI assistant should quote verbatim.`
+      ? '- Use one Markdown blockquote ("> ") for a self-contained takeaway of about 134-167 words. State who it applies to, the decision or next step, and any material limitations. Keep it distinct from the quick answer.'
       : '',
     '- Where the content compares options, steps, or trade-offs, prefer a compact Markdown table or bulleted list over dense prose.',
-    '- State limitations plainly where they are material ("this does not cover X", "figures vary by Y"). A stated boundary is a trust signal, not a weakness, and assistants quote hedged claims more readily than absolute ones.',
+    '- State limitations plainly where they are material ("this does not cover X", "figures vary by Y"). Explain how those limits affect the reader’s decision.',
     '- Do NOT repeat the same distinctive keyword at both the start and the end of the title; if the topic has a synonym pair, use one in the title and the other in the first H2.',
     '- Do NOT include an FAQ section or a "Quick answer" section in the body; those render automatically from the JSON fields.',
     '- Use plain Markdown only. Never include scripts, embedded HTML, event handlers, or javascript/data links.',
@@ -121,6 +122,7 @@ function buildMessages(topic: SeoTopic, existing: readonly ExistingPost[]) {
   const user = [
     `Write the post on this topic: "${topic.keyword}".`,
     `Category: ${topic.category}. Editorial angle: ${topic.angle}.`,
+    ...(topic.evidence?.length ? ['Verified editorial evidence:', JSON.stringify(topic.evidence)] : []),
     ...(pins.length ? ['', 'PINNED VALUES (exact match required):', ...pins] : []),
     '',
     'Return ONLY this JSON object:',
@@ -258,13 +260,15 @@ function blockquoteWordCount(body: string): number {
 
 export function validateGeneratedPost(
   post: Partial<GeneratedBlogPost>,
-  args: { existingSlugs: string[]; topic: SeoTopic },
+  args: { existingSlugs: string[]; topic: SeoTopic; existingTitles?: readonly string[] },
 ): string[] {
   const rules = contentRules();
   const errs: string[] = [];
   if (hasEmDash(post)) errs.push('em dashes are forbidden in all post fields, including HTML entities');
   if (/<\/?[a-z][^>]*>/i.test([post.title, post.description, post.answer, post.body, ...(post.faqs || []).flatMap((f) => [f?.q, f?.a])].join('\n')) || /\]\(\s*(?:javascript|data|vbscript):/i.test(post.body || '')) errs.push('use plain Markdown, without embedded HTML or executable links');
   if (!post.title || post.title.length > 90) errs.push('title missing or > 90 chars');
+  const headline = post.title ? titleKey(post.title) : '';
+  if (headline && args.existingTitles?.some((title) => titleKey(title) === headline)) errs.push('title already exists; answer a distinct question');
   if (!post.slug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(post.slug)) errs.push('slug missing or not kebab-case');
   if (post.slug && args.existingSlugs.includes(post.slug)) errs.push('slug already exists: ' + post.slug);
   // Pinned values are applied in normalizeGeneratedPost; assert them for callers that validate
@@ -288,7 +292,11 @@ export function validateGeneratedPost(
   const qH2 = questionH2Count(post.body || '');
   if (qH2 < rules.minQuestionH2s) errs.push(`body needs >= ${rules.minQuestionH2s} question-phrased H2s ending in "?" (got ${qH2})`);
   if (rules.requireCitableBlockquote) {
-    const bq = blockquoteWordCount(post.body || '');
+    const body = post.body || '';
+    const bq = blockquoteWordCount(body);
+    const blocks = body.split(/\r?\n/).reduce((count, line, i, lines) =>
+      count + Number(/^>/.test(line) && (i === 0 || !/^>/.test(lines[i - 1]))), 0);
+    if (blocks > 1) errs.push('body needs one contiguous citable blockquote');
     if (bq < 90) errs.push(`body needs one citable "> " blockquote of ~134-167 words (got ${bq} blockquote words)`);
     else if (bq > 220) errs.push(`citable blockquote too long (${bq} words; keep it a single quotable passage)`);
   }
@@ -320,17 +328,17 @@ export function validateGeneratedPost(
 
 export function normalizeGeneratedPost(raw: Record<string, unknown>, topic?: Pick<SeoTopic, 'slug' | 'title'>): GeneratedBlogPost {
   const rules = contentRules();
-  const prose = (value: unknown) => normalizeBlogProse(String(value || '')).trim();
+  const prose = (value: unknown) => typeof value === 'string' ? normalizeBlogProse(value).trim() : '';
   // A pinned slug is used verbatim: slugify() strips stop words ("to", "a", "of"), which would
   // silently move a curated URL.
-  const slug = topic?.slug || slugify(String(raw.slug || raw.title || ''));
+  const slug = topic?.slug || slugify(prose(raw.slug) || prose(raw.title));
   return {
     title: topic?.title || prose(raw.title),
     slug,
     description: clampText(prose(raw.description), rules.clampDescriptionTo),
     category: prose(raw.category) as GeneratedBlogPost['category'],
     answer: prose(raw.answer),
-    readMins: Math.max(1, Math.ceil(wordCount(String(raw.body || '')) / 220)),
+    readMins: Math.max(1, Math.ceil(wordCount(prose(raw.body)) / 220)),
     tags: Array.isArray(raw.tags)
       ? [...new Set(raw.tags.map((t) => prose(t).toLowerCase()).filter(Boolean))].slice(0, 6)
       : [],
@@ -345,6 +353,7 @@ export function normalizeGeneratedPost(raw: Record<string, unknown>, topic?: Pic
 
 export async function generateBlogPost(topic: SeoTopic, existing: ExistingPost[]): Promise<GeneratedBlogPost> {
   const existingSlugs = existing.map((p) => p.slug);
+  const existingTitles = existing.map((p) => p.title);
   const messages = buildMessages(topic, existing);
 
   let errs: string[] = [];
@@ -353,12 +362,11 @@ export async function generateBlogPost(topic: SeoTopic, existing: ExistingPost[]
     try {
       rawText = await callLLM(messages);
       const post = normalizeGeneratedPost(parseModelJson(rawText), topic);
-      errs = validateGeneratedPost(post, { existingSlugs, topic });
+      errs = validateGeneratedPost(post, { existingSlugs, existingTitles, topic });
       if (errs.length === 0 && post.sources?.length) errs = await verifySources(post.sources || []);
       if (errs.length === 0 && getBlogHooks().validatePost) {
         errs = await getBlogHooks().validatePost!({ post, topic, operation: 'generate' });
       }
-      if (errs.length === 0 && existing.some((p) => p.title.trim().toLowerCase() === post.title.trim().toLowerCase())) errs.push('title already exists; answer a distinct question');
       if (errs.length === 0) { assertNoEmDashes(post); return post; }
       messages.push({ role: 'assistant', content: JSON.stringify(post).slice(0, 500) });
       messages.push({ role: 'user', content: `That JSON failed validation: ${errs.join('; ')}. Return corrected STRICT JSON only.` });

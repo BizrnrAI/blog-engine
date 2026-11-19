@@ -20,7 +20,8 @@ website scheduler and policy
 import { blogGenerateWorkflow, blogRefreshWorkflow, blogIndexingWorkflow } from '@bizrnr/blog-engine/core';
 
 writeFileSync('.github/workflows/blog-generate.yml', blogGenerateWorkflow({
-  generateCron: websitePolicy.generateCron,
+  generateCron: '23 15 * * *', // example site-owned daily primary trigger (UTC)
+  dailyTarget: 1,
   generateCommand: 'npm run blog:generate -- --count="$BLOG_COUNT" --skip-ping',
 }));
 writeFileSync('.github/workflows/blog-refresh.yml', blogRefreshWorkflow({
@@ -35,6 +36,12 @@ no PR token, and no content build/merge step. Inputs enter commands through envi
 `BLOG_REQUIRE_REMOTE_STORE=1` makes canonical generation/refresh CLIs reject a filesystem or
 `persistPost` fallback and require the store's published status.
 
+The daily target counts new published rows on the UTC date. A same-day retry generates only
+the remaining number. Run the generator from one scheduler per site, or share a distributed lock
+across scheduler replicas. An optional second run later in the same UTC day can recover a missed
+or failed primary trigger. Run the health check with `--cadence-days=1 --strict` to flag missed days.
+Keep review-required sites on their accountable release path.
+
 The adapter must actually supply a remote store. Providing credentials alone does not select one.
 For AllWeb, use the existing least-privilege launcher and scoped credentials. A gateway that
 requires review must be explicitly reconfigured by its authorized operator before autonomous
@@ -47,9 +54,19 @@ index CLI. The separate indexing workflow accepts stored slugs for retries. It n
 from commits or assumes that a merge deploy happened. A failed indexing run does not require
 regenerating the article. Retry indexing for the already-persisted slugs.
 
-Live verification uses bounded requests and requires HTTP 200 without a redirect at the canonical
-URL. A missing IndexNow key skips that provider, while configured GSC hooks/OAuth still run. A
-successful API submission is not a guarantee of indexing or ranking.
+Run `npm run blog:index -- --slugs=a,b` to retry known saved rows. If an interrupted job lost
+its slug output, run `npm run blog:index -- --recent-days=2` or select `recent_days` on the generated
+indexing workflow. That recovery mode reads the configured store, accepts one to seven UTC days
+of published changes, and leaves syndication off. Use exact slugs whenever available.
+
+Live verification requires HTTP 200 without a redirect and rejects explicit noindex or conflicting
+canonicals. Enable `indexing.requireCanonicalHtml` to require the self-canonical HTML link and check
+the rendered article against the store. Let the site invalidate its public article, hub, feed, and
+sitemap caches at publication or release. The engine waits up to 60 seconds by default.
+
+IndexNow and Search Console submissions run independently. The report distinguishes skipped
+providers, accepted sitemaps, and an IndexNow key still awaiting validation. Use the scorecard,
+Search Console URL Inspection, and Bing Webmaster Tools to observe coverage after submission.
 
 ## Existing sites
 

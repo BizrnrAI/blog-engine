@@ -118,11 +118,13 @@ export function blogPostingSchema(post, options = {}) {
             ? { speakable: { '@type': 'SpeakableSpecification', cssSelector: [...options.speakableSelectors] } }
             : {}),
     };
-    const author = options.author || configuredAuthor();
+    const defaultAuthor = configuredAuthor();
+    const byline = post.author?.trim();
+    const author = options.author ?? (byline && byline !== defaultAuthor?.name ? { name: byline } : defaultAuthor);
     if (author) {
         node.author = author.id
             ? { '@id': author.id }
-            : { '@type': 'Person', name: author.name, ...(author.url ? { url: author.url } : {}) };
+            : { '@type': author.type || 'Person', name: author.name, ...(author.url ? { url: absolute(siteUrl, author.url) } : {}) };
     }
     if (options.publisher) {
         node.publisher = options.publisher.id
@@ -162,7 +164,7 @@ export function breadcrumbSchema(items, options = {}) {
 }
 /**
  * The complete per-post graph: BlogPosting + FAQPage (when the post has FAQs)
- * + breadcrumbs. Serialize with JSON.stringify into a single
+ * + breadcrumbs. Serialize with serializeBlogJsonLd into a single
  * <script type="application/ld+json"> tag.
  */
 export function blogPostGraph(post, options = {}) {
@@ -177,7 +179,7 @@ export function blogPostGraph(post, options = {}) {
             { name: post.title, path: formatBlogPath(base, post.slug, trailingSlash) },
         ], options),
     ];
-    if (post.faqs.length)
+    if (options.includeFaq !== false && post.faqs.length)
         graph.push(faqPageSchema(url, post.faqs));
     return { '@context': 'https://schema.org', '@graph': graph };
 }

@@ -37,9 +37,10 @@ test('enclosure length is the real byte size when root is provided', () => {
   assert.ok(xml.includes('length="1234"'), 'expected real byte length in enclosure');
 });
 
-test('enclosure length falls back to 0 when the file is missing', () => {
+test('unknown enclosure size preserves media markup without publishing a false length', () => {
   const xml = buildBlogRss([post], { root: '/nonexistent-root' });
-  assert.ok(xml.includes('length="0"'));
+  assert.doesNotMatch(xml, /<enclosure/);
+  assert.match(xml, /<media:content/);
 });
 
 test('rss limit is respected', () => {

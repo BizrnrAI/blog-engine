@@ -125,6 +125,7 @@ function runtimeFor(brief: SiteBrief): BlogEngineRuntime {
 
 export const sites: ServiceSite[] = BRIEFS.map((brief) => ({
   id: brief.id,
+  dailyTarget: 1,
   runtime: () => runtimeFor(brief),
   ...(brief.days ? { days: brief.days } : {}),
 }));

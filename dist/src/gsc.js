@@ -45,6 +45,39 @@ function assertQueryRows(rows) {
     if (invalid !== -1)
         throw new Error(`query source returned an invalid row at index ${invalid}`);
 }
+export function hasGoogleOAuth() {
+    return Boolean(process.env.GOOGLE_OAUTH_CLIENT_ID && process.env.GOOGLE_OAUTH_CLIENT_SECRET && process.env.GOOGLE_OAUTH_REFRESH_TOKEN);
+}
+export async function inspectGscUrl(url, token) {
+    const response = await fetch('https://searchconsole.googleapis.com/v1/urlInspection/index:inspect', {
+        method: 'POST',
+        signal: AbortSignal.timeout(12_000),
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inspectionUrl: url, siteUrl: BLOG_CONFIG.gsc.property, languageCode: 'en-US' }),
+    });
+    if (!response.ok) {
+        await response.body?.cancel();
+        throw new Error(`Search Console URL Inspection HTTP ${response.status}`);
+    }
+    const { inspectionResult } = await response.json();
+    const result = inspectionResult?.indexStatusResult;
+    return parseIndexStatus(result);
+}
+export function parseIndexStatus(value) {
+    if (!value || typeof value !== 'object')
+        return null;
+    const result = value;
+    if (typeof result.coverageState !== 'string' || !result.coverageState.trim())
+        return null;
+    return {
+        coverageState: result.coverageState,
+        ...(typeof result.verdict === 'string' ? { verdict: result.verdict } : {}),
+        ...(typeof result.googleCanonical === 'string' ? { googleCanonical: result.googleCanonical } : {}),
+        ...(typeof result.lastCrawlTime === 'string' ? { lastCrawlTime: result.lastCrawlTime } : {}),
+        ...(Array.isArray(result.referringUrls)
+            ? { referringUrls: result.referringUrls.filter((url) => typeof url === 'string') } : {}),
+    };
+}
 export async function getGoogleAccessToken() {
     const body = new URLSearchParams({
         client_id: env('GOOGLE_OAUTH_CLIENT_ID'),
@@ -52,10 +85,14 @@ export async function getGoogleAccessToken() {
         refresh_token: env('GOOGLE_OAUTH_REFRESH_TOKEN'),
         grant_type: 'refresh_token',
     });
-    const r = await fetch('https://oauth2.googleapis.com/token', { method: 'POST', body });
+    const r = await fetch('https://oauth2.googleapis.com/token', { method: 'POST', body, signal: AbortSignal.timeout(12_000) });
+    if (!r.ok) {
+        await r.body?.cancel();
+        throw new Error(`Google token exchange failed with HTTP ${r.status}`);
+    }
     const j = await r.json();
-    if (!j.access_token)
-        throw new Error('Google token exchange failed: ' + JSON.stringify(j).slice(0, 200));
+    if (typeof j.access_token !== 'string' || !j.access_token)
+        throw new Error('Google token exchange returned no access token');
     return j.access_token;
 }
 export async function getGscQueries() {
@@ -77,18 +114,18 @@ export async function getGscQueries() {
             return querySourceFailure('fetchGscQueries hook failed', err);
         }
     }
-    if (!process.env.GOOGLE_OAUTH_CLIENT_ID ||
-        !process.env.GOOGLE_OAUTH_CLIENT_SECRET ||
-        !process.env.GOOGLE_OAUTH_REFRESH_TOKEN) {
+    if (!hasGoogleOAuth()) {
         return querySourceFailure('no fetchGscQueries hook or Google OAuth credentials are configured');
     }
-    const token = await getGoogleAccessToken();
+    let token = null;
     const end = new Date(Date.now() - FINAL_DATA_LAG_DAYS * 864e5);
-    const start = new Date(end.getTime() - LOOKBACK_DAYS * 864e5);
+    const start = new Date(end.getTime() - (LOOKBACK_DAYS - 1) * 864e5);
     const fmt = (d) => d.toISOString().slice(0, 10);
     try {
+        token = await getGoogleAccessToken();
         const r = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(BLOG_CONFIG.gsc.property)}/searchAnalytics/query`, {
             method: 'POST',
+            signal: AbortSignal.timeout(12_000),
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 startDate: fmt(start),
@@ -130,15 +167,16 @@ export async function getGscPageQueries(pathPrefix) {
             return [];
         }
     }
-    if (!process.env.GOOGLE_OAUTH_CLIENT_ID || !process.env.GOOGLE_OAUTH_CLIENT_SECRET || !process.env.GOOGLE_OAUTH_REFRESH_TOKEN)
+    if (!hasGoogleOAuth())
         return [];
     try {
         const token = await getGoogleAccessToken();
         const end = new Date(Date.now() - FINAL_DATA_LAG_DAYS * 864e5);
-        const start = new Date(end.getTime() - LOOKBACK_DAYS * 864e5);
+        const start = new Date(end.getTime() - (LOOKBACK_DAYS - 1) * 864e5);
         const fmt = (d) => d.toISOString().slice(0, 10);
         const r = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(BLOG_CONFIG.gsc.property)}/searchAnalytics/query`, {
             method: 'POST',
+            signal: AbortSignal.timeout(12_000),
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 startDate: fmt(start),
@@ -149,6 +187,8 @@ export async function getGscPageQueries(pathPrefix) {
                 dimensionFilterGroups: [{ filters: [{ dimension: 'page', operator: 'contains', expression: pathPrefix }] }],
             }),
         });
+        if (!r.ok)
+            throw new Error(`Search Console page/query request failed with HTTP ${r.status}`);
         const j = await r.json();
         return (j.rows || []).map((row) => ({
             page: row.keys[0],
@@ -163,36 +203,40 @@ export async function getGscPageQueries(pathPrefix) {
         return [];
     }
 }
-export async function pingGscSitemap(token) {
+/** Submit every configured sitemap and surface individual failures to the caller. */
+export async function submitGscSitemaps(token) {
     const sitemaps = [...new Set([
             BLOG_CONFIG.gsc.sitemap,
             ...(BLOG_CONFIG.gsc.sitemaps ?? []),
-        ].map((value) => value?.trim()).filter((value) => Boolean(value)))];
-    // A site with its own Search Console auth submits through the hook; there is no OAuth token.
+        ].map((value) => value?.trim()).filter(Boolean))];
     const hook = getBlogHooks().submitSitemap;
-    if (hook) {
-        for (const sitemap of sitemaps) {
-            try {
-                await hook({ sitemap, property: BLOG_CONFIG.gsc.property });
-                console.log('[blog-indexing] GSC sitemap resubmit via hook:', sitemap);
-            }
-            catch (err) {
-                console.warn('[blog-indexing] submitSitemap hook failed:', sitemap, err instanceof Error ? err.message : String(err));
-            }
+    if (!hook && !token)
+        return [];
+    const property = BLOG_CONFIG.gsc.property;
+    const outcomes = await Promise.allSettled(sitemaps.map(async (sitemap) => {
+        if (hook)
+            await hook({ sitemap, property });
+        else {
+            const r = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(property)}/sitemaps/${encodeURIComponent(sitemap)}`, { method: 'PUT', headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(12_000) });
+            await r.body?.cancel();
+            if (!r.ok)
+                throw new Error(`HTTP ${r.status}`);
         }
-        return;
+        console.log('[blog-indexing] Search Console accepted sitemap:', sitemap);
+    }));
+    const failures = outcomes.flatMap((result, index) => result.status === 'rejected'
+        ? [`${sitemaps[index]}: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`] : []);
+    if (failures.length)
+        throw new Error(`Search Console sitemap submission failed: ${failures.join(', ')}`);
+    return sitemaps;
+}
+/** Compatibility wrapper for callers expecting a best-effort ping. */
+export async function pingGscSitemap(token) {
+    try {
+        await submitGscSitemaps(token);
     }
-    if (!token)
-        return;
-    for (const sitemap of sitemaps) {
-        try {
-            const sm = encodeURIComponent(sitemap);
-            const r = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(BLOG_CONFIG.gsc.property)}/sitemaps/${sm}`, { method: 'PUT', headers: { Authorization: `Bearer ${token}` } });
-            console.log('[blog-indexing] GSC sitemap resubmit:', sitemap, r.status);
-        }
-        catch (err) {
-            console.warn('[blog-indexing] GSC sitemap ping failed:', sitemap, err instanceof Error ? err.message : String(err));
-        }
+    catch (error) {
+        console.warn('[blog-indexing]', error instanceof Error ? error.message : String(error));
     }
 }
 //# sourceMappingURL=gsc.js.map

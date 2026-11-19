@@ -73,7 +73,7 @@ export function buildTemplateBlogEngineRuntime(site, options = {}) {
                 sitemap: `${site.domain}/sitemap.xml`,
             },
             indexNow: {
-                key: options.indexNowKey || process.env.INDEXNOW_KEY || 'replace-with-indexnow-key',
+                key: options.indexNowKey || process.env.INDEXNOW_KEY || '',
             },
             text: {
                 provider: 'openrouter',

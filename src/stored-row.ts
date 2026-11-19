@@ -6,6 +6,7 @@ export function storedRowToPost(row: Record<string, any>): ParsedBlogPost {
   const content = String(row.content || '');
   const answer = String(row.answer || row.description || '');
   return {
+    ...(typeof row.status === 'string' ? { status: row.status } : {}),
     slug: String(row.slug), title: String(row.title || ''), description: String(row.description || ''),
     category: String(row.category || ''), tags: Array.isArray(row.tags) ? row.tags.map(String) : [],
     author: String(row.author || ''), publishedAt: String(row.published_at || '').slice(0, 10),

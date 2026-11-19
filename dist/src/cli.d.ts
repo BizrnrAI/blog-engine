@@ -2,7 +2,7 @@ import type { BlogEngineRuntime, GenerateRunResult } from './types.js';
 export declare function cleanBlogSlugs(raw: string | undefined): string[];
 export { waitUntilBlogUrlsLive } from './indexing.js';
 export declare function runBlogGenerateCli(runtime: BlogEngineRuntime, root?: string): Promise<GenerateRunResult>;
-export declare function runBlogIndexPublishedCli(runtime: BlogEngineRuntime): Promise<void>;
+export declare function runBlogIndexPublishedCli(runtime: BlogEngineRuntime, root?: string): Promise<void>;
 /**
  * Refresh mode CLI: `--slugs=a,b` to force, otherwise rank rescue picks up to `--max=N` (default 1)
  * posts at position 8–30 from Search Console. Writes `slugs=` to GITHUB_OUTPUT for PR flows.

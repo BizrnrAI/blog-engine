@@ -84,10 +84,10 @@ all read through the store automatically.
 import { runBlogService, formatServiceReport } from '@bizrnr/blog-engine/core';
 
 const results = await runBlogService([
-  { id: 'sandiegobuyguy', runtime: () => sdbgRuntime(), days: [1, 3, 5] },
-  { id: 'kristianpeter', runtime: () => kpRuntime() },
-  { id: 'sdreos',        runtime: () => sdreosRuntime(), days: [3] },
-], { refresh: true });
+  { id: 'sandiegobuyguy', runtime: () => sdbgRuntime(), dailyTarget: 1 },
+  { id: 'kristianpeter', runtime: () => kpRuntime(), dailyTarget: 1 },
+  { id: 'sdreos',        runtime: () => sdreosRuntime(), dailyTarget: 1 },
+]);
 
 console.log(formatServiceReport(results));
 ```
@@ -95,8 +95,11 @@ console.log(formatServiceReport(results));
 One site's failure never stops the others — every site returns a result, including
 `status: 'failed'` with the reason.
 
-A temporary daily push belongs in a bounded campaign, not a permanent site fork. This example
-runs daily for exactly 30 UTC dates, then automatically returns to Tuesday/Friday:
+Run the service from a daily scheduler. With `dailyTarget`, publication is capped by the number
+of new published rows on the UTC date, so a same-day retry skips generation after the target is
+met. `count` can further restrict one run. Leave `dailyTarget` unset for stores staging review or
+draft rows. Days and campaigns still belong to each site's policy. For example, a site can run
+daily for 30 UTC dates and then return to Tuesday and Friday:
 
 ```ts
 {

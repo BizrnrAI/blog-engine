@@ -1,3 +1,12 @@
+# Unreleased
+
+- Add a site-owned UTC daily target, exact daily cadence reporting, and a fresh-topic gate.
+- Verify canonical article HTML, submit discovery signals independently, and resume interrupted
+  submissions from persisted slugs or recent published changes.
+- Check live sitemap membership, Google-selected canonicals, and grounded article citations.
+- Preserve honest modification dates, public bylines, and publication status across outputs.
+- Require Node 22 for the installed AI SDK and patch the npm audit findings.
+
 # 2.0.0 - 2026-09-03
 
 - Publishing workflows write directly to Supabase-backed stores, without content PRs, git-history

@@ -3,6 +3,8 @@ export interface RssPost {
     title: string;
     description: string;
     date: Date;
+    /** Last substantial public edit when available, for channel lastBuildDate. */
+    updated?: Date;
     image?: string;
     imageAlt?: string;
     ogImage?: string;
@@ -12,12 +14,13 @@ export interface BuildRssOptions {
     exclude?: readonly string[];
     /**
      * Repository root containing the public/ directory. When provided, local
-     * image enclosures get their real byte length from disk instead of 0
-     * (some validators and readers reject length="0").
+     * image enclosures get their real byte length from disk.
      */
     root?: string;
     /** Directory local image paths resolve against (default 'public'). */
     publicDir?: string;
+    /** Clock for excluding future-dated items. */
+    now?: Date;
 }
 export declare function buildBlogRss(posts: RssPost[], options?: BuildRssOptions): string;
 //# sourceMappingURL=rss.d.ts.map

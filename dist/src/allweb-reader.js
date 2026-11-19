@@ -60,16 +60,28 @@ export function createAllWebBlogReader(options) {
             revision: Number(row.revision || 0),
         };
     };
+    const isPublic = (post, today) => post.status === 'published' && Boolean(post.publishedAt) && post.publishedAt <= today;
     async function fetchPublishedList(includeContent) {
         const posts = [];
+        const seen = new Set();
+        const today = new Date().toISOString().slice(0, 10);
         let offset = 0;
         while (true) {
             const result = await call({
                 action: 'blog_list', status: 'published', limit: pageSize, offset,
                 include_content: includeContent,
             });
-            const rows = Array.isArray(result.posts) ? result.posts : [];
-            posts.push(...rows.map((row) => checkedPost(row)).filter((post) => post.status === 'published' && (!post.publishedAt || post.publishedAt <= new Date().toISOString().slice(0, 10))));
+            if (!Array.isArray(result.posts))
+                throw new Error('AllWeb blog_list returned an invalid corpus');
+            const rows = result.posts;
+            for (const row of rows) {
+                const post = checkedPost(row);
+                if (!row.slug || seen.has(post.slug))
+                    throw new Error('AllWeb blog_list returned a missing or repeated slug');
+                seen.add(post.slug);
+                if (isPublic(post, today))
+                    posts.push(post);
+            }
             const pagination = result.pagination && typeof result.pagination === 'object' ? result.pagination : null;
             const hasMore = pagination ? pagination.has_more === true : rows.length === pageSize;
             if (!hasMore || rows.length === 0)
@@ -87,7 +99,8 @@ export function createAllWebBlogReader(options) {
         if (!force && current && current.expiresAt > now)
             return current.promise;
         const promise = loader().catch((error) => {
-            cache.delete(key);
+            if (cache.get(key)?.promise === promise)
+                cache.delete(key);
             throw error;
         });
         if (cacheTtlMs > 0)
@@ -115,7 +128,9 @@ export function createAllWebBlogReader(options) {
                     try {
                         const result = await call({ action: 'blog_get', slug: cleanSlug });
                         const post = checkedPost(result.post || {});
-                        return post.status === 'published' ? post : null;
+                        if (post.slug !== cleanSlug)
+                            throw new Error('AllWeb blog_get returned a different slug');
+                        return isPublic(post, new Date().toISOString().slice(0, 10)) ? post : null;
                     }
                     catch (error) {
                         if (Number(error?.status) === 404)

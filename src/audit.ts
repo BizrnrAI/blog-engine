@@ -3,7 +3,7 @@ import { BLOG_CONFIG, blogBasePath, blogPostPath, getBlogTopics, getBlogHooks } 
 import { readGeneratedBlogPosts } from './content-reader.js';
 import { contentRules } from './generate-post.js';
 import type { CorpusAuditEntry, CorpusVerdict, ParsedBlogPost } from './types.js';
-import { wordCount } from './utils.js';
+import { titleKey, wordCount } from './utils.js';
 
 /**
  * Corpus audit — the ASEO skill's blog verdicts applied to every published post:
@@ -112,7 +112,19 @@ export function auditPosts(posts: readonly ParsedBlogPost[], options: AuditOptio
     now: options.now || new Date(),
     staleAfterDays: options.staleAfterDays ?? 365,
   };
-  return posts.map((p) => auditPost(p, context)).sort((a, b) => (a.verdict === b.verdict ? a.slug.localeCompare(b.slug) : a.verdict === 'BLOCK' ? -1 : b.verdict === 'BLOCK' ? 1 : a.verdict === 'FIX' ? -1 : 1));
+  const titleCounts = new Map<string, number>();
+  for (const post of posts) {
+    const key = titleKey(post.title);
+    if (key) titleCounts.set(key, (titleCounts.get(key) || 0) + 1);
+  }
+  return posts.map((post) => {
+    const entry = auditPost(post, context);
+    if ((titleCounts.get(titleKey(post.title)) || 0) > 1) {
+      entry.issues.push('duplicate article title; consolidate or distinguish the pages');
+      if (entry.verdict === 'SHIP') entry.verdict = 'FIX';
+    }
+    return entry;
+  }).sort((a, b) => (a.verdict === b.verdict ? a.slug.localeCompare(b.slug) : a.verdict === 'BLOCK' ? -1 : b.verdict === 'BLOCK' ? 1 : a.verdict === 'FIX' ? -1 : 1));
 }
 
 /** Slugs the audit says must not appear in public surfaces — feed the discovery/RSS `exclude`. */

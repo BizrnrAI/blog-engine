@@ -120,6 +120,12 @@ export function validateBlogEngineRuntime(runtime: BlogEngineRuntime): string[] 
       problems.push('gsc.requireQuerySource must be a boolean when set');
     }
   }
+  if (config.indexing?.requireCanonicalHtml !== undefined && typeof config.indexing.requireCanonicalHtml !== 'boolean') {
+    problems.push('indexing.requireCanonicalHtml must be a boolean when set');
+  }
+  if (config.content?.requireFreshTopic !== undefined && typeof config.content.requireFreshTopic !== 'boolean') {
+    problems.push('content.requireFreshTopic must be a boolean when set');
+  }
   if (config.image?.og && config.image.og.enabled !== false) {
     if (!config.image.og.width || !config.image.og.height) problems.push('image.og.width/height are required unless image.og.enabled is false');
   }

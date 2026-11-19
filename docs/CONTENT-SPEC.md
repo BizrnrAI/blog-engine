@@ -32,12 +32,10 @@ transparent scoping, disclosed authorship).
    40–60-word answer paragraph before elaborating. This mirrors how People
    Also Ask and AI answer engines chunk content: heading = query,
    first paragraph = extractable answer.
-4. **Exactly one citable blockquote** (`> `), 134–167 words (validator accepts
-   90–220), self-contained with concrete scope (who/where/conditions), units,
-   an explicit statement of what it does *not* cover, and the timeframe
-   "as of <month year>". No dangling pronouns, no "as above". This is the
-   passage an AI assistant can quote verbatim with attribution — give it one
-   obvious candidate.
+4. **One practical takeaway** when `requireCitableBlockquote` is enabled. Use one contiguous
+   Markdown quote, around 134–167 words (the validator accepts 90–220), with scope, a decision or
+   next step, and material limitations. Add an as-of date only when the evidence has a relevant date.
+   This is an editorial convention for readers.
 5. **Tables/lists over prose** wherever the content compares options, steps,
    or trade-offs. Parallel, scannable structure is what gets extracted.
 6. **2–4 internal links** chosen only from the adapter's `internalLinks`
@@ -69,7 +67,13 @@ transparent scoping, disclosed authorship).
 - **Speakable** — pass `speakableSelectors` to the schema builders only for
   selectors your template really renders (machine/visible parity).
 
-## Evidence and demand (v0.5.0, opt-in)
+## Evidence and demand
+
+- **Curated evidence** with `EditorialTopic.evidence` supplies verified facts, examples, and
+  observations approved for publication. Ask for a concrete decision criterion, worked example,
+  or checklist. Clearly identify hypothetical examples and keep evidence near its claims.
+- **Fresh topics** with `content.requireFreshTopic` surface a depleted queue before a model call.
+  Maintain a rolling set of distinct briefs or supply `hooks.deriveTopic` backed by editorial input.
 
 - **Two demand signals** — with `content.requireTwoDemandSignals`, a Search
   Console query becomes a new post only if an independent source (autocomplete

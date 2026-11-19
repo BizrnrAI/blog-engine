@@ -1,32 +1,31 @@
-import { BLOG_CONFIG, blogBasePath, blogPostUrl, getBlogHooks } from './config.js';
+import { BLOG_CONFIG, blogBasePath, blogHubUrl, blogPostUrl, getBlogHooks } from './config.js';
 import { auditPosts } from './audit.js';
 import { getStore } from './store.js';
-import { getGscPageQueries } from './gsc.js';
+import { getGoogleAccessToken, getGscPageQueries, hasGoogleOAuth, inspectGscUrl } from './gsc.js';
+import { liveBlogPageProblems, readBlogHtml } from './live-page.js';
+import { checkSitemapMembership } from './sitemap-health.js';
 import { cannibalizationPairs } from './rank-rescue.js';
 import type { CitationProbe, ParsedBlogPost, Scorecard, ScorecardCheck } from './types.js';
 
-/**
- * Retrieval crawlers — the user agents that fetch a page to ANSWER a question right now, as
- * opposed to training crawlers. Blocking one of these is a silent, total loss of AI citation
- * for that provider, and nothing in a build ever notices.
- */
-export const RETRIEVAL_CRAWLERS = ['OAI-SearchBot', 'ChatGPT-User', 'PerplexityBot', 'Claude-SearchBot', 'Claude-User', 'Googlebot'] as const;
+/** Search and user-directed retrieval agents monitored by the scorecard. */
+export const RETRIEVAL_CRAWLERS = ['OAI-SearchBot', 'ChatGPT-User', 'PerplexityBot', 'Claude-SearchBot', 'Claude-User', 'Googlebot', 'Bingbot'] as const;
 
-async function fetchText(url: string, timeoutMs = 12000): Promise<{ ok: boolean; status: number; text: string }> {
-  const ctl = new AbortController();
-  const t = setTimeout(() => ctl.abort(), timeoutMs);
+async function fetchText(url: string, redirect: RequestRedirect = 'follow'): Promise<{ ok: boolean; status: number; headers: Headers; text: string }> {
   try {
-    const r = await fetch(url, { redirect: 'follow', signal: ctl.signal });
-    return { ok: r.ok, status: r.status, text: r.ok ? await r.text() : '' };
+    const r = await fetch(url, { redirect, signal: AbortSignal.timeout(12_000) });
+    if (!r.ok) await r.body?.cancel();
+    return { ok: r.ok, status: r.status, headers: r.headers, text: r.ok ? await readBlogHtml(r) : '' };
   } catch {
-    return { ok: false, status: 0, text: '' };
-  } finally {
-    clearTimeout(t);
+    return { ok: false, status: 0, headers: new Headers(), text: '' };
   }
 }
 
 /** Is this user agent disallowed from the blog path by robots.txt? */
 export function crawlerBlocked(robotsTxt: string, userAgent: string, path: string): boolean {
+  return crawlerPolicy(robotsTxt, userAgent)(path);
+}
+
+function crawlerPolicy(robotsTxt: string, userAgent: string): (path: string) => boolean {
   type Rule = { allow: boolean; path: string };
   const groups: Array<{ agents: string[]; rules: Rule[] }> = [];
   let group: (typeof groups)[number] | undefined;
@@ -48,20 +47,18 @@ export function crawlerBlocked(robotsTxt: string, userAgent: string, path: strin
   const ua = userAgent.toLowerCase();
   const specificity = (agents: string[]) => Math.max(-1, ...agents.map((agent) => agent === '*' ? 0 : ua.includes(agent) ? agent.length : -1));
   const best = Math.max(-1, ...groups.map((g) => specificity(g.agents)));
-  if (best < 0) return false;
-  let winningLength = -1;
-  let allowed = true;
-  for (const rule of groups.filter((g) => specificity(g.agents) === best).flatMap((g) => g.rules)) {
+  if (best < 0) return () => false;
+  const rules = groups.filter((g) => specificity(g.agents) === best).flatMap((g) => g.rules).map((rule) => {
     const anchored = rule.path.endsWith('$');
-    const pattern = (anchored ? rule.path.slice(0, -1) : rule.path).split('*').map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.*');
-    if (!new RegExp('^' + pattern + (anchored ? '$' : '')).test(path)) continue;
-    const length = rule.path.replace(/[*$]/g, '').length;
-    if (length > winningLength || length === winningLength && rule.allow) {
-      winningLength = length;
-      allowed = rule.allow;
-    }
-  }
-  return !allowed;
+    const pattern = (anchored ? rule.path.slice(0, -1) : rule.path).split('*')
+      .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.*');
+    return {
+      matcher: new RegExp('^' + pattern + (anchored ? '$' : '')),
+      length: rule.path.replace(/[*$]/g, '').length,
+      allow: rule.allow,
+    };
+  }).sort((a, b) => b.length - a.length || Number(b.allow) - Number(a.allow));
+  return (path) => rules.find((rule) => rule.matcher.test(path))?.allow === false;
 }
 
 /**
@@ -69,39 +66,48 @@ export function crawlerBlocked(robotsTxt: string, userAgent: string, path: strin
  * content is in the RAW HTML. A build gate proves a page compiles; only this proves it renders,
  * returns 200, and exposes its answer before any JavaScript runs.
  */
-async function liveProbeChecks(posts: readonly ParsedBlogPost[], siteUrl: string, base: string): Promise<ScorecardCheck[]> {
+async function liveProbeChecks(posts: readonly ParsedBlogPost[], siteUrl: string): Promise<ScorecardCheck[]> {
   const checks: ScorecardCheck[] = [];
-  const sorted = [...posts].sort((a, b) => (a.publishedAt || '').localeCompare(b.publishedAt || ''));
+  const sorted = [...posts].sort((a, b) => (a.publishedAt || '').localeCompare(b.publishedAt || '') || a.slug.localeCompare(b.slug));
   const newest = sorted[sorted.length - 1];
   const targets: Array<{ name: string; url: string }> = [
-    { name: 'live:hub', url: `${siteUrl}${base}` },
+    { name: 'live:hub', url: blogHubUrl() },
     { name: 'live:feed', url: `${siteUrl}${BLOG_CONFIG.rss.path}` },
     ...(sorted[0] ? [{ name: 'live:oldest-post', url: `${blogPostUrl(sorted[0].slug)}` }] : []),
     ...(newest && sorted.length > 1 ? [{ name: 'live:newest-post', url: `${blogPostUrl(newest.slug)}` }] : []),
   ];
-  let newestHtml = '';
+  let latestPage: Awaited<ReturnType<typeof fetchText>> | undefined;
   for (const target of targets) {
-    const res = await fetchText(target.url);
-    if (target.name === 'live:newest-post' || (target.name === 'live:oldest-post' && sorted.length === 1)) newestHtml = res.text;
+    const res = await fetchText(target.url, 'manual');
+    if (target.name === 'live:newest-post' || (target.name === 'live:oldest-post' && sorted.length === 1)) latestPage = res;
     checks.push({
       name: target.name,
       status: res.ok ? 'pass' : 'fail',
       detail: `${target.url} → ${res.status || 'unreachable'}`,
     });
   }
-  // Pre-JavaScript extractability of the passage an assistant would quote.
-  if (newest && newestHtml) {
-    const needle = (newest.answer || '').split(/\s+/).slice(0, 8).join(' ');
-    const present = needle.length > 12 && newestHtml.includes(needle);
-    checks.push({
-      name: 'answer-pre-js',
-      status: present ? 'pass' : 'fail',
-      detail: present
-        ? `quick answer present in raw HTML for /${newest.slug}`
-        : `quick answer NOT in raw HTML for /${newest.slug} — answer engines cannot extract it`,
-    });
+  if (newest && latestPage?.ok) {
+    const url = blogPostUrl(newest.slug);
+    const errors = liveBlogPageProblems(url, latestPage, latestPage.text, { requireCanonicalHtml: true, title: newest.title });
+    checks.push({ name: 'canonical-article', status: errors.length ? 'fail' : 'pass', detail: errors.join(', ') || url });
+    const answerMissing = !newest.answer || liveBlogPageProblems(url, latestPage, latestPage.text, { answer: newest.answer })
+      .includes('published answer missing from readable HTML');
+    checks.push({ name: 'answer-pre-js', status: answerMissing ? 'fail' : 'pass', detail: answerMissing
+      ? `published answer missing from readable HTML for ${url}`
+      : `published answer present in readable HTML for ${url}` });
   } else if (newest) {
     checks.push({ name: 'answer-pre-js', status: 'na', detail: 'post HTML unavailable' });
+  }
+  if (newest) {
+    const url = blogPostUrl(newest.slug);
+    const match = await checkSitemapMembership(url, [BLOG_CONFIG.gsc.sitemap, ...(BLOG_CONFIG.gsc.sitemaps ?? [])]);
+    checks.push({
+      name: 'sitemap-discovery',
+      status: match.found ? 'pass' : match.complete ? 'fail' : 'warn',
+      detail: match.found ? `newest article found: ${url}` : match.complete
+        ? `newest article missing from configured sitemaps: ${url}`
+        : `sitemap probe incomplete and newest article was not found: ${url}`,
+    });
   }
   return checks;
 }
@@ -118,8 +124,10 @@ export interface ScorecardOptions {
   liveProbe?: boolean;
   /** Fail when a blog PR has been open longer than this (default 48h). */
   maxPrAgeHours?: number;
-  /** How many posts form the fixed index-coverage cohort (default 25). */
+  /** How many posts form the default alphabetical index-coverage sample (default 25). */
   indexCohortSize?: number;
+  /** Pin a stable coverage cohort to these slugs instead of the default sample. */
+  indexSlugs?: readonly string[];
   /** GitHub "owner/repo" for workflow-run checks; needs GITHUB_TOKEN (actions:read). */
   repo?: string;
   /** Workflow file names to check, e.g. ['autoblog.yml', 'blog-indexing.yml', 'blog-refresh.yml']. */
@@ -138,6 +146,7 @@ async function checkWorkflows(repo: string, workflows: string[]): Promise<Scorec
   for (const w of workflows) {
     try {
       const r = await fetch(`https://api.github.com/repos/${repo}/actions/workflows/${encodeURIComponent(w)}/runs?per_page=5&status=completed`, {
+        signal: AbortSignal.timeout(12_000),
         headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'bizrnr-blog-engine' },
       });
       if (!r.ok) {
@@ -196,20 +205,30 @@ export async function runScorecard(root: string, options: ScorecardOptions = {})
   const site = BLOG_CONFIG.identity.siteHost;
 
   // 1. cadence — read through the store so a database-backed site is measured the same way.
-  const storedPosts = await getStore(root).listPosts();
+  const today = now.toISOString().slice(0, 10);
+  const storedPosts = (await getStore(root).listPosts()).filter((post) => (!post.status || post.status === 'published') && (!post.publishedAt || post.publishedAt.slice(0, 10) <= today));
   const latest = storedPosts
-    .map((p) => Date.parse(p.updatedAt || p.publishedAt))
-    .filter((t) => !Number.isNaN(t))
+    .map((p) => Date.parse(p.publishedAt))
+    .filter((t) => Number.isFinite(t) && t <= now.getTime())
     .sort((a, b) => b - a)[0];
   const cadence = options.expectedCadenceDays ?? 7;
-  if (!latest) checks.push({ name: 'cadence', status: 'warn', detail: 'no dated posts found' });
+  if (latest === undefined) checks.push({ name: 'cadence', status: 'warn', detail: 'no dated posts found' });
   else {
     const age = (now.getTime() - latest) / 864e5;
     checks.push({
       name: 'cadence',
       status: age > cadence * 3 ? 'fail' : age > cadence * 1.5 ? 'warn' : 'pass',
-      detail: `latest post ${Math.round(age)} days ago (expected every ~${cadence})`,
+      detail: `latest new post ${Math.round(age)} days ago (expected every ~${cadence})`,
     });
+  }
+
+  if (cadence === 1) {
+    const dates = new Set(storedPosts.map((post) => post.publishedAt.slice(0, 10)));
+    const completedDays = Array.from({ length: 7 }, (_, i) => new Date(Date.parse(today) - (i + 1) * 864e5).toISOString().slice(0, 10));
+    const gaps = completedDays.filter((date) => !dates.has(date));
+    checks.push({ name: 'daily-publication', status: gaps.length ? 'fail' : 'pass', detail: gaps.length
+      ? `${7 - gaps.length}/7 completed UTC days had a new post. Missing: ${gaps.join(', ')}`
+      : 'all 7 completed UTC days had a new post' });
   }
 
   // 2. corpus audit
@@ -227,7 +246,7 @@ export async function runScorecard(root: string, options: ScorecardOptions = {})
     const feedUrl = `${BLOG_CONFIG.identity.siteUrl}${BLOG_CONFIG.rss.path}`;
     const r = await fetch(feedUrl, { redirect: 'follow', signal: AbortSignal.timeout(12_000) });
     const text = r.ok ? await r.text() : '';
-    const items = (text.match(/<item>/g) || []).length;
+    const items = (text.match(/<item(?:[\s>])/g) || []).length;
     checks.push({ name: 'feed', status: r.ok && items > 0 ? 'pass' : 'fail', detail: `${feedUrl} → ${r.status}, ${items} items` });
   } catch (err) {
     checks.push({ name: 'feed', status: 'fail', detail: err instanceof Error ? err.message : String(err) });
@@ -242,11 +261,18 @@ export async function runScorecard(root: string, options: ScorecardOptions = {})
   // 5. live probe + retrieval access
   const parsed = storedPosts;
   if (options.liveProbe !== false) {
-    checks.push(...(await liveProbeChecks(parsed, BLOG_CONFIG.identity.siteUrl, blogBasePath())));
+    checks.push(...(await liveProbeChecks(parsed, BLOG_CONFIG.identity.siteUrl)));
     const robots = await fetchText(`${BLOG_CONFIG.identity.siteUrl}/robots.txt`);
-    if (!robots.ok) checks.push({ name: 'retrieval-crawlers', status: 'na', detail: `robots.txt → ${robots.status || 'unreachable'}` });
+    if (!robots.ok) checks.push({
+      name: 'retrieval-crawlers', status: [404, 410].includes(robots.status) ? 'na' : 'warn',
+      detail: `robots.txt → ${robots.status || 'unreachable'}`,
+    });
     else {
-      const blockedUas = RETRIEVAL_CRAWLERS.filter((ua) => crawlerBlocked(robots.text, ua, `${blogBasePath()}/`));
+      const pages = [new URL(blogHubUrl()).pathname, ...parsed.map((post) => new URL(blogPostUrl(post.slug)).pathname)];
+      const blockedUas = RETRIEVAL_CRAWLERS.flatMap((ua) => {
+        const blocked = pages.find(crawlerPolicy(robots.text, ua));
+        return blocked ? [`${ua} (${blocked})`] : [];
+      });
       checks.push({
         name: 'retrieval-crawlers',
         status: blockedUas.length ? 'fail' : 'pass',
@@ -255,30 +281,44 @@ export async function runScorecard(root: string, options: ScorecardOptions = {})
     }
   }
 
-  // 5b. index coverage over a FIXED cohort, so "not indexed" and "not checked" stay distinct.
-  const inspect = getBlogHooks().inspectUrl;
-  if (inspect && parsed.length) {
-    const cohort = [...parsed].sort((a, b) => a.slug.localeCompare(b.slug)).slice(0, options.indexCohortSize ?? 25);
+  // 5b. Index coverage records indexed, unindexed and unavailable responses.
+  let token: Promise<string> | undefined;
+  const inspect = getBlogHooks().inspectUrl ?? (hasGoogleOAuth()
+    ? async ({ url }: { url: string }) => inspectGscUrl(url, await (token ??= getGoogleAccessToken()))
+    : undefined);
+  const cohort = options.indexSlugs?.length
+    ? [...new Set(options.indexSlugs)]
+    : [...parsed].sort((a, b) => a.slug.localeCompare(b.slug)).slice(0, options.indexCohortSize ?? 25).map((post) => post.slug);
+  if (inspect && cohort.length) {
     const states = new Map<string, number>();
     let unavailable = 0;
-    for (const post of cohort) {
-      try {
-        const result = await inspect({ url: blogPostUrl(post.slug) });
-        if (!result) { unavailable++; continue; }
-        states.set(result.coverageState, (states.get(result.coverageState) || 0) + 1);
-      } catch {
-        unavailable++;
-      }
+    let indexed = 0;
+    for (let i = 0; i < cohort.length; i += 4) {
+      await Promise.all(cohort.slice(i, i + 4).map(async (slug) => {
+        try {
+          const url = blogPostUrl(slug);
+          const result = await inspect({ url });
+          if (!result?.coverageState?.trim()) { unavailable++; return; }
+          const canonicalMismatch = result.googleCanonical && result.googleCanonical !== url;
+          const state = canonicalMismatch ? 'Google-selected canonical differs' : result.coverageState;
+          states.set(state, (states.get(state) || 0) + 1);
+          const isIndexed = result.verdict
+            ? result.verdict === 'PASS'
+            : /^(?:submitted and indexed|indexed(?:,|$)|indexed though)/i.test(result.coverageState);
+          if (!canonicalMismatch && isIndexed) indexed++;
+        } catch {
+          unavailable++;
+        }
+      }));
     }
     const checked = cohort.length - unavailable;
-    const indexed = [...states.entries()].filter(([k]) => /indexed/i.test(k) && !/not indexed|excluded/i.test(k)).reduce((s, [, v]) => s + v, 0);
     checks.push({
       name: 'index-coverage',
       status: checked === 0 ? 'na' : indexed === 0 ? 'fail' : indexed < checked * 0.8 ? 'warn' : 'pass',
-      detail: checked === 0 ? 'inspection unavailable for the whole cohort' : `${indexed}/${checked} of a fixed ${cohort.length}-post cohort indexed (${[...states].map(([k, v]) => `${k}: ${v}`).join('; ')})`,
+      detail: checked === 0 ? 'inspection unavailable for the whole cohort' : `${indexed}/${checked} inspected URLs indexed across ${cohort.length} selected URLs (${[...states].sort().map(([k, v]) => `${k}: ${v}`).join('; ')}, ${unavailable} unavailable)`,
     });
   } else {
-    checks.push({ name: 'index-coverage', status: 'na', detail: inspect ? 'no posts' : 'no inspectUrl hook' });
+    checks.push({ name: 'index-coverage', status: 'na', detail: inspect ? 'no posts' : 'no inspectUrl hook or Google OAuth credentials' });
   }
 
   // 5. demand (Search Console, 28d)
@@ -322,10 +362,27 @@ export async function runScorecard(root: string, options: ScorecardOptions = {})
       const probes: CitationProbe[] = await probe({ queries: options.citationQueries, siteHost: site });
       const available = probes.filter((p) => p.available);
       const mentioned = available.filter((p) => p.mentioned).length;
+      const canonicalUrls = new Set(parsed.map((post) => blogPostUrl(post.slug)));
+      const cited = new Set<string>();
+      let citingProbes = 0;
+      for (const result of available) {
+        const matches = result.citedUrls.filter((url) => {
+          try {
+            const target = new URL(url);
+            target.hash = '';
+            target.search = '';
+            return canonicalUrls.has(target.href);
+          } catch { return false; }
+        });
+        if (matches.length) citingProbes++;
+        matches.forEach((url) => cited.add(url.split(/[?#]/)[0]));
+      }
       checks.push({
         name: 'citations',
-        status: available.length ? 'pass' : 'na',
-        detail: available.length ? `${mentioned}/${available.length} available probes mention ${site}` : 'no provider available',
+        status: !available.length ? 'na' : citingProbes ? 'pass' : 'warn',
+        detail: available.length
+          ? `${citingProbes}/${available.length} available probes cited ${cited.size} distinct blog URLs; ${mentioned} mentioned ${site}`
+          : 'no provider available',
       });
     } catch (err) {
       checks.push({ name: 'citations', status: 'na', detail: err instanceof Error ? err.message : String(err) });

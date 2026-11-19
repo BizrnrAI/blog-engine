@@ -1,10 +1,6 @@
 import type { Scorecard } from './types.js';
-/**
- * Retrieval crawlers — the user agents that fetch a page to ANSWER a question right now, as
- * opposed to training crawlers. Blocking one of these is a silent, total loss of AI citation
- * for that provider, and nothing in a build ever notices.
- */
-export declare const RETRIEVAL_CRAWLERS: readonly ["OAI-SearchBot", "ChatGPT-User", "PerplexityBot", "Claude-SearchBot", "Claude-User", "Googlebot"];
+/** Search and user-directed retrieval agents monitored by the scorecard. */
+export declare const RETRIEVAL_CRAWLERS: readonly ["OAI-SearchBot", "ChatGPT-User", "PerplexityBot", "Claude-SearchBot", "Claude-User", "Googlebot", "Bingbot"];
 /** Is this user agent disallowed from the blog path by robots.txt? */
 export declare function crawlerBlocked(robotsTxt: string, userAgent: string, path: string): boolean;
 /**
@@ -19,8 +15,10 @@ export interface ScorecardOptions {
     liveProbe?: boolean;
     /** Fail when a blog PR has been open longer than this (default 48h). */
     maxPrAgeHours?: number;
-    /** How many posts form the fixed index-coverage cohort (default 25). */
+    /** How many posts form the default alphabetical index-coverage sample (default 25). */
     indexCohortSize?: number;
+    /** Pin a stable coverage cohort to these slugs instead of the default sample. */
+    indexSlugs?: readonly string[];
     /** GitHub "owner/repo" for workflow-run checks; needs GITHUB_TOKEN (actions:read). */
     repo?: string;
     /** Workflow file names to check, e.g. ['autoblog.yml', 'blog-indexing.yml', 'blog-refresh.yml']. */

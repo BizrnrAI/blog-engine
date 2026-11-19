@@ -65,6 +65,7 @@ export async function listExistingPosts(root) {
     return posts.map((p) => ({
         slug: p.slug,
         title: p.title,
+        ...(p.status ? { status: p.status } : {}),
         ...(p.publishedAt ? { date: p.publishedAt.slice(0, 10) } : {}),
     }));
 }

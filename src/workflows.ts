@@ -5,6 +5,8 @@ export interface BlogWorkflowOptions {
   indexCommand?: string;
   /** Website-owned schedule. Omit to use dispatch or the site's external scheduler. */
   generateCron?: string;
+  /** Maximum published posts per UTC date, selected by the website. */
+  dailyTarget?: number;
   /** @deprecated Database indexing uses explicit slugs, never git history. */
   indexSweepCron?: string;
 }
@@ -14,6 +16,11 @@ function schedule(cron?: string): string {
 }
 
 function directWorkflow(kind: 'generate' | 'refresh', options: BlogWorkflowOptions & { refreshCommand?: string; refreshCron?: string }): string {
+  if (options.dailyTarget !== undefined && (!Number.isSafeInteger(options.dailyTarget) || options.dailyTarget < 1)) {
+    throw new Error('dailyTarget must be a positive safe integer');
+  }
+  const dailyTargetEnv = kind === 'generate' && options.dailyTarget !== undefined
+    ? `      BLOG_DAILY_TARGET: "${options.dailyTarget}"\n` : '';
   const command = kind === 'generate'
     ? options.generateCommand || 'npm run blog:generate -- --count="$BLOG_COUNT" --skip-ping'
     : options.refreshCommand || 'npm run blog:refresh -- --max=1';
@@ -43,7 +50,7 @@ jobs:
     timeout-minutes: 30
     env:
       BLOG_REQUIRE_REMOTE_STORE: "1"
-      NEXT_PUBLIC_SITE_ID: ${JSON.stringify(options.defaultSiteId || 'generic-service-business')}
+${dailyTargetEnv}      NEXT_PUBLIC_SITE_ID: ${JSON.stringify(options.defaultSiteId || 'generic-service-business')}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -102,7 +109,10 @@ on:
     inputs:
       slugs:
         description: Published database slugs to submit
-        required: true
+        required: false
+      recent_days:
+        description: Recovery only. UTC days of stored changes to resubmit (1 to 7)
+        required: false
 
 permissions:
   contents: read
@@ -120,9 +130,15 @@ jobs:
           node-version: ${options.nodeVersion || 22}
           cache: npm
       - run: npm ci
+      - name: Require a recovery selection
+        run: test -n "$BLOG_SLUGS" || test -n "$BLOG_RECENT_DAYS"
+        env:
+          BLOG_SLUGS: \${{ inputs.slugs }}
+          BLOG_RECENT_DAYS: \${{ inputs.recent_days }}
       - run: ${options.indexCommand || 'npm run blog:index -- --slugs="$BLOG_SLUGS" --wait-live'}
         env:
           BLOG_SLUGS: \${{ inputs.slugs }}
+          BLOG_RECENT_DAYS: \${{ inputs.recent_days }}
           INDEXNOW_KEY: \${{ secrets.INDEXNOW_KEY }}
           SUPABASE_URL: \${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: \${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

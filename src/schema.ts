@@ -24,7 +24,9 @@ export interface BlogSchemaOptions {
   /** Override the configured canonical trailing-slash policy. */
   trailingSlash?: boolean;
   /** Stable person entity for E-E-A-T, e.g. { id: 'https://example.com/#person', name: 'Jane Doe' }. */
-  author?: { id?: string; name: string; url?: string };
+  author?: { id?: string; name: string; url?: string; type?: 'Person' | 'Organization' };
+  /** Set false when the visible template omits FAQs or you use only article and breadcrumb markup. */
+  includeFaq?: boolean;
   /** Stable organization entity, e.g. { id: 'https://example.com/#organization', name: 'Brand', logo: '/logo.png' }. */
   publisher?: { id?: string; name: string; logo?: string };
   /**
@@ -172,11 +174,13 @@ export function blogPostingSchema(post: ParsedBlogPost, options: BlogSchemaOptio
       : {}),
   };
 
-  const author = options.author || configuredAuthor();
+  const defaultAuthor = configuredAuthor();
+  const byline = post.author?.trim();
+  const author = options.author ?? (byline && byline !== defaultAuthor?.name ? { name: byline } : defaultAuthor);
   if (author) {
     node.author = author.id
       ? { '@id': author.id }
-      : { '@type': 'Person', name: author.name, ...(author.url ? { url: author.url } : {}) };
+      : { '@type': author.type || 'Person', name: author.name, ...(author.url ? { url: absolute(siteUrl, author.url) } : {}) };
   }
   if (options.publisher) {
     node.publisher = options.publisher.id
@@ -222,7 +226,7 @@ export function breadcrumbSchema(
 
 /**
  * The complete per-post graph: BlogPosting + FAQPage (when the post has FAQs)
- * + breadcrumbs. Serialize with JSON.stringify into a single
+ * + breadcrumbs. Serialize with serializeBlogJsonLd into a single
  * <script type="application/ld+json"> tag.
  */
 export function blogPostGraph(post: ParsedBlogPost, options: BlogSchemaOptions = {}): JsonLd {
@@ -240,6 +244,6 @@ export function blogPostGraph(post: ParsedBlogPost, options: BlogSchemaOptions =
       options,
     ),
   ];
-  if (post.faqs.length) graph.push(faqPageSchema(url, post.faqs));
+  if (options.includeFaq !== false && post.faqs.length) graph.push(faqPageSchema(url, post.faqs));
   return { '@context': 'https://schema.org', '@graph': graph };
 }
