@@ -27,6 +27,7 @@ export declare function refreshBlogPost(root: string, slug: string, args?: {
     post: GeneratedBlogPost;
     markdown: string;
     file: string;
+    changed: boolean;
 }>;
 export declare function refreshBlogRun(root: string, options: RefreshRunOptions): Promise<RefreshRunResult>;
 //# sourceMappingURL=refresh.d.ts.map

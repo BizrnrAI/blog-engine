@@ -52,7 +52,7 @@ export function allEditorialTopicsCovered(existing: ExistingPost[]): boolean {
   return EDITORIAL_TOPICS.length > 0 && EDITORIAL_TOPICS.every((seed) => isCovered(seed, existing));
 }
 
-export function pickTopic(existing: ExistingPost[], gscQueries: GscQuery[], offset: number): SeoTopic {
+function pickUncoveredTopic(existing: ExistingPost[], gscQueries: GscQuery[], offset: number, useAllDemand = false): SeoTopic | null {
   const idx = existing.length + offset;
   const topics = getBlogTopics();
   // Cross-promo only makes sense with a partner site to link to. With no backlink configured the
@@ -73,7 +73,7 @@ export function pickTopic(existing: ExistingPost[], gscQueries: GscQuery[], offs
     }
   }
 
-  if (idx % 2 === 0) {
+  if (idx % 2 === 0 || useAllDemand && allEditorialTopicsCovered(existing)) {
     // Optional: answer verification-intent questions before commercial ones. Impressions alone
     // are a poor ranking signal for topic choice — head commercial terms routinely earn many
     // impressions and no clicks, while long-tail verification questions convert and get cited.
@@ -100,26 +100,35 @@ export function pickTopic(existing: ExistingPost[], gscQueries: GscQuery[], offs
     }
   }
 
-  const seed = EDITORIAL_TOPICS[idx % EDITORIAL_TOPICS.length];
+  return null;
+}
+
+function recycledTopic(existing: ExistingPost[], offset: number): SeoTopic {
+  const seed = EDITORIAL_TOPICS[(existing.length + offset) % EDITORIAL_TOPICS.length];
   return { type: 'editorial', ...seed, mustBacklink: false };
 }
 
-/**
- * The topic the engine will actually write about: `hooks.pickTopic` first (a curated,
- * priority-ordered catalog or an external calendar), then `hooks.deriveTopic` when the editorial
- * pool is exhausted, then the built-in rotation. With no hooks this is exactly `pickTopic`.
- */
-export async function resolveTopic(existing: ExistingPost[], gscQueries: GscQuery[], offset: number): Promise<SeoTopic> {
+export function pickTopic(existing: ExistingPost[], gscQueries: GscQuery[], offset: number): SeoTopic {
+  return pickUncoveredTopic(existing, gscQueries, offset) ?? recycledTopic(existing, offset);
+}
+
+interface TopicResolutionOptions { allowCoveredFallback: boolean }
+
+/** Resolve a curated, derived, demand-led, or editorial topic in the adopter's configured rotation. */
+export function resolveTopic(existing: ExistingPost[], gscQueries: GscQuery[], offset: number): Promise<SeoTopic>;
+export function resolveTopic(existing: ExistingPost[], gscQueries: GscQuery[], offset: number, options: TopicResolutionOptions): Promise<SeoTopic | null>;
+export async function resolveTopic(existing: ExistingPost[], gscQueries: GscQuery[], offset: number, options?: TopicResolutionOptions): Promise<SeoTopic | null> {
   const hooks = getBlogHooks();
+  const allowCovered = options?.allowCoveredFallback !== false;
   if (hooks.pickTopic) {
     const picked = await hooks.pickTopic({ existing, gscQueries, offset });
-    if (picked) return picked;
+    if (picked && (allowCovered || !isCovered(picked, existing))) return picked;
   }
   if (hooks.deriveTopic && allEditorialTopicsCovered(existing)) {
     const derived: EditorialTopic = await hooks.deriveTopic({ existing });
-    return { type: 'editorial', ...derived, mustBacklink: false };
+    if (allowCovered || !isCovered(derived, existing)) return { type: 'editorial', ...derived, mustBacklink: false };
   }
-  return pickTopic(existing, gscQueries, offset);
+  return pickUncoveredTopic(existing, gscQueries, offset, !allowCovered) ?? (allowCovered ? recycledTopic(existing, offset) : null);
 }
 
 export function describeTopic(topic: SeoTopic): string {

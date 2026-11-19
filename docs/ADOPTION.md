@@ -62,6 +62,8 @@ export const config: BlogEngineConfig = {
     sitemaps: ['https://acmeplumbing.com/sitemap-blog.xml'],
   },
   indexNow: { key: '<key>' },                  // also host /<key>.txt publicly
+  indexing: { requireCanonicalHtml: true },
+  content: { requireFreshTopic: true },
   text: { provider: 'openrouter', url: 'https://openrouter.ai/api/v1/chat/completions',
           model: 'deepseek/deepseek-v4-flash', maxTokens: 4000, temperature: 0.7 },
   image: { /* copy from examples/sdbg/config.ts and change the colours */ } as never,
@@ -139,7 +141,7 @@ await runBlogGenerateCli({ config, topics, brandPersona, hooks });
 | Command | What it does | Useful flags |
 |---|---|---|
 | `blog:generate` | Write one new post | `--count=N` `--dry-run` `--skip-ping` |
-| `blog:index` | Submit live URLs to IndexNow + GSC | `--slugs=a,b` `--wait-live` |
+| `blog:index` | Submit live URLs and sitemaps | `--slugs=a,b` or `--recent-days=2` |
 | `blog:refresh` | Re-optimize a post already ranking 8–30, or heal the audit backlog | `--slugs=a` `--max=N` `--dry-run` |
 | `blog:audit` | SHIP / FIX / BLOCK for the whole corpus | `--json` `--strict` |
 | `blog:scorecard` | Cadence, corpus, live probes, index coverage, crawler access | `--strict` `--workflows=a.yml,b.yml` |
@@ -214,7 +216,7 @@ And the surfaces around it, all sharing one exclude list so they cannot disagree
 ```ts
 const exclude = blockedSlugs(auditBlogCorpus(process.cwd()));   // or auditPosts(await store.listPosts())
 blogSitemapEntries(posts, { exclude });
-blogHubSitemapEntry(posts);                    // hub lastmod — without it new posts sit undiscovered
+blogHubSitemapEntry(posts);                    // lastmod is optional when the corpus has no known date
 buildBlogLlmsTxt(posts, { exclude });
 buildBlogRss(rssPosts, { root: process.cwd(), exclude });
 ```

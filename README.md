@@ -70,6 +70,8 @@ snapshot/rebuild path or server-rendered blog routes before direct publishing be
 
 ## Quality and reliability
 
+Use Node.js 22 or newer for the shipped engine and its AI SDK.
+
 - Em dashes are forbidden in every post field, including HTML entity spellings. Generated prose
   is repaired deterministically; final persistence checks catch custom-renderer regressions.
 - Answer-first prose, question headings, FAQs, allowlisted internal links, and optional verified
@@ -81,9 +83,10 @@ snapshot/rebuild path or server-rendered blog routes before direct publishing be
   public rows, and bound network waits.
 - Concurrent services isolate each website's runtime. A failure in one site does not stop others.
 - Public URLs must return HTTP 200 at their canonical path before indexing. A redirect is not
-  accepted as proof of publication. Syndication reads metadata from the configured store.
-- Website-owned schedules and limits are the only publishing throttle. There is no engine weekly
-  cap, default publication cron, or `maxPostsPerWeek` setting.
+  accepted as proof of publication. Enable `indexing.requireCanonicalHtml` to verify the HTML
+  self-canonical, stored title, and visible answer before submission.
+- A website can choose one new post per UTC date with `dailyTarget: 1`. The strict daily scorecard
+  reports missed dates, sitemap membership, Google canonical coverage, and grounded article citations.
 
 ASEO improvements follow ordinary search fundamentals: useful evidence, crawlable content,
 internal discovery, accurate dates, and visible-content/schema parity. Exact passage lengths,
@@ -102,6 +105,7 @@ FAQ markup, and `llms.txt` do not guarantee rankings or AI citations.
 | [docs/PROVIDERS.md](docs/PROVIDERS.md) | Provider configuration |
 | [docs/TRAFFIC.md](docs/TRAFFIC.md) | Measurement and content improvement |
 | [docs/UPGRADE-V2.md](docs/UPGRADE-V2.md) | Cutover, existing-post repair, and deployment limits |
+| [docs/AUDIT-2026-11.md](docs/AUDIT-2026-11.md) | November research, audit, and rollout proof points |
 | [docs/AUDIT-2026-09.md](docs/AUDIT-2026-09.md) | Repository review findings and verification |
 | [CHANGELOG.md](CHANGELOG.md) | Release changes |
 

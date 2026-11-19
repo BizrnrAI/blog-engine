@@ -98,6 +98,7 @@ function runtimeFor(brief) {
 }
 export const sites = BRIEFS.map((brief) => ({
     id: brief.id,
+    dailyTarget: 1,
     runtime: () => runtimeFor(brief),
     ...(brief.days ? { days: brief.days } : {}),
 }));

@@ -5,6 +5,8 @@ export interface BlogWorkflowOptions {
     indexCommand?: string;
     /** Website-owned schedule. Omit to use dispatch or the site's external scheduler. */
     generateCron?: string;
+    /** Maximum published posts per UTC date, selected by the website. */
+    dailyTarget?: number;
     /** @deprecated Database indexing uses explicit slugs, never git history. */
     indexSweepCron?: string;
 }

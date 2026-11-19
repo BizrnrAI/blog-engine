@@ -25,6 +25,8 @@ export interface DiscoveryOptions {
   trailingSlash?: boolean;
   /** Slugs to omit from every public surface (e.g. corpus-audit BLOCK verdicts). */
   exclude?: readonly string[];
+  /** Clock for public date filtering. Defaults to the current time. */
+  now?: Date;
 }
 
 function resolveSiteUrl(options: DiscoveryOptions): string {
@@ -52,7 +54,7 @@ function publicUrl(options: DiscoveryOptions, slug?: string): string {
 
 export interface SitemapEntry {
   loc: string;
-  lastmod: string;
+  lastmod?: string;
   priority?: number;
 }
 
@@ -67,28 +69,35 @@ export function excludeBlocked<T extends { slug: string }>(posts: readonly T[], 
   return posts.filter((p) => !blocked.has(p.slug));
 }
 
-/**
- * The hub's own sitemap entry, with lastmod = the newest post's date.
- *
- * Without it a crawler has no signal that the index page changed, so newly linked posts can sit
- * undiscovered for days even though the sitemap lists them — the single most expensive discovery
- * defect in the playbook's field notes.
- */
-export function blogHubSitemapEntry(posts: readonly ParsedBlogPost[], options: DiscoveryOptions = {}): SitemapEntry {
-  const newest = excludeBlocked(posts, options.exclude)
-    .map((p) => p.updatedAt || p.publishedAt)
-    .filter(Boolean)
-    .sort()
-    .pop();
-  return { loc: publicUrl(options), lastmod: newest || new Date().toISOString().slice(0, 10) };
+function publicPosts(posts: readonly ParsedBlogPost[], options: DiscoveryOptions): ParsedBlogPost[] {
+  const now = (options.now ?? new Date()).getTime();
+  return excludeBlocked(posts, options.exclude).filter((post) =>
+    (!post.status || post.status === 'published') && !(Date.parse(post.publishedAt) > now));
 }
 
-/** One <url> entry per post with lastmod = updatedAt (honest dates only). */
+function lastModified(post: ParsedBlogPost, now: number): string | undefined {
+  const published = Date.parse(post.publishedAt);
+  const modified = Date.parse(post.updatedAt ?? '');
+  if (Number.isFinite(modified) && modified <= now && (!(modified < published))) return post.updatedAt;
+  if (Number.isFinite(published) && published <= now) return post.publishedAt;
+  return undefined;
+}
+
+/** Include lastmod for the hub when the public corpus contains a known modification date. */
+export function blogHubSitemapEntry(posts: readonly ParsedBlogPost[], options: DiscoveryOptions = {}): SitemapEntry {
+  const now = (options.now ?? new Date()).getTime();
+  const dates = publicPosts(posts, options).flatMap((post) => lastModified(post, now) || []);
+  const newest = dates.sort((a, b) => Date.parse(b) - Date.parse(a))[0];
+  return { loc: publicUrl(options), ...(newest ? { lastmod: newest } : {}) };
+}
+
+/** One canonical entry per public post. Omit unknown dates and ignore invalid refresh dates. */
 export function blogSitemapEntries(posts: readonly ParsedBlogPost[], options: DiscoveryOptions = {}): SitemapEntry[] {
-  return excludeBlocked(posts, options.exclude).map((post) => ({
-    loc: publicUrl(options, post.slug),
-    lastmod: post.updatedAt || post.publishedAt,
-  }));
+  const now = (options.now ?? new Date()).getTime();
+  return publicPosts(posts, options).map((post) => {
+    const lastmod = lastModified(post, now);
+    return { loc: publicUrl(options, post.slug), ...(lastmod ? { lastmod } : {}) };
+  });
 }
 
 export interface LlmsTxtOptions extends DiscoveryOptions {
@@ -119,7 +128,7 @@ export function buildBlogLlmsTxt(posts: readonly ParsedBlogPost[], options: Llms
     `## ${options.heading || 'Blog'}`,
     '',
     `- RSS feed: ${siteUrl}${feedPath}`,
-    ...excludeBlocked(posts, options.exclude).slice(0, options.limit ?? 50).map(
+    ...publicPosts(posts, options).slice(0, options.limit ?? 50).map(
       (post) => `- [${post.title}](${publicUrl(options, post.slug)}): ${post.description}`,
     ),
   ];
@@ -133,7 +142,7 @@ export function buildBlogLlmsTxt(posts: readonly ParsedBlogPost[], options: Llms
  */
 export function relatedPosts(post: ParsedBlogPost, posts: readonly ParsedBlogPost[], limit = 3, exclude?: readonly string[]): ParsedBlogPost[] {
   const tags = new Set(post.tags.map((t) => t.toLowerCase()));
-  return excludeBlocked(posts, exclude)
+  return publicPosts(posts, { exclude })
     .filter((p) => p.slug !== post.slug)
     .map((p) => {
       const overlap = p.tags.filter((t) => tags.has(t.toLowerCase())).length;

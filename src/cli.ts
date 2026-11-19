@@ -1,6 +1,6 @@
 import { BlogRunError } from './run-error.js';
 import { writeFileSync } from 'node:fs';
-import { BLOG_CONFIG, blogBasePath, blogPostUrl, configureBlogEngine, getBlogHooks } from './config.js';
+import { BLOG_CONFIG, blogBasePath, blogPostUrl, configureBlogEngine } from './config.js';
 import { generateBlogRun } from './publisher.js';
 import { refreshBlogRun } from './refresh.js';
 import { getStore } from './store.js';
@@ -9,8 +9,7 @@ import { generateFanoutPassages } from './fanout.js';
 import { formatScorecard, postScorecard, runScorecard } from './scorecard.js';
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { getGoogleAccessToken, pingGscSitemap } from './gsc.js';
-import { pingIndexNow } from './indexing.js';
+import { submitBlogDiscovery } from './indexing.js';
 import type { BlogEngineRuntime, GenerateRunResult } from './types.js';
 
 function parseArg(name: string, argv = process.argv): string | undefined {
@@ -31,7 +30,6 @@ export function cleanBlogSlugs(raw: string | undefined): string[] {
 }
 
 export { waitUntilBlogUrlsLive } from './indexing.js';
-import { waitUntilBlogUrlsLive } from './indexing.js';
 
 function requireRemoteStore(runtime: BlogEngineRuntime): void {
   if (process.env.BLOG_REQUIRE_REMOTE_STORE !== '1') return;
@@ -45,11 +43,13 @@ export async function runBlogGenerateCli(runtime: BlogEngineRuntime, root = proc
   const dryRun = process.argv.includes('--dry-run') || process.env.DRY_RUN === '1';
   const count = Math.max(1, Number(parseArg('count') || '1') || 1);
   const skipPing = process.argv.includes('--skip-ping') || process.env.SKIP_PING === '1';
+  const dailyTargetArg = parseArg('daily-target') ?? process.env.BLOG_DAILY_TARGET;
+  const dailyTarget = dailyTargetArg ? Number(dailyTargetArg) : undefined;
 
   configureBlogEngine(runtime);
   requireRemoteStore(runtime);
   let result: GenerateRunResult;
-  try { result = await generateBlogRun(root, { count, dryRun, skipPing }); }
+  try { result = await generateBlogRun(root, { count, dryRun, skipPing, dailyTarget }); }
   catch (error) {
     if (error instanceof BlogRunError && process.env.GITHUB_OUTPUT && error.written.length) writeFileSync(process.env.GITHUB_OUTPUT, `slugs=${error.written.join(',')}\n`, { flag: 'a' });
     throw error;
@@ -59,22 +59,44 @@ export async function runBlogGenerateCli(runtime: BlogEngineRuntime, root = proc
     writeFileSync(process.env.GITHUB_OUTPUT, `slugs=${result.written.join(',')}\n`, { flag: 'a' });
   }
 
+  if (result.skipped) console.log(`[blog-generate] ${result.skipped}`);
+
   if (!dryRun && result.written.length === 0 && !result.skipped) {
     process.exitCode = 1;
   }
   return result;
 }
 
-export async function runBlogIndexPublishedCli(runtime: BlogEngineRuntime): Promise<void> {
+export async function runBlogIndexPublishedCli(runtime: BlogEngineRuntime, root = process.cwd()): Promise<void> {
   configureBlogEngine(runtime);
   requireRemoteStore(runtime);
 
-  const slugs = cleanBlogSlugs(parseArg('slugs') || process.env.BLOG_SLUGS);
+  let slugs = cleanBlogSlugs(parseArg('slugs') || process.env.BLOG_SLUGS);
   const dryRun = process.argv.includes('--dry-run') || process.env.DRY_RUN === '1';
 
   if (process.env.BLOG_ENGINE_DISABLED === '1') {
     console.log('[blog-indexing] BLOG_ENGINE_DISABLED=1 - exiting.');
     return;
+  }
+
+  const recentDaysArg = parseArg('recent-days') ?? (process.env.BLOG_RECENT_DAYS || undefined);
+  let posts;
+  if (recentDaysArg !== undefined) {
+    if (slugs.length) throw new Error('Choose either --slugs or --recent-days');
+    const days = Number(recentDaysArg);
+    if (!Number.isInteger(days) || days < 1 || days > 7) throw new Error('--recent-days must be between 1 and 7');
+    const day = 86_400_000;
+    const today = Math.floor(Date.now() / day) * day;
+    const cutoff = today - (days - 1) * day;
+    const store = getStore(root);
+    if (store.publicationStatus && store.publicationStatus !== 'published') throw new Error('Indexing recovery requires a published corpus');
+    posts = await store.listPosts();
+    slugs = posts.filter((post) => {
+      if (post.status && post.status !== 'published') return false;
+      const published = Date.parse(post.publishedAt.slice(0, 10));
+      const changed = Date.parse((post.updatedAt || post.publishedAt).slice(0, 10));
+      return published <= today && changed >= cutoff && changed <= today;
+    }).map((post) => post.slug);
   }
 
   if (!slugs.length) {
@@ -89,36 +111,16 @@ export async function runBlogIndexPublishedCli(runtime: BlogEngineRuntime): Prom
     return;
   }
 
-  await waitUntilBlogUrlsLive(urls);
-
-  await pingIndexNow(urls);
-
-  // A submitSitemap hook owns its own auth, so it needs no OAuth token (pingGscSitemap routes to it).
-  if (getBlogHooks().submitSitemap) {
-    await pingGscSitemap(null);
-  } else if (
-    process.env.GOOGLE_OAUTH_CLIENT_ID &&
-    process.env.GOOGLE_OAUTH_CLIENT_SECRET &&
-    process.env.GOOGLE_OAUTH_REFRESH_TOKEN
-  ) {
-    try {
-      await pingGscSitemap(await getGoogleAccessToken());
-    } catch (err) {
-      console.warn('[blog-indexing] GSC sitemap resubmit skipped:', err instanceof Error ? err.message : String(err));
-    }
+  if (runtime.config.indexing?.requireCanonicalHtml) {
+    const store = getStore(root);
+    if (store.publicationStatus && store.publicationStatus !== 'published') throw new Error('Indexing requires a published corpus');
+    posts ??= await store.listPosts();
+    const today = new Date().toISOString().slice(0, 10);
+    const published = new Set(posts.filter((post) => (!post.status || post.status === 'published') && post.publishedAt && post.publishedAt.slice(0, 10) <= today).map((post) => post.slug));
+    const missing = slugs.filter((slug) => !published.has(slug));
+    if (missing.length) throw new Error(`No published rows found for: ${missing.join(', ')}`);
   }
-
-  console.log(`[blog-indexing] Submitted ${urls.length} live URL(s): ${urls.join(', ')}`);
-
-  // Distribution seam: syndication runs only after URLs are live + submitted, and never blocks.
-  const afterIndexed = getBlogHooks().afterIndexed;
-  if (afterIndexed) {
-    try {
-      await afterIndexed({ urls, slugs });
-    } catch (err) {
-      console.warn('[blog-indexing] afterIndexed hook failed (publish unaffected):', err instanceof Error ? err.message : String(err));
-    }
-  }
+  await submitBlogDiscovery(slugs, { posts, notify: recentDaysArg === undefined });
 }
 
 /**
@@ -181,6 +183,7 @@ export async function runBlogScorecardCli(runtime: BlogEngineRuntime, root = pro
     repo: parseArg('repo') || process.env.GITHUB_REPOSITORY,
     workflows: (parseArg('workflows') || '').split(',').map((s) => s.trim()).filter(Boolean),
     expectedCadenceDays: Number(parseArg('cadence-days') || '7') || 7,
+    indexSlugs: cleanBlogSlugs(parseArg('index-slugs')),
     citationQueries: (parseArg('queries') || '').split('|').map((s) => s.trim()).filter(Boolean),
   });
   console.log(process.argv.includes('--json') ? JSON.stringify(card, null, 2) : formatScorecard(card));

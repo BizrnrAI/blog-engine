@@ -6,6 +6,11 @@ export function norm(s: string): string {
     .trim();
 }
 
+/** Compare titles across punctuation and case while retaining non-Latin words. */
+export function titleKey(title: string): string {
+  return (title.normalize('NFKC').toLowerCase().match(/[\p{L}\p{N}]+/gu) || []).join(' ');
+}
+
 export function slugify(s: string): string {
   return norm(s)
     .replace(/\b(the|a|an|in|of|for|to|your|and|with|how)\b/g, '')

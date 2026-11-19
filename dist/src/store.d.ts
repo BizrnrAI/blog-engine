@@ -1,4 +1,4 @@
-import type { BlogStore, CoverImage, GeneratedBlogPost } from './types.js';
+import type { ExistingPost, BlogStore, CoverImage, GeneratedBlogPost } from './types.js';
 /**
  * The content store is the engine's only route to persisted posts and assets.
  *
@@ -14,11 +14,7 @@ export declare function createFileStore(root: string): BlogStore;
 /** The configured store: `hooks.store` when a site supplies one, otherwise the filesystem. */
 export declare function getStore(root: string): BlogStore;
 /** Existing posts in the shape topic rotation and the cadence guard want. */
-export declare function listExistingPosts(root: string): Promise<Array<{
-    slug: string;
-    title: string;
-    date?: string;
-}>>;
+export declare function listExistingPosts(root: string): Promise<ExistingPost[]>;
 /**
  * Write a hero/OG asset through the store and return the URL the post should reference.
  * File stores return the same public path they always did; remote stores return a CDN URL.

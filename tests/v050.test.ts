@@ -123,7 +123,8 @@ test('fanout: question-like query filter, validation, and generation via hook', 
 });
 
 // ---- scorecard ----
-test('scorecard: cadence/corpus/feed/citations checks with N/A for unavailable sources; strict summary', async () => {
+test('scorecard: cadence/corpus/feed/citations checks with N/A for unavailable sources; strict summary', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => new Response(null, { status: 404 }));
   configureTestEngine({}, { probeCitations: async () => [{ provider: 'x', probeType: 'grounded', available: true, mentioned: true, citedUrls: [], checkedAt: 'now' }, { provider: 'y', probeType: 'grounded', available: false, mentioned: false, citedUrls: [], checkedAt: 'now' }] });
   const root = mkdtempSync(join(tmpdir(), 'blog-engine-score-'));
   mkdirSync(join(root, 'src/content/blog'), { recursive: true });
@@ -132,9 +133,10 @@ test('scorecard: cadence/corpus/feed/citations checks with N/A for unavailable s
   const by = Object.fromEntries(card.checks.map((c) => [c.name, c]));
   assert.equal(by.cadence.status, 'pass');
   assert.equal(by.corpus.status, 'warn');
-  assert.equal(by.feed.status, 'fail'); // acme-plumbing.example does not resolve
+  assert.equal(by.feed.status, 'fail');
   assert.equal(by['search-console'].status, 'na');
-  assert.equal(by.citations.detail, '1/1 available probes mention acme-plumbing.example');
+  assert.equal(by.citations.status, 'warn');
+  assert.match(by.citations.detail, /0\/1 available probes cited 0 distinct blog URLs; 1 mentioned/);
   assert.ok(formatScorecard(card).includes('cadence'));
   assert.ok(blogScorecardWorkflow().includes('SCORECARD_WEBHOOK_URL'));
 });

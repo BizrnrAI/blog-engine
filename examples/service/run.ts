@@ -15,7 +15,6 @@ const only = process.argv.find((a) => a.startsWith('--only='))?.split('=')[1];
 
 const results = await runBlogService(sites, {
   dryRun: process.argv.includes('--dry-run'),
-  refresh: true, // also improve one existing post per site, per run
   ...(only ? { only: [only] } : {}),
 });
 

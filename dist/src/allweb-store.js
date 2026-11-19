@@ -48,6 +48,7 @@ export function createAllWebStore(options) {
         publicationStatus: options.publishStatus || 'published',
         async listPosts() {
             const posts = [];
+            const seen = new Set();
             let offset = 0;
             while (true) {
                 const result = await call({
@@ -55,13 +56,18 @@ export function createAllWebStore(options) {
                     ...(options.includeDrafts ? {} : { status: 'published' }),
                     limit: pageSize, offset, include_content: true,
                 });
-                const rows = Array.isArray(result.posts) ? result.posts : [];
+                if (!Array.isArray(result.posts))
+                    throw new Error('AllWeb blog_list returned an invalid corpus');
+                const rows = result.posts;
                 for (const row of rows) {
                     if (String(row.site_id || '') !== siteId)
                         throw new Error(`AllWeb tenant violation: received site_id ${String(row.site_id || '<missing>')}`);
+                    if (!row.slug || seen.has(row.slug))
+                        throw new Error('AllWeb blog_list returned a missing or repeated slug');
+                    seen.add(row.slug);
                     // Unfiltered editorial reads include archived rows. They are retained
                     // for audit history, but must not consume cadence or topic ownership.
-                    if (String(row.status || '') === 'archived')
+                    if (row.status === 'archived' || (!options.includeDrafts && row.status !== 'published'))
                         continue;
                     posts.push(storedRowToPost(row));
                 }
@@ -79,13 +85,15 @@ export function createAllWebStore(options) {
         async putPost({ post, cover, markdown, dateISO, isRefresh }) {
             assertNoEmDashes({ post, cover, markdown, author: options.author });
             let expectedRevision;
-            try {
-                const current = await call({ action: 'blog_get', slug: post.slug });
-                expectedRevision = Number(current.post?.revision);
-            }
-            catch (error) {
-                if (error?.status !== 404)
-                    throw error;
+            if (isRefresh) {
+                if ((options.publishStatus || 'published') !== 'published')
+                    throw new Error('AllWeb refresh requires a published store');
+                const { post: current } = await call({ action: 'blog_get', slug: post.slug });
+                if (current?.slug !== post.slug || current.site_id !== siteId || current.status !== 'published'
+                    || !Number.isSafeInteger(current.revision) || current.revision < 1) {
+                    throw new Error('AllWeb refresh requires an exact published revision from this site');
+                }
+                expectedRevision = current.revision;
             }
             const result = await call({
                 action: 'blog_upsert',

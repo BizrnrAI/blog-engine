@@ -5,6 +5,10 @@ export function norm(s) {
         .replace(/\s+/g, ' ')
         .trim();
 }
+/** Compare titles across punctuation and case while retaining non-Latin words. */
+export function titleKey(title) {
+    return (title.normalize('NFKC').toLowerCase().match(/[\p{L}\p{N}]+/gu) || []).join(' ');
+}
 export function slugify(s) {
     return norm(s)
         .replace(/\b(the|a|an|in|of|for|to|your|and|with|how)\b/g, '')

@@ -6,6 +6,8 @@ export interface SeoTopic {
     angle: string;
     mustBacklink: boolean;
     impressions?: number;
+    /** Verified facts, examples, or observations the editor is willing to publish. */
+    evidence?: readonly string[];
     /**
      * Pin the published slug exactly (no slugify, no stop-word stripping). Use when a curated
      * catalog owns its URLs. The engine instructs the model, enforces the value deterministically
@@ -19,6 +21,8 @@ export interface EditorialTopic {
     keyword: string;
     category: TopicCategory;
     angle: string;
+    /** Verified facts, examples, or observations the editor is willing to publish. */
+    evidence?: readonly string[];
     /** Curated slug: pins the URL and makes coverage detection exact instead of heuristic. */
     slug?: string;
     /** Curated title: pins the headline and makes coverage detection exact instead of heuristic. */
@@ -34,6 +38,8 @@ export interface ExistingPost {
     title: string;
     /** ISO publish date from frontmatter, when present (used by the cadence guard). */
     date?: string;
+    /** Store-provided status when available. */
+    status?: string;
 }
 export interface GeneratedBlogPost {
     title: string;
@@ -100,6 +106,8 @@ export interface CannibalizationPair {
 export interface UrlInspection {
     /** Search Console coverage state, verbatim (e.g. 'Submitted and indexed'). */
     coverageState: string;
+    verdict?: string;
+    googleCanonical?: string;
     lastCrawlTime?: string;
     referringUrls?: string[];
 }
@@ -143,6 +151,10 @@ export interface GenerateRunOptions {
     count: number;
     dryRun: boolean;
     skipPing: boolean;
+    /** Site-owned target per UTC publication date. Omit to request count posts per invocation. */
+    dailyTarget?: number;
+    /** Clock used for the run's UTC publication date. */
+    now?: Date;
 }
 export interface GenerateRunResult {
     written: string[];
@@ -243,6 +255,10 @@ export interface BlogEngineConfig {
     };
     indexNow: {
         key: string;
+    };
+    indexing?: {
+        /** Require an HTML self-canonical and a rendered article title before submission. */
+        requireCanonicalHtml?: boolean;
     };
     text: {
         /** 'openrouter' is the default; 'openai-compatible' works with any /chat/completions endpoint. */
@@ -365,6 +381,8 @@ export interface BlogContentRules {
      * before a Search-Console-led topic may become a new post. Default false.
      */
     requireTwoDemandSignals?: boolean;
+    /** Pause generation if there is no distinct unused topic. Default false for legacy rotation. */
+    requireFreshTopic?: boolean;
     /**
      * Require 2–4 verified external sources per post (opt-in). Sources must resolve (HEAD/GET 2xx)
      * and, when topics.trustedSourceDomains is set, come from those domains. Default false.
@@ -512,6 +530,8 @@ export interface ServiceSite {
     root?: string;
     /** Posts per run (default 1). */
     count?: number;
+    /** Site-owned UTC daily target. Retries generate only the remaining posts for that day. */
+    dailyTarget?: number;
     /** UTC weekdays this site publishes on (0=Sun). Omit for every run. */
     days?: readonly number[];
     /** Bounded UTC window when the site is due daily; `endsAt` is exclusive. */
@@ -843,6 +863,8 @@ export interface ParsedBlogFaq {
     answer: string;
 }
 export interface ParsedBlogPost {
+    /** Store-provided status when available. File and legacy adapters may omit it. */
+    status?: string;
     slug: string;
     title: string;
     description: string;

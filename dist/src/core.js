@@ -34,7 +34,7 @@ export { assertBlogEngineRuntime, validateBlogEngineRuntime, BlogEngineConfigErr
 export { cleanBlogSlugs, runBlogAuditCli, runBlogFanoutCli, runBlogGenerateCli, runBlogIndexPublishedCli, runBlogRefreshCli, runBlogScorecardCli, waitUntilBlogUrlsLive } from './cli.js';
 export { blogGenerateWorkflow, blogIndexingWorkflow, blogRefreshWorkflow, blogScorecardWorkflow } from './workflows.js';
 export { getGoogleAccessToken, getGscPageQueries, getGscQueries, pingGscSitemap } from './gsc.js';
-export { pingIndexNow } from './indexing.js';
+export { pingIndexNow, submitBlogDiscovery } from './indexing.js';
 export { clampText, mimeTypeFor, norm, slugify, wordCount, xmlEscape } from './utils.js';
 export { toMarkdown } from './markdown.js';
 export { hasEmDash, normalizeBlogProse, assertNoEmDashes } from './punctuation.js';

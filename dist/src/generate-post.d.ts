@@ -27,6 +27,7 @@ export declare function parseModelJson(text: string): Record<string, unknown>;
 export declare function validateGeneratedPost(post: Partial<GeneratedBlogPost>, args: {
     existingSlugs: string[];
     topic: SeoTopic;
+    existingTitles?: readonly string[];
 }): string[];
 export declare function normalizeGeneratedPost(raw: Record<string, unknown>, topic?: Pick<SeoTopic, 'slug' | 'title'>): GeneratedBlogPost;
 export declare function generateBlogPost(topic: SeoTopic, existing: ExistingPost[]): Promise<GeneratedBlogPost>;

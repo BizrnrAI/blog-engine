@@ -17,7 +17,10 @@ export interface BlogSchemaOptions {
         id?: string;
         name: string;
         url?: string;
+        type?: 'Person' | 'Organization';
     };
+    /** Set false when the visible template omits FAQs or you use only article and breadcrumb markup. */
+    includeFaq?: boolean;
     /** Stable organization entity, e.g. { id: 'https://example.com/#organization', name: 'Brand', logo: '/logo.png' }. */
     publisher?: {
         id?: string;
@@ -61,7 +64,7 @@ export declare function breadcrumbSchema(items: readonly {
 }[], options?: BlogSchemaOptions): JsonLd;
 /**
  * The complete per-post graph: BlogPosting + FAQPage (when the post has FAQs)
- * + breadcrumbs. Serialize with JSON.stringify into a single
+ * + breadcrumbs. Serialize with serializeBlogJsonLd into a single
  * <script type="application/ld+json"> tag.
  */
 export declare function blogPostGraph(post: ParsedBlogPost, options?: BlogSchemaOptions): JsonLd;

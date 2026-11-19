@@ -1,16 +1,13 @@
 import { BlogRunError } from './run-error.js';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { BLOG_CONFIG, blogPostUrl, getBlogHooks } from './config.js';
-import { listExistingPosts } from './store.js';
-import { getStore } from './store.js';
-import { generateBlogPost } from './generate-post.js';
-import { getGscQueries, pingGscSitemap } from './gsc.js';
+import { BLOG_CONFIG, blogHubUrl, getBlogHooks } from './config.js';
+import { getStore, listExistingPosts } from './store.js';
+import { contentRules, generateBlogPost } from './generate-post.js';
+import { getGscQueries } from './gsc.js';
 import { generateCoverImage, gradientForOrdinal } from './images.js';
-import { waitUntilBlogUrlsLive } from './indexing.js';
-import { pingIndexNow } from './indexing.js';
+import { submitBlogDiscovery } from './indexing.js';
 import { toMarkdown } from './markdown.js';
-import { contentRules } from './generate-post.js';
 import { contentExtensions } from './content-reader.js';
 import { hasSecondDemandSignal } from './demand.js';
 import { describeTopic, resolveTopic } from './topic-rotation.js';
@@ -27,12 +24,39 @@ function ensureDir(path: string): void {
   if (!existsSync(path)) mkdirSync(path, { recursive: true });
 }
 
+const dailyRuns = new Map<string, Promise<void>>();
+
 export async function generateBlogRun(root: string, options: GenerateRunOptions): Promise<GenerateRunResult> {
+  if (options.dailyTarget === undefined || options.dryRun) return generate(root, options);
+  // One process can host multiple runtimes. Serialize scheduler overlap per canonical site.
+  const site = blogHubUrl();
+  const run = (dailyRuns.get(site) ?? Promise.resolve()).then(() => generate(root, options));
+  const tail = run.then(() => {}, () => {});
+  dailyRuns.set(site, tail);
+  try { return await run; }
+  finally {
+    if (dailyRuns.get(site) === tail) dailyRuns.delete(site);
+  }
+}
+
+async function generate(root: string, options: GenerateRunOptions): Promise<GenerateRunResult> {
   if (!Number.isSafeInteger(options.count) || options.count < 1) throw new Error('count must be a positive safe integer');
   const logPrefix = BLOG_CONFIG.logPrefix || '[blog-engine]';
   if (process.env.BLOG_ENGINE_DISABLED === '1') {
     console.log(`${logPrefix} BLOG_ENGINE_DISABLED=1 - exiting without generating.`);
     return { written: [], skipped: 'BLOG_ENGINE_DISABLED' };
+  }
+
+  const dateISO = (options.now || new Date()).toISOString().slice(0, 10);
+  const store = getStore(root);
+  const existing = await listExistingPosts(root);
+  const dailyTarget = options.dailyTarget;
+  let count = options.count;
+  if (dailyTarget !== undefined) {
+    if (!Number.isSafeInteger(dailyTarget) || dailyTarget < 1) throw new Error('dailyTarget must be a positive safe integer');
+    if (store.publicationStatus && store.publicationStatus !== 'published') throw new Error('dailyTarget requires a published corpus');
+    count = Math.min(count, dailyTarget - existing.filter((post) => post.date === dateISO && (!post.status || post.status === 'published')).length);
+    if (count <= 0) return { written: [], skipped: `daily publication target already met for ${dateISO}` };
   }
 
   const { token, queries: gscQueries } = await getGscQueries();
@@ -52,20 +76,23 @@ export async function generateBlogRun(root: string, options: GenerateRunOptions)
   // Only a filesystem store needs a content directory. A dry run must not touch the filesystem
   // either — it previously created the directory before deciding it wasn't going to write
   // anything, which litters a repo just for previewing a post.
-  if (!options.dryRun && getStore(root).root) ensureDir(blogDir);
-  const existing = await listExistingPosts(root);
+  if (!options.dryRun && store.root) ensureDir(blogDir);
   console.log(`${logPrefix} existing posts: ${existing.length}`);
 
   const written: string[] = [];
+  const publishedCopy: Array<{ slug: string; title: string; answer: string }> = [];
+  let generationError: BlogRunError | undefined;
   try {
-    for (let i = 0; i < options.count; i++) {
-      const topic = await resolveTopic(existing, queries, 0);
+    for (let i = 0; i < count; i++) {
+      const topic = await resolveTopic(existing, queries, 0, { allowCoveredFallback: !contentRules().requireFreshTopic });
+      if (!topic) {
+        throw new Error('No uncovered topic ready. Add distinct editorial briefs or configure a topic provider.');
+      }
       console.log(`${logPrefix} topic #${existing.length}: ${describeTopic(topic)}`);
       const post = await generateBlogPost(topic, existing);
       const ordinal = existing.length;
       const cover = await generateCoverImage(root, post, topic, ordinal, options.dryRun);
       const gradient = gradientForOrdinal(ordinal);
-      const dateISO = new Date().toISOString().slice(0, 10);
       // The consuming site may own its own frontmatter shape; the engine still owns everything
       // around it (generation, validation, watermarking, encoding, the write).
       const author = BLOG_CONFIG.identity.author?.name;
@@ -89,21 +116,26 @@ export async function generateBlogRun(root: string, options: GenerateRunOptions)
           if (alsoWriteFile) writeFileSync(file, md, 'utf8');
           target = alsoWriteFile ? file : post.slug;
         } else {
-          target = await getStore(root).putPost({ post, cover, markdown: md, dateISO, isRefresh: false });
+          target = await store.putPost({ post, cover, markdown: md, dateISO, isRefresh: false });
         }
         console.log(`${logPrefix} published ${target} (image: ${cover.source}, og: ${cover.ogImage})`);
         written.push(post.slug);
-        existing.push({ slug: post.slug, title: post.title, date: dateISO });
+        publishedCopy.push({ slug: post.slug, title: post.title, answer: post.answer });
       }
+      existing.push({ slug: post.slug, title: post.title, date: dateISO });
     }
 
-    if (!options.dryRun && !options.skipPing && written.length) {
-      if (getStore(root).publicationStatus && getStore(root).publicationStatus !== 'published') return { written };
-      await waitUntilBlogUrlsLive(written.map(blogPostUrl));
-      await pingIndexNow(written.map(blogPostUrl));
-      await pingGscSitemap(token);
-    }
+  } catch (error) { generationError = new BlogRunError('generate', written, error); }
 
-    return { written };
-  } catch (error) { throw new BlogRunError('generate', written, error); }
+  if (!options.dryRun && !options.skipPing && written.length && (!store.publicationStatus || store.publicationStatus === 'published')) {
+    try { await submitBlogDiscovery(written, { posts: publishedCopy, googleToken: token, notify: false }); }
+    catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new BlogRunError('generate', written, generationError
+        ? new Error(`${generationError.message} | discovery: ${detail}`, { cause: generationError })
+        : error);
+    }
+  }
+  if (generationError) throw generationError;
+  return { written };
 }

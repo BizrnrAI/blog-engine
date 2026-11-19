@@ -1,4 +1,6 @@
 export declare function norm(s: string): string;
+/** Compare titles across punctuation and case while retaining non-Latin words. */
+export declare function titleKey(title: string): string;
 export declare function slugify(s: string): string;
 export declare function wordCount(s: string): number;
 export declare function yamlString(s: string): string;

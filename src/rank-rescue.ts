@@ -83,9 +83,8 @@ export function cannibalizationPairs(rows: readonly GscPageQuery[], minImpressio
 export function slugFromPage(page: string, pathPrefix = '/blog/'): string | null {
   try {
     const path = new URL(page).pathname.replace(/\/$/, '');
-    const i = path.indexOf(pathPrefix);
-    if (i === -1) return null;
-    const slug = path.slice(i + pathPrefix.length);
+    if (!path.startsWith(pathPrefix)) return null;
+    const slug = path.slice(pathPrefix.length);
     return /^[a-z0-9-]+$/.test(slug) ? slug : null;
   } catch {
     return null;

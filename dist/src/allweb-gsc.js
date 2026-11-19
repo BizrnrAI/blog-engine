@@ -1,3 +1,4 @@
+import { parseIndexStatus } from './gsc.js';
 async function request(options, body) {
     if (!options.apiUrl || !options.token || !options.siteId) {
         throw new Error('AllWeb GSC hooks require apiUrl, token, and siteId');
@@ -38,8 +39,18 @@ export function createAllWebGscHooks(options) {
             });
             return (payload.rows ?? []);
         },
+        async inspectUrl({ url }) {
+            const payload = await request(options, { action: 'gsc_inspect_url', url });
+            if (payload.site_id !== options.siteId || payload.url !== url) {
+                throw new Error('AllWeb GSC URL Inspection did not return the requested site and URL');
+            }
+            return parseIndexStatus(payload.inspection?.indexStatusResult);
+        },
         async submitSitemap({ sitemap }) {
-            await request(options, { action: 'gsc_submit_sitemaps', sitemaps: [sitemap] });
+            const payload = await request(options, { action: 'gsc_submit_sitemaps', sitemaps: [sitemap] });
+            if (payload.site_id !== options.siteId || !Array.isArray(payload.submitted) || !payload.submitted.includes(new URL(sitemap).href)) {
+                throw new Error('AllWeb GSC did not confirm the requested sitemap');
+            }
         },
     };
 }

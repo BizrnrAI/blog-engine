@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { BLOG_CONFIG, getBlogHooks } from './config.js';
 import { contentExtensions, readGeneratedBlogPosts } from './content-reader.js';
-import type { BlogStore, CoverImage, GeneratedBlogPost, ParsedBlogPost, PutPostArgs } from './types.js';
+import type { ExistingPost, BlogStore, CoverImage, GeneratedBlogPost, ParsedBlogPost, PutPostArgs } from './types.js';
 
 /**
  * The content store is the engine's only route to persisted posts and assets.
@@ -64,11 +64,12 @@ export function getStore(root: string): BlogStore {
 }
 
 /** Existing posts in the shape topic rotation and the cadence guard want. */
-export async function listExistingPosts(root: string): Promise<Array<{ slug: string; title: string; date?: string }>> {
+export async function listExistingPosts(root: string): Promise<ExistingPost[]> {
   const posts = await getStore(root).listPosts();
   return posts.map((p) => ({
     slug: p.slug,
     title: p.title,
+    ...(p.status ? { status: p.status } : {}),
     ...(p.publishedAt ? { date: p.publishedAt.slice(0, 10) } : {}),
   }));
 }

@@ -2,10 +2,7 @@ import { BlogRunError } from './run-error.js';
 import { withBlogEngineRuntime } from './config.js';
 import { generateBlogRun } from './publisher.js';
 import { refreshBlogRun } from './refresh.js';
-import { waitUntilBlogUrlsLive, indexingToken } from './indexing.js';
-import { pingIndexNow } from './indexing.js';
-import { pingGscSitemap } from './gsc.js';
-import { blogPostUrl } from './config.js';
+import { submitBlogDiscovery } from './indexing.js';
 import { getStore } from './store.js';
 /**
  * The blog service: one process that publishes for many sites.
@@ -73,44 +70,54 @@ export async function runBlogService(sites, options = {}) {
                     results.push({ site: site.id, status: 'nothing-to-do', detail: 'dry run: runtime and publication policy validated; no models or writes', published: [], refreshed: [] });
                     return;
                 }
-                if (options.generate !== false) {
-                    const run = await generateBlogRun(root, { count: site.count ?? 1, dryRun: Boolean(options.dryRun), skipPing: true });
-                    if (publicationStatus === 'published')
-                        published.push(...run.written);
-                    else
-                        staged.push(...run.written);
-                    if (run.skipped) {
-                        if (!options.refresh) {
-                            results.push({ site: site.id, status: 'skipped', detail: run.skipped, published: [], refreshed: [], ms: Date.now() - started });
-                            return;
-                        }
+                let skipped;
+                let operationError;
+                try {
+                    if (options.generate !== false) {
+                        const run = await generateBlogRun(root, {
+                            count: site.count ?? site.dailyTarget ?? 1,
+                            dailyTarget: site.dailyTarget,
+                            now,
+                            dryRun: false,
+                            skipPing: true,
+                        });
+                        (publicationStatus === 'published' ? published : staged).push(...run.written);
+                        skipped = run.skipped;
+                    }
+                    if (options.refresh) {
+                        const run = await refreshBlogRun(root, { dryRun: false, max: 1 });
+                        refreshed.push(...run.refreshed);
                     }
                 }
-                if (options.refresh) {
-                    const run = await refreshBlogRun(root, { dryRun: Boolean(options.dryRun), max: 1 });
-                    refreshed.push(...run.refreshed);
+                catch (error) {
+                    operationError = error;
+                    if (error instanceof BlogRunError) {
+                        const changed = error.operation === 'refresh' ? refreshed : publicationStatus === 'published' ? published : staged;
+                        changed.push(...error.written);
+                    }
                 }
-                // Submit only what actually changed, and only when something did.
                 const changed = [...published, ...refreshed];
-                if (!options.dryRun && changed.length) {
-                    await waitUntilBlogUrlsLive(changed.map(blogPostUrl));
-                    await pingIndexNow(changed.map(blogPostUrl));
-                    await pingGscSitemap(await indexingToken());
-                    if (runtime.hooks?.afterIndexed) {
-                        try {
-                            await runtime.hooks.afterIndexed({ urls: changed.map(blogPostUrl), slugs: changed });
-                        }
-                        catch (error) {
-                            console.warn('[blog-service] afterIndexed failed:', error instanceof Error ? error.message : String(error));
-                        }
+                if (changed.length) {
+                    try {
+                        const posts = runtime.config.indexing?.requireCanonicalHtml ? await store.listPosts() : undefined;
+                        await submitBlogDiscovery(changed, { posts });
+                    }
+                    catch (error) {
+                        if (!operationError)
+                            throw error;
+                        const detail = (value) => value instanceof Error ? value.message : String(value);
+                        throw new Error(`${detail(operationError)} | discovery: ${detail(error)}`, { cause: operationError });
                     }
                 }
+                if (operationError)
+                    throw operationError;
                 const status = staged.length
                     ? publicationStatus === 'review' ? 'queued-for-review' : 'drafted'
-                    : changed.length ? 'published' : 'nothing-to-do';
+                    : changed.length ? 'published' : skipped ? 'skipped' : 'nothing-to-do';
                 results.push({
                     site: site.id,
                     status,
+                    ...(skipped ? { detail: skipped } : {}),
                     published,
                     ...(staged.length ? { staged } : {}),
                     refreshed,
@@ -119,10 +126,6 @@ export async function runBlogService(sites, options = {}) {
             });
         }
         catch (err) {
-            if (err instanceof BlogRunError) {
-                const changed = err.operation === 'refresh' ? refreshed : site.publicationStatus && site.publicationStatus !== 'published' ? staged : published;
-                changed.push(...err.written.filter((slug) => !changed.includes(slug)));
-            }
             // One site's failure must never stop the fleet.
             results.push({
                 site: site.id,
