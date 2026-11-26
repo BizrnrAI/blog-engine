@@ -43,8 +43,8 @@
     "verify:docs": "node scripts/verify-docs.mjs"
   },
   "dependencies": {
-    "@ai-sdk/gateway": "^4.0.62",
-    "ai": "^7.0.77",
+    "@ai-sdk/gateway": "^4.0.152",
+    "ai": "^7.0.179",
     "parse5": "^8.1.1",
     "saxes": "^6.0.0",
     "sharp": "^0.35.5"
